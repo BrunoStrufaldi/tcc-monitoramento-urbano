@@ -1,0 +1,17 @@
+# Python
+backend/venv/
+backend/.env
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Frontend — não commitar chaves
+frontend/js/config.js
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
