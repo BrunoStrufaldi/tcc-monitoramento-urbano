@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mapa de Eventos — Notificações Urbanas</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="header">
+    <div>
+      <h1>Mapa de eventos urbanos</h1>
+      <p class="subtitle">Marcadores por criticidade · dados em tempo real da API</p>
+    </div>
+    <div class="header-actions">
+      <label class="filtro-status-label">
+        Status
+        <select id="filtro-status" class="select-status">
+          <option value="" selected>Todos</option>
+          <option value="ativo">Ativo</option>
+          <option value="em_analise">Em análise</option>
+          <option value="resolvido">Resolvido</option>
+        </select>
+      </label>
+      <button type="button" id="btn-atualizar" class="btn">Atualizar</button>
+      <span id="status-api" class="status-badge">Carregando…</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <section class="sidebar-block">
+        <h2>Criticidade</h2>
+        <p class="sidebar-hint">Marque os níveis exibidos no mapa</p>
+        <div id="legenda-criticidade" class="legenda-criticidade"></div>
+      </section>
+
+      <section class="sidebar-block">
+        <div class="sidebar-titulo-row">
+          <h2>Eventos</h2>
+          <span id="contagem-eventos" class="contagem">—</span>
+        </div>
+        <ul id="lista-eventos" class="lista-eventos">
+          <li class="empty-state">Carregando eventos…</li>
+        </ul>
+      </section>
+    </aside>
+
+    <section class="mapa-container">
+      <div id="mapa" role="application" aria-label="Mapa Google Maps com eventos urbanos"></div>
+      <div class="mapa-overlay-legenda" aria-hidden="true">
+        <span class="overlay-titulo">Criticidade</span>
+        <div class="overlay-itens">
+          <span><i style="background:#22c55e"></i> Baixa</span>
+          <span><i style="background:#f59e0b"></i> Média</span>
+          <span><i style="background:#ef4444"></i> Alta</span>
+          <span><i style="background:#a855f7"></i> Crítica</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/criticidade.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
