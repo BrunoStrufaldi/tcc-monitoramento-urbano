@@ -1,151 +1,86 @@
-# Sistema de Notificações Urbanas em Tempo Real (TCC)
+# Sistema de Notificações Urbanas em Tempo Real 
 
-Monitoramento urbano com API FastAPI, MySQL, mapa interativo e módulo de Data Fusion.
+Protótipo com API FastAPI, MySQL, frontend com Google Maps, Data Fusion e estrutura para YOLO.
 
 ## Estrutura
 
 ```
 Projeto Gx/
-├── backend/           # API FastAPI + SQLAlchemy
-├── database/          # schema.sql (banco principal)
-├── frontend/          # Mapa Google Maps
-├── data_fusion/       # Cálculo de confiabilidade
-├── ml/                # Reservado: YOLO (fase final)
-└── PROJECT_STATE.md   # Estado e roadmap do TCC
+├── backend/           # API FastAPI
+├── database/          # schema.sql + ERD
+├── frontend/          # Mapa + lista de eventos
+├── data_fusion/       # Confiabilidade (IA + clima + fonte)
+└── ml/                # Futuro: YOLO
 ```
 
 ## Pré-requisitos
 
 - Python 3.11+
 - MySQL 8.x
-- Chave [Google Maps JavaScript API](https://console.cloud.google.com/) (frontend)
+- Chave [Google Maps JavaScript API](https://console.cloud.google.com/)
 
----
-
-## 1. Ambiente virtual e dependências
-
-```bash
-cd backend
-python -m venv venv
-```
-
-**Windows (ativar venv):**
-
-```bash
-venv\Scripts\activate
-```
-
-**Linux/macOS:**
-
-```bash
-source venv/bin/activate
-```
-
-**Instalar dependências:**
-
-```bash
-pip install -r requirements.txt
-```
-
-Pacotes principais: `fastapi`, `uvicorn`, `sqlalchemy`, `pymysql`, `python-dotenv`, `pydantic-settings`.
-
----
-
-## 2. Configurar `.env`
-
-Copie o exemplo e edite com sua senha MySQL:
-
-```bash
-copy .env.example .env
-```
-
-Conteúdo de `.env`:
-
-```
-DATABASE_URL=mysql+pymysql://root:SENHA@localhost/tcc_monitoramento_urbano
-API_HOST=0.0.0.0
-API_PORT=8000
-CORS_ORIGINS=http://localhost:5500,http://127.0.0.1:5500
-```
-
----
-
-## 3. Criar banco MySQL
+## 1. Banco MySQL
 
 ```bash
 mysql -u root -p < database/schema.sql
 ```
 
-Isso cria o banco `tcc_monitoramento_urbano`, a tabela `eventos` e 3 registros de exemplo.
-
----
-
-## 4. Rodar a API
-
-Com o venv ativo, na pasta `backend`:
+## 2. Backend
 
 ```bash
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+cd backend
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
 ```
 
-- Raiz: [http://127.0.0.1:8000/](http://127.0.0.1:8000/) → `{"status":"online","message":"API do TCC rodando com sucesso"}`
-- Swagger: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- Health: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
+Edite `.env`:
 
----
+```
+DATABASE_URL=mysql+pymysql://usuario:senha@localhost:3306/notificacoes_urbanas
+```
 
-## 5. Endpoints de eventos (CRUD)
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+- Raiz: http://localhost:8000/ → `{"status":"online","message":"API do TCC rodando com sucesso"}`
+- Docs: http://localhost:8000/docs
+
+### Endpoints
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| GET | `/eventos` | Lista (filtros: `status`, `tipo`, `criticidade`, `limite`) |
-| GET | `/eventos/{id}` | Detalhe |
-| POST | `/eventos` | Criar |
-| PUT | `/eventos/{id}` | Atualizar |
-| DELETE | `/eventos/{id}` | Excluir |
+| GET | `/` | Status da API |
+| GET | `/health` | Health check |
+| GET | `/eventos` | Lista eventos |
+| POST | `/eventos` | Cria evento |
+| GET | `/fusion/eventos/{id}/confiabilidade` | Score Data Fusion |
+| POST | `/fusion/eventos/{id}/recalcular` | Recalcula e grava confiança |
 
-**Exemplo POST:**
+## 3. Frontend
 
-```json
-{
-  "tipo": "transito",
-  "descricao": "Congestionamento na marginal",
-  "criticidade": "media",
-  "latitude": -23.55,
-  "longitude": -46.63,
-  "status": "ativo",
-  "confiabilidade": 0.7,
-  "fonte": "api"
-}
-```
-
-### Data Fusion (mantido)
-
-| Método | Rota |
-|--------|------|
-| GET | `/fusion/eventos/{id}/confiabilidade` |
-| POST | `/fusion/eventos/{id}/recalcular?persistir=true` |
-
----
-
-## 6. Frontend (mapa)
+1. Copie `frontend/js/config.example.js` para `frontend/js/config.js` e preencha com a sua chave em `GOOGLE_MAPS_API_KEY`.
+2. Sirva a pasta:
 
 ```bash
 cd frontend
 python -m http.server 5500
 ```
 
-Configure `frontend/js/config.js` com a chave do Google Maps e `API_BASE_URL=http://127.0.0.1:8000`.
+3. Abra http://localhost:5500
 
-Abra: [http://localhost:5500](http://localhost:5500)
+Marcadores por criticidade: baixa (verde), média (amarelo), alta (vermelho), crítica (roxo).
 
----
+## 4. Data Fusion
 
-## Roadmap
+```bash
+python -m data_fusion.test_fusion
+curl http://localhost:8000/fusion/eventos/2/confiabilidade
+```
 
-Consulte `PROJECT_STATE.md` para arquitetura completa e fases.
-
-**YOLO não está implementado** — será a última fase, como módulo de automação visual em `ml/`.
+Pesos: IA 40%, clima 30%, fonte oficial 30%.
 
 ## Licença
 

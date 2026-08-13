@@ -1,10 +1,14 @@
 # Python
 backend/venv/
+notificacoes-urbanas/venv/
 backend/.env
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+
+# Node
+node_modules/
 
 # Frontend — não commitar chaves
 frontend/js/config.js

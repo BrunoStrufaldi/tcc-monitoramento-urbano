@@ -5,15 +5,6 @@ let eventosCarregados = [];
 
 const filtrosCriticidade = new Set(Object.keys(CRITICIDADE));
 
-/** Campo da API: criticidade (compatível com severidade legado) */
-function criticidadeDoEvento(evento) {
-  return evento.criticidade || evento.severidade || "media";
-}
-
-function tituloDoEvento(evento) {
-  return evento.descricao || `${evento.tipo} #${evento.id}`;
-}
-
 function escapeHtml(texto) {
   if (texto == null) return "";
   return String(texto)
@@ -47,20 +38,14 @@ function atualizarStatusApi(ok, mensagem) {
 async function buscarEventos() {
   const params = new URLSearchParams({ limite: "200" });
   const statusEl = document.getElementById("filtro-status");
-  if (statusEl && statusEl.value) {
-    params.set("status", statusEl.value);
-  }
-  const url = `${CONFIG.API_BASE_URL}/eventos?${params}`;
-  const resposta = await fetch(url);
-  if (!resposta.ok) {
-    throw new Error(`API retornou ${resposta.status}`);
-  }
+  if (statusEl && statusEl.value) params.set("status", statusEl.value);
+  const resposta = await fetch(`${CONFIG.API_BASE_URL}/eventos?${params}`);
+  if (!resposta.ok) throw new Error(`API retornou ${resposta.status}`);
   return resposta.json();
 }
 
 function eventoVisivel(evento) {
-  const chave = normalizarCriticidade(criticidadeDoEvento(evento));
-  return filtrosCriticidade.has(chave);
+  return filtrosCriticidade.has(normalizarCriticidade(evento.severidade));
 }
 
 function limparMarcadores() {
@@ -80,46 +65,43 @@ function criarIconeMarcador(estilo) {
 }
 
 function conteudoInfoWindow(evento) {
-  const crit = criticidadeDoEvento(evento);
-  const estilo = obterEstiloCriticidade(crit);
-  const criado = evento.criado_em
-    ? new Date(evento.criado_em).toLocaleString("pt-BR")
+  const estilo = obterEstiloCriticidade(evento.severidade);
+  const endereco = evento.localizacao?.endereco || evento.localizacao?.bairro || "";
+  const regiao = evento.regiao?.nome || "";
+  const detectado = evento.detectado_em
+    ? new Date(evento.detectado_em).toLocaleString("pt-BR")
     : "";
+  const confianca = evento.confianca != null ? `${(Number(evento.confianca) * 100).toFixed(0)}%` : "";
 
   return `
     <div class="info-window">
-      <span class="info-criticidade" style="background:${estilo.cor}">
-        ${escapeHtml(rotuloCriticidade(crit))}
-      </span>
-      <h3>${escapeHtml(tituloDoEvento(evento))}</h3>
-      <p class="info-tipo">${escapeHtml(evento.tipo)} · ${escapeHtml(evento.status || "")}</p>
-      ${evento.fonte ? `<p>Fonte: ${escapeHtml(evento.fonte)}</p>` : ""}
-      ${evento.confiabilidade != null ? `<p>Confiabilidade: ${(evento.confiabilidade * 100).toFixed(0)}%</p>` : ""}
-      ${criado ? `<p class="info-data">${criado}</p>` : ""}
+      <span class="info-criticidade" style="background:${estilo.cor}">${escapeHtml(rotuloCriticidade(evento.severidade))}</span>
+      <h3>${escapeHtml(evento.titulo)}</h3>
+      <p class="info-tipo">${escapeHtml(evento.tipo)} · ${escapeHtml(evento.status)}</p>
+      ${evento.descricao ? `<p>${escapeHtml(evento.descricao)}</p>` : ""}
+      ${confianca ? `<p class="info-confianca">Confiabilidade: ${confianca}</p>` : ""}
+      ${endereco ? `<p class="info-endereco">${escapeHtml(endereco)}</p>` : ""}
+      ${regiao ? `<p class="info-regiao">${escapeHtml(regiao)}</p>` : ""}
+      ${detectado ? `<p class="info-data">${detectado}</p>` : ""}
     </div>
   `;
 }
 
 function criarMarcador(evento) {
-  const crit = criticidadeDoEvento(evento);
-  const estilo = obterEstiloCriticidade(crit);
+  const estilo = obterEstiloCriticidade(evento.severidade);
   const marcador = new google.maps.Marker({
-    position: { lat: Number(evento.latitude), lng: Number(evento.longitude) },
+    position: { lat: evento.latitude, lng: evento.longitude },
     map: mapa,
-    title: `${rotuloCriticidade(crit)}: ${tituloDoEvento(evento)}`,
+    title: `${rotuloCriticidade(evento.severidade)}: ${evento.titulo}`,
     icon: criarIconeMarcador(estilo),
     zIndex: estilo.zIndex,
   });
-
   marcador.addListener("click", () => {
     if (infoWindowAberta) infoWindowAberta.close();
-    infoWindowAberta = new google.maps.InfoWindow({
-      content: conteudoInfoWindow(evento),
-    });
+    infoWindowAberta = new google.maps.InfoWindow({ content: conteudoInfoWindow(evento) });
     infoWindowAberta.open({ anchor: marcador, map: mapa });
     destacarItemLista(evento.id);
   });
-
   marcadoresPorId.set(evento.id, marcador);
   return marcador;
 }
@@ -145,11 +127,9 @@ function renderizarLegenda() {
         <input type="checkbox" data-criticidade="${chave}" ${filtrosCriticidade.has(chave) ? "checked" : ""} />
         <span class="legenda-cor" style="background:${estilo.cor}"></span>
         <span>${estilo.label}</span>
-      </label>
-    `
+      </label>`
     )
     .join("");
-
   container.querySelectorAll("input[data-criticidade]").forEach((input) => {
     input.addEventListener("change", () => {
       const chave = input.dataset.criticidade;
@@ -173,53 +153,46 @@ function atualizarContagem(visiveis, total) {
   const el = document.getElementById("contagem-eventos");
   if (!el) return;
   el.textContent =
-    visiveis === total
-      ? `${total} evento(s) no mapa`
-      : `${visiveis} de ${total} evento(s) no mapa`;
+    visiveis === total ? `${total} evento(s) no mapa` : `${visiveis} de ${total} evento(s) no mapa`;
 }
 
 function renderizarLista(eventos) {
   const lista = document.getElementById("lista-eventos");
   const visiveis = eventos.filter(eventoVisivel);
   lista.innerHTML = "";
-
   if (!visiveis.length) {
-    lista.innerHTML =
-      '<li class="empty-state">Nenhum evento para os filtros selecionados.</li>';
+    lista.innerHTML = '<li class="empty-state">Nenhum evento para os filtros selecionados.</li>';
     return;
   }
-
-  const ordenados = [...visiveis].sort((a, b) => {
-    const za = obterEstiloCriticidade(criticidadeDoEvento(a)).zIndex;
-    const zb = obterEstiloCriticidade(criticidadeDoEvento(b)).zIndex;
-    return zb - za;
-  });
-
-  ordenados.forEach((evento) => {
-    const estilo = obterEstiloCriticidade(criticidadeDoEvento(evento));
-    const li = document.createElement("li");
-    li.className = "evento-item";
-    li.dataset.id = evento.id;
-    li.innerHTML = `
-      <div class="evento-cabecalho">
-        <span class="crit-badge" style="background:${estilo.cor}">${escapeHtml(estilo.label)}</span>
-        <h3>${escapeHtml(tituloDoEvento(evento))}</h3>
-      </div>
-      <div class="evento-meta">
-        <span class="tag">${escapeHtml(evento.tipo)}</span>
-        <span class="tag">${escapeHtml(evento.status || "")}</span>
-        ${evento.fonte ? `<span>${escapeHtml(evento.fonte)}</span>` : ""}
-      </div>
-    `;
-    li.addEventListener("click", () => {
-      mapa.panTo({ lat: evento.latitude, lng: evento.longitude });
-      mapa.setZoom(16);
-      const marcador = marcadoresPorId.get(evento.id);
-      if (marcador) google.maps.event.trigger(marcador, "click");
-      destacarItemLista(evento.id);
+  [...visiveis]
+    .sort(
+      (a, b) =>
+        obterEstiloCriticidade(b.severidade).zIndex - obterEstiloCriticidade(a.severidade).zIndex
+    )
+    .forEach((evento) => {
+      const estilo = obterEstiloCriticidade(evento.severidade);
+      const li = document.createElement("li");
+      li.className = "evento-item";
+      li.dataset.id = evento.id;
+      li.innerHTML = `
+        <div class="evento-cabecalho">
+          <span class="crit-badge" style="background:${estilo.cor}">${escapeHtml(estilo.label)}</span>
+          <h3>${escapeHtml(evento.titulo)}</h3>
+        </div>
+        <div class="evento-meta">
+          <span class="tag">${escapeHtml(evento.tipo)}</span>
+          <span class="tag">${escapeHtml(evento.status)}</span>
+          ${evento.regiao ? `<span>${escapeHtml(evento.regiao.nome)}</span>` : ""}
+        </div>`;
+      li.addEventListener("click", () => {
+        mapa.panTo({ lat: evento.latitude, lng: evento.longitude });
+        mapa.setZoom(16);
+        const marcador = marcadoresPorId.get(evento.id);
+        if (marcador) google.maps.event.trigger(marcador, "click");
+        destacarItemLista(evento.id);
+      });
+      lista.appendChild(li);
     });
-    lista.appendChild(li);
-  });
 }
 
 function destacarItemLista(id) {
@@ -230,10 +203,9 @@ function destacarItemLista(id) {
 
 async function carregarEventos() {
   try {
-    const eventos = await buscarEventos();
-    eventosCarregados = eventos;
+    eventosCarregados = await buscarEventos();
     aplicarMarcadoresNoMapa();
-    renderizarLista(eventos);
+    renderizarLista(eventosCarregados);
     atualizarStatusApi(true, "Conectado");
   } catch (erro) {
     console.error(erro);
@@ -260,20 +232,11 @@ function initMapa() {
       { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f1419" }] },
     ],
   });
-
   renderizarLegenda();
   document.getElementById("btn-atualizar").addEventListener("click", carregarEventos);
-
-  const filtroStatus = document.getElementById("filtro-status");
-  if (filtroStatus) {
-    filtroStatus.addEventListener("change", carregarEventos);
-  }
-
+  document.getElementById("filtro-status")?.addEventListener("change", carregarEventos);
   carregarEventos();
-
-  if (CONFIG.REFRESH_INTERVAL_MS > 0) {
-    setInterval(carregarEventos, CONFIG.REFRESH_INTERVAL_MS);
-  }
+  if (CONFIG.REFRESH_INTERVAL_MS > 0) setInterval(carregarEventos, CONFIG.REFRESH_INTERVAL_MS);
 }
 
 window.initMapa = initMapa;

@@ -1,34 +1,209 @@
 -- =============================================================================
--- Banco principal do TCC — tcc_monitoramento_urbano
--- Execução: mysql -u root -p < database/schema.sql
--- Schema estendido (fases futuras): database/schema_extended.sql
+-- Banco: notificacoes_urbanas
+-- Sistema de notificações urbanas em tempo real 
 -- =============================================================================
 
-CREATE DATABASE IF NOT EXISTS tcc_monitoramento_urbano
+CREATE DATABASE IF NOT EXISTS notificacoes_urbanas
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
-USE tcc_monitoramento_urbano;
+USE notificacoes_urbanas;
 
-CREATE TABLE IF NOT EXISTS eventos (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    tipo VARCHAR(100) NOT NULL,
-    descricao TEXT,
-    criticidade VARCHAR(50),
-    latitude DECIMAL(10,7),
-    longitude DECIMAL(10,7),
-    status VARCHAR(50),
-    confiabilidade FLOAT DEFAULT 0,
-    fonte VARCHAR(100),
-    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_eventos_tipo (tipo),
-    INDEX idx_eventos_status (status),
-    INDEX idx_eventos_criticidade (criticidade),
-    INDEX idx_eventos_criado (criado_em)
+SET FOREIGN_KEY_CHECKS = 0;
+
+DROP TABLE IF EXISTS logs_sistema;
+DROP TABLE IF EXISTS notificacoes;
+DROP TABLE IF EXISTS dados_contextuais;
+DROP TABLE IF EXISTS evidencias_visuais;
+DROP TABLE IF EXISTS eventos;
+DROP TABLE IF EXISTS localizacoes;
+DROP TABLE IF EXISTS fontes_dados;
+DROP TABLE IF EXISTS regioes;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+CREATE TABLE regioes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(120) NOT NULL,
+  codigo VARCHAR(32) UNIQUE,
+  descricao TEXT,
+  poligono_geojson JSON NULL,
+  ativo TINYINT(1) NOT NULL DEFAULT 1,
+  criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_regioes_ativo (ativo)
 ) ENGINE=InnoDB;
 
--- Dados iniciais para desenvolvimento e testes do mapa
-INSERT INTO eventos (tipo, descricao, criticidade, latitude, longitude, status, confiabilidade, fonte) VALUES
-  ('transito', 'Congestionamento intenso na Av. Paulista', 'media', -23.5505200, -46.6333080, 'ativo', 0.65, 'api'),
-  ('alagamento', 'Acúmulo de água após chuva forte na Zona Norte', 'alta', -23.5614140, -46.6558810, 'ativo', 0.82, 'sensor'),
-  ('incendio', 'Fumaça detectada em área comercial — em análise', 'alta', -23.5429700, -46.6298100, 'em_analise', 0.55, 'manual');
+CREATE TABLE fontes_dados (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(120) NOT NULL,
+  tipo VARCHAR(50) NOT NULL COMMENT 'sensor, api, yolo, data_fusion, manual',
+  endpoint VARCHAR(500) NULL,
+  descricao TEXT,
+  configuracao JSON NULL,
+  ativo TINYINT(1) NOT NULL DEFAULT 1,
+  criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_fontes_tipo (tipo),
+  INDEX idx_fontes_ativo (ativo)
+) ENGINE=InnoDB;
+
+CREATE TABLE localizacoes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  regiao_id INT NULL,
+  latitude DOUBLE NOT NULL,
+  longitude DOUBLE NOT NULL,
+  endereco VARCHAR(255) NULL,
+  bairro VARCHAR(120) NULL,
+  cidade VARCHAR(120) NULL DEFAULT 'São Paulo',
+  cep VARCHAR(12) NULL,
+  precisao_metros FLOAT NULL,
+  referencia VARCHAR(200) NULL,
+  criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_localizacoes_regiao FOREIGN KEY (regiao_id) REFERENCES regioes(id) ON DELETE SET NULL,
+  INDEX idx_localizacoes_coords (latitude, longitude),
+  INDEX idx_localizacoes_regiao (regiao_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE eventos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  titulo VARCHAR(200) NOT NULL,
+  descricao TEXT,
+  tipo VARCHAR(50) NOT NULL,
+  severidade ENUM('baixa', 'media', 'alta', 'critica') NOT NULL DEFAULT 'media',
+  status VARCHAR(30) NOT NULL DEFAULT 'ativo',
+  localizacao_id INT NOT NULL,
+  regiao_id INT NULL,
+  fonte_id INT NULL,
+  confianca DECIMAL(5,4) NULL,
+  detectado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  resolvido_em DATETIME NULL,
+  criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_eventos_localizacao FOREIGN KEY (localizacao_id) REFERENCES localizacoes(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_eventos_regiao FOREIGN KEY (regiao_id) REFERENCES regioes(id) ON DELETE SET NULL,
+  CONSTRAINT fk_eventos_fonte FOREIGN KEY (fonte_id) REFERENCES fontes_dados(id) ON DELETE SET NULL,
+  INDEX idx_eventos_status (status),
+  INDEX idx_eventos_tipo (tipo),
+  INDEX idx_eventos_severidade (severidade),
+  INDEX idx_eventos_detectado (detectado_em),
+  INDEX idx_eventos_localizacao (localizacao_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE evidencias_visuais (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  evento_id INT NOT NULL,
+  fonte_id INT NULL,
+  tipo ENUM('imagem', 'video', 'frame', 'thumbnail') NOT NULL DEFAULT 'imagem',
+  caminho_arquivo VARCHAR(500) NULL,
+  url_externa VARCHAR(500) NULL,
+  modelo_ia VARCHAR(80) NULL,
+  classe_detectada VARCHAR(80) NULL,
+  confianca DECIMAL(5,4) NULL,
+  largura_px INT NULL,
+  altura_px INT NULL,
+  metadados JSON NULL,
+  capturado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_evidencias_evento FOREIGN KEY (evento_id) REFERENCES eventos(id) ON DELETE CASCADE,
+  CONSTRAINT fk_evidencias_fonte FOREIGN KEY (fonte_id) REFERENCES fontes_dados(id) ON DELETE SET NULL,
+  INDEX idx_evidencias_evento (evento_id),
+  INDEX idx_evidencias_capturado (capturado_em)
+) ENGINE=InnoDB;
+
+CREATE TABLE dados_contextuais (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  evento_id INT NULL,
+  regiao_id INT NULL,
+  fonte_id INT NULL,
+  categoria VARCHAR(60) NOT NULL,
+  chave VARCHAR(80) NOT NULL,
+  valor_texto TEXT NULL,
+  valor_numerico DOUBLE NULL,
+  unidade VARCHAR(30) NULL,
+  coletado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_contexto_evento FOREIGN KEY (evento_id) REFERENCES eventos(id) ON DELETE CASCADE,
+  CONSTRAINT fk_contexto_regiao FOREIGN KEY (regiao_id) REFERENCES regioes(id) ON DELETE SET NULL,
+  CONSTRAINT fk_contexto_fonte FOREIGN KEY (fonte_id) REFERENCES fontes_dados(id) ON DELETE SET NULL,
+  INDEX idx_contexto_evento (evento_id),
+  INDEX idx_contexto_regiao (regiao_id),
+  INDEX idx_contexto_categoria (categoria),
+  INDEX idx_contexto_coletado (coletado_em)
+) ENGINE=InnoDB;
+
+CREATE TABLE notificacoes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  evento_id INT NOT NULL,
+  canal ENUM('painel', 'push', 'email', 'sms', 'webhook') NOT NULL DEFAULT 'painel',
+  destinatario VARCHAR(200) NULL,
+  titulo VARCHAR(200) NOT NULL,
+  mensagem TEXT NOT NULL,
+  status ENUM('pendente', 'enviada', 'falha', 'lida') NOT NULL DEFAULT 'pendente',
+  tentativas TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  erro_detalhe TEXT NULL,
+  agendada_para DATETIME NULL,
+  enviada_em DATETIME NULL,
+  lida_em DATETIME NULL,
+  criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_notificacoes_evento FOREIGN KEY (evento_id) REFERENCES eventos(id) ON DELETE CASCADE,
+  INDEX idx_notificacoes_evento (evento_id),
+  INDEX idx_notificacoes_status (status),
+  INDEX idx_notificacoes_canal (canal)
+) ENGINE=InnoDB;
+
+CREATE TABLE logs_sistema (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  nivel ENUM('DEBUG', 'INFO', 'WARN', 'ERROR', 'CRITICAL') NOT NULL DEFAULT 'INFO',
+  modulo VARCHAR(80) NOT NULL,
+  mensagem TEXT NOT NULL,
+  evento_id INT NULL,
+  contexto JSON NULL,
+  ip_origem VARCHAR(45) NULL,
+  criado_em DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  CONSTRAINT fk_logs_evento FOREIGN KEY (evento_id) REFERENCES eventos(id) ON DELETE SET NULL,
+  INDEX idx_logs_nivel (nivel),
+  INDEX idx_logs_modulo (modulo),
+  INDEX idx_logs_criado (criado_em),
+  INDEX idx_logs_evento (evento_id)
+) ENGINE=InnoDB;
+
+INSERT INTO regioes (nome, codigo, descricao) VALUES
+  ('Centro', 'CENTRO', 'Região central da cidade'),
+  ('Zona Norte', 'ZN', 'Bairros da zona norte'),
+  ('Zona Sul', 'ZS', 'Bairros da zona sul');
+
+INSERT INTO fontes_dados (nome, tipo, descricao, ativo) VALUES
+  ('Painel manual', 'manual', 'Cadastro manual via API', 1),
+  ('API Prefeitura', 'api', 'Integração com serviços municipais', 1),
+  ('YOLO — câmeras', 'yolo', 'Detecção por visão computacional', 0),
+  ('Motor Data Fusion', 'data_fusion', 'Fusão de múltiplas fontes', 0),
+  ('Estação meteorológica', 'sensor', 'Sensores de clima urbano', 1);
+
+INSERT INTO localizacoes (regiao_id, latitude, longitude, endereco, bairro, referencia) VALUES
+  (1, -23.550520, -46.633308, 'Av. Paulista, 1000', 'Bela Vista', 'Próximo ao MASP'),
+  (2, -23.561414, -46.655881, 'Rua Voluntários, 200', 'Santana', 'Entrada Zona Norte'),
+  (1, -23.542970, -46.629810, 'Rua Augusta, 500', 'Consolação', 'Área comercial');
+
+INSERT INTO eventos (titulo, descricao, tipo, severidade, status, localizacao_id, regiao_id, fonte_id, confianca) VALUES
+  ('Congestionamento na Av. Principal', 'Trânsito intenso no horário de pico', 'transito', 'media', 'ativo', 1, 1, 1, 0.8500),
+  ('Alagamento reportado', 'Acúmulo de água após chuva forte', 'alagamento', 'alta', 'ativo', 2, 2, 2, 0.9200),
+  ('Fumaça em área comercial', 'Possível incêndio — aguardando confirmação', 'incendio', 'alta', 'em_analise', 3, 1, 1, 0.7800);
+
+INSERT INTO evidencias_visuais (evento_id, fonte_id, tipo, url_externa, modelo_ia, classe_detectada, confianca) VALUES
+  (3, 3, 'frame', 'https://exemplo.local/evidencias/fumaca_001.jpg', 'yolov8n', 'smoke', 0.7800);
+
+INSERT INTO dados_contextuais (evento_id, regiao_id, fonte_id, categoria, chave, valor_numerico, unidade) VALUES
+  (2, 2, 5, 'clima', 'precipitacao_mm_h', 45.2, 'mm/h'),
+  (2, 2, 5, 'clima', 'umidade', 92.0, '%'),
+  (1, 1, 2, 'transito', 'indice_congestionamento', 8.5, 'escala_0_10');
+
+INSERT INTO notificacoes (evento_id, canal, titulo, mensagem, status) VALUES
+  (2, 'painel', 'Alerta: alagamento', 'Alagamento reportado na Zona Norte. Evite a região.', 'enviada'),
+  (3, 'push', 'Possível incêndio', 'Fumaça detectada na região Centro. Equipes em deslocamento.', 'pendente');
+
+INSERT INTO logs_sistema (nivel, modulo, mensagem, evento_id, contexto) VALUES
+  ('INFO', 'api', 'Evento #1 listado via GET /eventos', 1, JSON_OBJECT('endpoint', '/eventos', 'limite', 100)),
+  ('INFO', 'api', 'Seed do banco aplicado com sucesso', NULL, JSON_OBJECT('versao_schema', '2.0'));
