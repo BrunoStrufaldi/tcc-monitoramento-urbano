@@ -12,6 +12,7 @@ from app.routers import (
     logs,
     notificacoes,
     regioes,
+    tempo_real,
 )
 
 app = FastAPI(
@@ -37,6 +38,7 @@ app.include_router(fontes.router)
 app.include_router(localizacoes.router)
 app.include_router(evidencias.router)
 app.include_router(dados_contextuais.router)
+app.include_router(tempo_real.router)
 
 
 @app.get("/")

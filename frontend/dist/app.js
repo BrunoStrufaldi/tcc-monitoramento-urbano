@@ -57,6 +57,10 @@ const markersById = new Map();
 const activeSeverities = new Set(Object.keys(SEVERITIES));
 let railPanelOpen = false;
 let activeView = "dashboard";
+let sseConnection = null;
+let sseRetryCount = 0;
+const SSE_MAX_RETRY = 5;
+const SSE_BASE_DELAY_MS = 1000;
 const byId = (id) => document.getElementById(id);
 function escapeHtml(value) {
     if (value == null)
@@ -67,6 +71,75 @@ function escapeHtml(value) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
+}
+function connectSSE() {
+    if (sseConnection) {
+        sseConnection.close();
+    }
+    const url = window.CONFIG.API_BASE_URL + "/events/stream";
+    sseConnection = new EventSource(url);
+    sseConnection.addEventListener("evento_criado", (e) => {
+        sseRetryCount = 0;
+        const evento = JSON.parse(e.data);
+        loadedEvents.unshift(evento);
+        renderEventList(loadedEvents);
+        updateMetrics(loadedEvents);
+        updateMarker(evento);
+    });
+    sseConnection.addEventListener("evento_atualizado", (e) => {
+        sseRetryCount = 0;
+        const atualizado = JSON.parse(e.data);
+        const idx = loadedEvents.findIndex((ev) => ev.id === atualizado.id);
+        if (idx !== -1) {
+            loadedEvents[idx] = { ...loadedEvents[idx], ...atualizado };
+        }
+        renderEventList(loadedEvents);
+        updateMetrics(loadedEvents);
+        updateMarker(atualizado);
+        if (selectedEventId === atualizado.id) {
+            renderSelectedEvent(atualizado);
+        }
+    });
+    sseConnection.addEventListener("evento_removido", (e) => {
+        sseRetryCount = 0;
+        const { id } = JSON.parse(e.data);
+        loadedEvents = loadedEvents.filter((ev) => ev.id !== id);
+        renderEventList(loadedEvents);
+        updateMetrics(loadedEvents);
+        removeMarker(id);
+        if (selectedEventId === id) {
+            selectedEventId = null;
+            byId("evento-selecionado").innerHTML =
+                '<p class="empty-state">Selecione um evento no mapa ou na lista.</p>';
+        }
+    });
+    sseConnection.onerror = () => {
+        sseConnection?.close();
+        sseConnection = null;
+        if (sseRetryCount < SSE_MAX_RETRY) {
+            const delay = SSE_BASE_DELAY_MS * Math.pow(2, sseRetryCount);
+            sseRetryCount++;
+            setTimeout(connectSSE, delay);
+        }
+    };
+}
+function updateMarker(evento) {
+    const existing = markersById.get(evento.id);
+    if (existing) {
+        const style = severityStyle(evento.severidade);
+        existing.setIcon({ path: window.google.maps.SymbolPath.CIRCLE, scale: style.scale, fillColor: style.color, fillOpacity: 0.9, strokeWeight: 0 });
+        existing.setTitle(evento.titulo);
+    }
+    else {
+        createMarker(evento);
+    }
+}
+function removeMarker(id) {
+    const marker = markersById.get(id);
+    if (marker) {
+        marker.setMap(null);
+        markersById.delete(id);
+    }
 }
 function normalizeSeverity(value) {
     const key = String(value || "media").toLowerCase().trim();
@@ -737,7 +810,11 @@ function initMapa() {
         searchInput.focus();
     });
     loadEvents();
-    if (window.CONFIG.REFRESH_INTERVAL_MS > 0) {
+    // Tempo real: tenta SSE, fallback para polling
+    if (window.EventSource) {
+        connectSSE();
+    }
+    else if (window.CONFIG.REFRESH_INTERVAL_MS > 0) {
         window.setInterval(loadEvents, window.CONFIG.REFRESH_INTERVAL_MS);
     }
 }
