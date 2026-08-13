@@ -1,11 +1,27 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models.evento import Evento
 from app.models.localizacao import Localizacao
+from app.routers.tempo_real import _broadcast
 from app.schemas.evento import EventoCreate, EventoResponse, EventoUpdate
 from app.schemas.localizacao import LocalizacaoCreate
+
+
+def _schedule_broadcast(event_type: str, data: dict) -> None:
+    """Agenda broadcast — ignora silenciosamente em contextos sem event loop ativo."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    if loop.is_running():
+        try:
+            loop.call_soon_threadsafe(asyncio.ensure_future, _broadcast(event_type, data))
+        except Exception:
+            pass
 
 router = APIRouter(prefix="/eventos", tags=["eventos"])
 
@@ -85,12 +101,14 @@ def criar_evento(payload: EventoCreate, db: Session = Depends(get_db)) -> Evento
     db.add(evento)
     db.commit()
     db.refresh(evento)
-    return (
+    resultado = (
         db.query(Evento)
         .options(*_EVENTO_LOAD_OPTIONS)
         .filter(Evento.id == evento.id)
         .first()
     )
+    _schedule_broadcast("evento_criado", EventoResponse.model_validate(resultado, from_attributes=True).model_dump(mode="json"))
+    return resultado
 
 
 @router.patch("/{evento_id}", response_model=EventoResponse)
@@ -109,12 +127,14 @@ def atualizar_evento(
 
     db.commit()
     db.refresh(evento)
-    return (
+    resultado = (
         db.query(Evento)
         .options(*_EVENTO_LOAD_OPTIONS)
         .filter(Evento.id == evento.id)
         .first()
     )
+    _schedule_broadcast("evento_atualizado", EventoResponse.model_validate(resultado, from_attributes=True).model_dump(mode="json"))
+    return resultado
 
 
 @router.delete("/{evento_id}", response_model=EventoResponse)
@@ -134,4 +154,5 @@ def remover_evento(
     dados = EventoResponse.model_validate(evento, from_attributes=True).model_dump()
     db.delete(evento)
     db.commit()
+    _schedule_broadcast("evento_removido", {"id": evento_id})
     return dados
