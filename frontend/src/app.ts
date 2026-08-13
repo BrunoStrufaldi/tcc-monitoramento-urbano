@@ -395,7 +395,7 @@ function renderSeverityFilters(): void {
         '</button>';
     }),
   ];
-  container.innerHTML = items.join("");
+  container.innerHTML = '<div role="tablist" aria-label="Filtrar por severidade">' + items.join("") + '</div>';
 
   container.querySelectorAll<HTMLButtonElement>("button[data-criticidade]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -547,8 +547,9 @@ function highlightListItem(id: number): void {
   });
 }
 
-function showLoading(): void {
-  byId("lista-eventos").innerHTML = '<li class="loading-state">Carregando eventos...</li>';
+function showLoading(listId: string, message?: string): void {
+  const msg = message || "Carregando...";
+  byId(listId).innerHTML = '<li class="loading-state">' + escapeHtml(msg) + '</li>';
 }
 
 function showError(message: string): void {
@@ -778,7 +779,7 @@ async function loadNotifications(): Promise<void> {
 async function loadEvents(): Promise<void> {
   try {
     setApiStatus(true, "Sincronizando");
-    showLoading();
+    showLoading("lista-eventos", "Carregando eventos...");
     loadedEvents = await fetchEvents();
     updateMetrics(loadedEvents);
     applyMarkers();

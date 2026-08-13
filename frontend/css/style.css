@@ -105,6 +105,19 @@ button { font-family: inherit; }
 ul, ol { list-style: none; }
 input, select, textarea { font-family: inherit; }
 
+/* Screen-reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -1254,6 +1267,14 @@ input, select, textarea { font-family: inherit; }
   .rail-tip { display: none; }
   .brand-eyebrow { display: none; }
   .field { display: none; }
+  .event-card { min-height: 44px; }
+  .rail-btn { min-height: 44px; min-width: 44px; }
+}
+@media (max-width: 480px) {
+  .kpi-grid { grid-template-columns: 1fr; }
+  .sidebar { max-height: 45vh; }
+  .rail { width: 44px; }
+  .rail-panel { left: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
