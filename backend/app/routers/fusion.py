@@ -15,7 +15,7 @@ def _resultado_para_response(
     *,
     persistido: bool,
 ) -> ConfiabilidadeResponse:
-    confianca_db = float(evento.confiabilidade) if evento.confiabilidade is not None else None
+    confianca_db = float(evento.confianca) if evento.confianca is not None else None
     return ConfiabilidadeResponse(
         evento_id=resultado.evento_id,
         confiabilidade=resultado.confiabilidade,
@@ -47,7 +47,7 @@ def obter_confiabilidade(evento_id: int, db: Session = Depends(get_db)) -> Confi
 @router.post("/eventos/{evento_id}/recalcular", response_model=ConfiabilidadeResponse)
 def recalcular_confiabilidade(
     evento_id: int,
-    persistir: bool = Query(True, description="Grava score em eventos.confiabilidade"),
+    persistir: bool = Query(True, description="Grava score em eventos.confianca"),
     db: Session = Depends(get_db),
 ) -> ConfiabilidadeResponse:
     try:

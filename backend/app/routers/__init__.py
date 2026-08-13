@@ -1,3 +1,3 @@
-from app.routers import eventos
+from app.routers import eventos, fusion
 
-__all__ = ["eventos"]
+__all__ = ["eventos", "fusion"]

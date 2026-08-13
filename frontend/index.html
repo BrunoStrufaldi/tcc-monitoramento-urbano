@@ -3,65 +3,287 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mapa de Eventos — Notificações Urbanas</title>
+  <title>GX Operations Center | Urban Intelligence</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230D0D0D'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='15' font-weight='900' fill='%23FF8A00' text-anchor='middle'%3EGX%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 </head>
 <body>
-  <header class="header">
-    <div>
-      <h1>Mapa de eventos urbanos</h1>
-      <p class="subtitle">Marcadores por criticidade · dados em tempo real da API</p>
-    </div>
-    <div class="header-actions">
-      <label class="filtro-status-label">
-        Status
-        <select id="filtro-status" class="select-status">
-          <option value="" selected>Todos</option>
-          <option value="ativo">Ativo</option>
-          <option value="em_analise">Em análise</option>
-          <option value="resolvido">Resolvido</option>
-        </select>
-      </label>
-      <button type="button" id="btn-atualizar" class="btn">Atualizar</button>
-      <span id="status-api" class="status-badge">Carregando…</span>
-    </div>
-  </header>
-
-  <main class="layout">
-    <aside class="sidebar">
-      <section class="sidebar-block">
-        <h2>Criticidade</h2>
-        <p class="sidebar-hint">Marque os níveis exibidos no mapa</p>
-        <div id="legenda-criticidade" class="legenda-criticidade"></div>
-      </section>
-
-      <section class="sidebar-block">
-        <div class="sidebar-titulo-row">
-          <h2>Eventos</h2>
-          <span id="contagem-eventos" class="contagem">—</span>
-        </div>
-        <ul id="lista-eventos" class="lista-eventos">
-          <li class="empty-state">Carregando eventos…</li>
-        </ul>
-      </section>
-    </aside>
-
-    <section class="mapa-container">
-      <div id="mapa" role="application" aria-label="Mapa Google Maps com eventos urbanos"></div>
-      <div class="mapa-overlay-legenda" aria-hidden="true">
-        <span class="overlay-titulo">Criticidade</span>
-        <div class="overlay-itens">
-          <span><i style="background:#22c55e"></i> Baixa</span>
-          <span><i style="background:#f59e0b"></i> Média</span>
-          <span><i style="background:#ef4444"></i> Alta</span>
-          <span><i style="background:#a855f7"></i> Crítica</span>
+  <div class="app-shell">
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <div class="brand-block">
+        <span class="brand-mark">GX</span>
+        <div class="brand-text">
+          <h1>Urban Operations</h1>
+          <span class="brand-eyebrow">Urban Intelligence · Mission Control</span>
         </div>
       </div>
+      <div class="topbar-actions">
+        <label class="field">
+          <span>Status</span>
+          <select id="filtro-status" class="control">
+            <option value="" selected>Todos</option>
+            <option value="ativo">Ativo</option>
+            <option value="em_analise">Em análise</option>
+            <option value="resolvido">Resolvido</option>
+          </select>
+        </label>
+        <button type="button" id="btn-atualizar" class="btn-primary">Atualizar</button>
+        <span id="status-api" class="status-badge">Conectando...</span>
+        <span id="ultima-atualizacao" class="last-update" title="Última sincronização colaborativa"></span>
+      </div>
+    </header>
+
+    <!-- OPS STRIP -->
+    <section class="ops-strip" aria-label="Estado operacional">
+      <span class="ops-chip strong">Ambiente local</span>
+      <span class="ops-chip">FastAPI</span>
+      <span class="ops-chip">Data Fusion</span>
+      <span class="ops-chip muted">Google Maps</span>
     </section>
-  </main>
+
+    <!-- WORKSPACE -->
+    <main class="workspace">
+      <!-- SIDEBAR -->
+      <aside class="sidebar" aria-label="Painel de operações">
+        <!-- NAVIGATION RAIL -->
+        <nav class="rail" aria-label="Navegação por seções">
+          <div class="rail-brand" aria-hidden="true">GX</div>
+          <div class="rail-items">
+            <button class="rail-btn active" data-rail="painel" data-view="dashboard" aria-label="Painel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              <span class="rail-tip">Painel</span>
+            </button>
+            <button class="rail-btn" data-rail="operacoes" aria-label="Operações">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <span class="rail-tip">Operações</span>
+            </button>
+            <button class="rail-btn" data-rail="inteligencia" aria-label="Inteligência">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span class="rail-tip">Inteligência</span>
+            </button>
+            <button class="rail-btn" data-rail="sistema" aria-label="Sistema">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="20" height="7" rx="1.5"/><rect x="2" y="14" width="20" height="7" rx="1.5"/><path d="M6 6.5h.01M6 17.5h.01"/></svg>
+              <span class="rail-tip">Sistema</span>
+            </button>
+          </div>
+          <div class="rail-footer">
+            <button class="rail-btn" data-rail="sistema" data-view="config" aria-label="Configurações">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h.01a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h.01a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.01a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+              <span class="rail-tip">Configurações</span>
+            </button>
+          </div>
+        </nav>
+
+        <!-- CONTEXTUAL NAVIGATION PANEL -->
+        <div class="rail-panel" id="rail-panel" aria-live="polite">
+          <div class="rail-panel-head">
+            <span class="rail-panel-title" id="rail-panel-title">Visão Geral</span>
+          </div>
+          <div class="rail-panel-items" id="rail-panel-items"></div>
+        </div>
+
+        <!-- VIEWS -->
+        <div class="sidebar-content">
+
+          <!-- Dashboard -->
+          <section class="view" id="view-dashboard">
+            <section class="kpi-grid" aria-label="Métricas operacionais">
+              <article class="kpi-card">
+                <div class="kpi-label">Eventos</div>
+                <div class="kpi-value" id="kpi-total">0</div>
+              </article>
+              <article class="kpi-card accent-success">
+                <div class="kpi-label">Ativos</div>
+                <div class="kpi-value" id="kpi-ativos">0</div>
+              </article>
+              <article class="kpi-card accent-danger">
+                <div class="kpi-label">Críticos</div>
+                <div class="kpi-value" id="kpi-criticos">0</div>
+              </article>
+              <article class="kpi-card accent-info">
+                <div class="kpi-label">Confiança</div>
+                <div class="kpi-value" id="kpi-confianca">--</div>
+              </article>
+            </section>
+
+            <section class="selected-event" id="evento-selecionado" aria-live="polite">
+              <div class="compact-heading">
+                <h2>Contexto Operacional</h2>
+                <span id="selected-severity" class="severity-badge" style="background: var(--color-muted);">--</span>
+              </div>
+              <h3 id="selected-title">Selecione um evento</h3>
+              <p id="selected-description" class="selected-description">Selecione um evento para visualizar os detalhes operacionais.</p>
+              <dl class="selected-grid">
+                <div><dt>Status</dt><dd id="selected-status">--</dd></div>
+                <div><dt>Categoria</dt><dd id="selected-type">--</dd></div>
+                <div><dt>Região</dt><dd id="selected-region">--</dd></div>
+                <div><dt>Confiabilidade</dt><dd id="selected-confidence">--</dd></div>
+                <div><dt>Fonte</dt><dd id="selected-source">--</dd></div>
+                <div><dt>Data Fusion</dt><dd id="selected-fusion">--</dd></div>
+              </dl>
+              <div id="fusion-breakdown" class="fusion-breakdown"></div>
+            </section>
+
+            <section class="section">
+              <div class="section-header">
+                <span class="section-title">Criticidade</span>
+                <span id="contagem-strip" class="section-count">0</span>
+              </div>
+              <div id="legenda-criticidade" class="severity-filters segmented-control"></div>
+            </section>
+          </section>
+
+          <!-- Eventos -->
+          <section class="view" id="view-eventos" hidden>
+            <div class="search-field">
+              <div class="search-wrapper">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+                <input id="busca-eventos" class="search-input" type="search" placeholder="Buscar evento, região ou fonte..." autocomplete="off" spellcheck="false" />
+                <button id="busca-limpar" class="search-clear" type="button" aria-label="Limpar busca" hidden>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+                <span class="search-hint">ESC</span>
+              </div>
+            </div>
+            <section class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+              <div class="section-header">
+                <span class="section-title">Alertas Recentes</span>
+                <span id="contagem-eventos" class="section-count">0</span>
+              </div>
+              <ul id="lista-eventos" class="event-list">
+                <li class="loading-state">Carregando eventos...</li>
+              </ul>
+            </section>
+          </section>
+
+          <!-- Alertas -->
+          <section class="view" id="view-alertas" hidden>
+            <section class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+              <div class="section-header">
+                <span class="section-title">Notificações</span>
+                <span id="contagem-notificacoes" class="section-count">0</span>
+              </div>
+              <ul id="lista-notificacoes" class="event-list">
+                <li class="loading-state">Carregando notificações...</li>
+              </ul>
+            </section>
+          </section>
+
+          <!-- Regiões -->
+          <section class="view" id="view-regioes" hidden>
+            <section class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+              <div class="section-header">
+                <span class="section-title">Regiões Monitoradas</span>
+                <span id="contagem-regioes" class="section-count">0</span>
+              </div>
+              <ul id="lista-regioes" class="event-list">
+                <li class="loading-state">Carregando regiões...</li>
+              </ul>
+            </section>
+          </section>
+
+          <!-- Fontes -->
+          <section class="view" id="view-fontes" hidden>
+            <section class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+              <div class="section-header">
+                <span class="section-title">Fontes de Dados</span>
+                <span id="contagem-fontes" class="section-count">0</span>
+              </div>
+              <ul id="lista-fontes" class="event-list">
+                <li class="loading-state">Carregando fontes...</li>
+              </ul>
+            </section>
+          </section>
+
+          <!-- Fusão de Dados -->
+          <section class="view" id="view-fusao" hidden>
+            <section class="selected-event" id="evento-selecionado-fusao">
+              <div class="compact-heading">
+                <h2>Fusão de Dados</h2>
+                <span class="severity-badge" style="background:var(--color-neon);">Motor ativo</span>
+              </div>
+              <h3>Confiabilidade consolidada</h3>
+              <p class="selected-description">Selecione um evento para ver a contribuição de cada evidência na decisão.</p>
+              <div id="fusion-breakdown-panel" class="fusion-breakdown"></div>
+            </section>
+            <div class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+              <div class="section-header">
+                <span class="section-title">Pipeline de Inteligência</span>
+              </div>
+              <ol class="pipeline-list">
+                <li><span class="pipe-idx">01</span><span><strong>Fontes</strong><small>Manuais, APIs, sensores e visão computacional</small></span></li>
+                <li><span class="pipe-idx">02</span><span><strong>Fusão de Dados</strong><small>Combinação ponderada das evidências</small></span></li>
+                <li><span class="pipe-idx">03</span><span><strong>Confiabilidade</strong><small>Score único por evento (0–100%)</small></span></li>
+                <li><span class="pipe-idx">04</span><span><strong>Criticidade</strong><small>Alerta georreferenciado no mapa</small></span></li>
+              </ol>
+            </div>
+          </section>
+
+          <!-- Visão Computacional -->
+          <section class="view" id="view-cv" hidden>
+            <section class="cv-placeholder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span class="cv-label">Visão Computacional</span>
+              <h3>Módulo em desenvolvimento</h3>
+              <p>Detecção automática de ocorrências urbanas por YOLO.</p>
+              <div class="cv-flow">
+                <span>Imagem / Vídeo</span><i>→</i>
+                <span>YOLO</span><i>→</i>
+                <span>Detecção</span><i>→</i>
+                <span>Evidência</span><i>→</i>
+                <span>Evento</span><i>→</i>
+                <span>Fusão</span><i>→</i>
+                <span>Mapa</span>
+              </div>
+            </section>
+          </section>
+
+          <!-- Configurações -->
+          <section class="view" id="view-config" hidden>
+            <section class="cv-placeholder compact">
+              <span class="cv-label">Configurações</span>
+              <h3>Preferências do ambiente</h3>
+              <p>Gestão de integrações e parâmetros operacionais.</p>
+              <span class="code-pill">Em desenvolvimento</span>
+            </section>
+          </section>
+        </div>
+      </aside>
+
+      <!-- MAP -->
+      <section class="map-stage" aria-label="Mapa de eventos urbanos">
+        <div id="mapa" role="application" aria-label="Mapa Google Maps com eventos urbanos"></div>
+
+        <div class="map-overlay map-command-card">
+          <span class="command-label">Visão Operacional</span>
+          <strong>Mapa de Riscos Urbanos</strong>
+          <span class="command-meta">Eventos, confiança e criticidade em tempo real</span>
+        </div>
+
+        <div class="map-overlay floating-summary">
+          <span class="pulse-dot"></span>
+          <span>Operação urbana ativa</span>
+        </div>
+
+        <div class="map-overlay map-legend">
+          <span class="legend-title">Criticidade</span>
+          <div class="legend-items">
+            <span><i style="background:var(--sev-info)"></i> Informação</span>
+            <span><i style="background:var(--sev-baixa)"></i> Baixa</span>
+            <span><i style="background:var(--sev-media)"></i> Média</span>
+            <span><i style="background:var(--sev-alta)"></i> Alta</span>
+            <span><i style="background:var(--sev-critica)"></i> Crítica</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
 
   <script src="js/config.js"></script>
-  <script src="js/criticidade.js"></script>
-  <script src="js/app.js"></script>
+  <script type="module" src="dist/app.js"></script>
 </body>
 </html>

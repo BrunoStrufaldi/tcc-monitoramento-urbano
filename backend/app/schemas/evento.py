@@ -1,36 +1,63 @@
 from datetime import datetime
+from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.schemas.fonte_dados import FonteDadosResponse
+from app.schemas.localizacao import LocalizacaoCreate, LocalizacaoResponse
+from app.schemas.regiao import RegiaoResponse
 
 
 class EventoBase(BaseModel):
-    tipo: str = Field(..., max_length=100, examples=["transito", "alagamento", "incendio"])
+    titulo: str = Field(..., max_length=200)
     descricao: str | None = None
-    criticidade: str | None = Field(None, max_length=50, examples=["baixa", "media", "alta", "critica"])
-    latitude: float | None = Field(None, ge=-90, le=90)
-    longitude: float | None = Field(None, ge=-180, le=180)
-    status: str | None = Field(default="ativo", max_length=50)
-    confiabilidade: float = Field(default=0.0, ge=0, le=1)
-    fonte: str | None = Field(None, max_length=100, examples=["api", "sensor", "manual"])
+    tipo: str = Field(..., max_length=50, examples=["transito", "incendio", "alagamento"])
+    severidade: str = Field(default="media", max_length=20)
+    status: str = Field(default="ativo", max_length=30)
+    regiao_id: int | None = None
+    fonte_id: int | None = None
+    confianca: Decimal | None = Field(None, ge=0, le=1)
 
 
 class EventoCreate(EventoBase):
-    pass
+    localizacao_id: int | None = None
+    localizacao: LocalizacaoCreate | None = None
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def validar_localizacao(self) -> "EventoCreate":
+        tem_coords = self.latitude is not None and self.longitude is not None
+        if not self.localizacao_id and not self.localizacao and not tem_coords:
+            raise ValueError(
+                "Informe localizacao_id, localizacao ou latitude/longitude"
+            )
+        return self
 
 
 class EventoUpdate(BaseModel):
-    tipo: str | None = Field(None, max_length=100)
+    titulo: str | None = Field(None, max_length=200)
     descricao: str | None = None
-    criticidade: str | None = Field(None, max_length=50)
-    latitude: float | None = Field(None, ge=-90, le=90)
-    longitude: float | None = Field(None, ge=-180, le=180)
-    status: str | None = Field(None, max_length=50)
-    confiabilidade: float | None = Field(None, ge=0, le=1)
-    fonte: str | None = Field(None, max_length=100)
+    tipo: str | None = Field(None, max_length=50)
+    severidade: str | None = Field(None, max_length=20)
+    status: str | None = Field(None, max_length=30)
+    regiao_id: int | None = None
+    fonte_id: int | None = None
+    confianca: Decimal | None = Field(None, ge=0, le=1)
+    resolvido_em: datetime | None = None
 
 
 class EventoResponse(EventoBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    localizacao_id: int
+    latitude: float
+    longitude: float
+    detectado_em: datetime
+    resolvido_em: datetime | None = None
     criado_em: datetime
+    atualizado_em: datetime
+    localizacao: LocalizacaoResponse | None = None
+    regiao: RegiaoResponse | None = None
+    fonte: FonteDadosResponse | None = None

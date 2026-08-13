@@ -2,7 +2,6 @@
 
 from data_fusion.models import DadoClima, EvidenciaIA, FonteInfo
 
-# Tipos de fonte considerados oficiais (prefeitura, órgãos, sensores certificados)
 FONTES_OFICIAIS = frozenset({"api", "sensor", "data_fusion"})
 
 
@@ -68,7 +67,6 @@ def _pontuar_clima_por_tipo(tipo: str, dados: list[DadoClima]) -> tuple[float, s
             return 0.55, "Condições climáticas neutras para incêndio"
         return 0.48, "Dados climáticos genéricos disponíveis"
 
-    # Demais tipos: presença de qualquer dado climático
     return 0.58, f"Contexto climático genérico para evento tipo '{tipo_norm}'"
 
 

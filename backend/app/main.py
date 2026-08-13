@@ -2,7 +2,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import eventos, fusion
+from app.routers import (
+    dados_contextuais,
+    evidencias,
+    eventos,
+    fontes,
+    fusion,
+    localizacoes,
+    logs,
+    notificacoes,
+    regioes,
+)
 
 app = FastAPI(
     title="Notificações Urbanas",
@@ -20,6 +30,13 @@ app.add_middleware(
 
 app.include_router(eventos.router)
 app.include_router(fusion.router)
+app.include_router(notificacoes.router)
+app.include_router(logs.router)
+app.include_router(regioes.router)
+app.include_router(fontes.router)
+app.include_router(localizacoes.router)
+app.include_router(evidencias.router)
+app.include_router(dados_contextuais.router)
 
 
 @app.get("/")

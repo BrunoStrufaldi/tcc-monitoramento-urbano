@@ -15,6 +15,6 @@ class ConfiabilidadeResponse(BaseModel):
     nivel: str = Field(..., description="baixa | media | alta")
     componentes: list[ComponenteConfiabilidadeResponse]
     confianca_registrada: float | None = Field(
-        None, description="Valor atual em eventos.confiabilidade no banco"
+        None, description="Valor atual em eventos.confianca no banco"
     )
     persistido: bool = False

@@ -30,3 +30,15 @@ class LocalizacaoCreate(BaseModel):
     cep: str | None = None
     precisao_metros: float | None = None
     referencia: str | None = None
+
+
+class LocalizacaoUpdate(BaseModel):
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
+    regiao_id: int | None = None
+    endereco: str | None = None
+    bairro: str | None = None
+    cidade: str | None = None
+    cep: str | None = None
+    precisao_metros: float | None = None
+    referencia: str | None = None
