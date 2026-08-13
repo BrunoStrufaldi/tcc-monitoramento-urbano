@@ -1,11 +1,15 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+CANAL_NOTIFICACAO = Literal["painel", "push", "email", "sms", "webhook"]
+STATUS_NOTIFICACAO = Literal["pendente", "enviada", "falha", "lida"]
 
 
 class NotificacaoCreate(BaseModel):
     evento_id: int
-    canal: str = Field(default="painel", max_length=20)
+    canal: CANAL_NOTIFICACAO = "painel"
     destinatario: str | None = Field(None, max_length=200)
     titulo: str = Field(..., max_length=200)
     mensagem: str
@@ -13,7 +17,7 @@ class NotificacaoCreate(BaseModel):
 
 
 class NotificacaoUpdate(BaseModel):
-    canal: str | None = Field(None, max_length=20)
+    canal: CANAL_NOTIFICACAO | None = None
     destinatario: str | None = None
     titulo: str | None = Field(None, max_length=200)
     mensagem: str | None = None

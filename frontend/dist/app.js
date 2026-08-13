@@ -39,7 +39,6 @@ const VIEW_TO_RAIL = {
     config: "sistema",
 };
 const SEVERITIES = {
-    info: { label: "Informação", color: "#3b82f6", scale: 8, zIndex: 1 },
     baixa: { label: "Baixa", color: "#22c55e", scale: 9, zIndex: 2 },
     media: { label: "Média", color: "#FFB300", scale: 11, zIndex: 3 },
     alta: { label: "Alta", color: "#FF8A00", scale: 13, zIndex: 4 },
