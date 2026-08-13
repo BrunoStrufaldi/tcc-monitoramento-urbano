@@ -173,3 +173,12 @@ def test_filtrar_por_status(client: TestClient):
 
     lidas = client.get("/notificacoes?status=lida")
     assert len(lidas.json()) == 1
+
+
+def test_criar_notificacao_canal_invalido_retorna_422(client: TestClient):
+    evento_id = _criar_evento(client)
+    response = client.post(
+        "/notificacoes",
+        json={"evento_id": evento_id, "titulo": "Teste", "mensagem": "m", "canal": "fax"},
+    )
+    assert response.status_code == 422

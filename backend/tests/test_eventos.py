@@ -187,3 +187,41 @@ def test_patch_com_payload_invalido_retorna_422(client: TestClient):
 
     response2 = client.patch(f"/eventos/{evento_id}", json={"confianca": 999})
     assert response2.status_code == 422
+
+
+def test_criar_evento_severidade_invalida_retorna_422(client: TestClient):
+    response = client.post(
+        "/eventos",
+        json={
+            "titulo": "Teste",
+            "tipo": "transito",
+            "severidade": "info",
+            "latitude": -23.55,
+            "longitude": -46.63,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_criar_evento_status_invalido_retorna_422(client: TestClient):
+    response = client.post(
+        "/eventos",
+        json={
+            "titulo": "Teste",
+            "tipo": "transito",
+            "status": "cancelado",
+            "latitude": -23.55,
+            "longitude": -46.63,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_patch_severidade_invalida_retorna_422(client: TestClient):
+    criar = client.post(
+        "/eventos",
+        json={"titulo": "Ok", "tipo": "transito", "latitude": -23.55, "longitude": -46.63},
+    )
+    evento_id = criar.json()["id"]
+    response = client.patch(f"/eventos/{evento_id}", json={"severidade": "info"})
+    assert response.status_code == 422
