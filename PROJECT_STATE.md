@@ -18,7 +18,7 @@ Sistema de Notificações Urbanas em Tempo Real para TCC. API FastAPI + frontend
 | ETAPA 5 — Prova de conceito YOLO | Concluída | ml/detector.py simulado, 5 endpoints |
 | ETAPA 6 — Teste ponta a ponta | Concluída | 5 fluxos E2E, 96/96 testes |
 | ETAPA 7 — Documentação | Concluída | README, PROJECT_STATE, ml/README |
-| ETAPA 8 — Validação final | Pendente | Build final, testes, relatório |
+| ETAPA 8 — Validação final | Concluída | Build limpo, 96/96 testes, data fusion OK |
 
 ## Números
 
