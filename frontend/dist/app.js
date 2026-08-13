@@ -290,7 +290,7 @@ function renderSeverityFilters() {
                 '</button>';
         }),
     ];
-    container.innerHTML = items.join("");
+    container.innerHTML = '<div role="tablist" aria-label="Filtrar por severidade">' + items.join("") + '</div>';
     container.querySelectorAll("button[data-criticidade]").forEach((btn) => {
         btn.addEventListener("click", () => {
             const raw = btn.dataset.criticidade;
@@ -429,8 +429,9 @@ function highlightListItem(id) {
         element.classList.toggle("active", Number(element.dataset.id) === id);
     });
 }
-function showLoading() {
-    byId("lista-eventos").innerHTML = '<li class="loading-state">Carregando eventos...</li>';
+function showLoading(listId, message) {
+    const msg = message || "Carregando...";
+    byId(listId).innerHTML = '<li class="loading-state">' + escapeHtml(msg) + '</li>';
 }
 function showError(message) {
     byId("lista-eventos").innerHTML = '<li class="error-state"><strong>Dados Indisponíveis</strong><span>' + escapeHtml(message) + '</span></li>';
@@ -659,7 +660,7 @@ async function loadNotifications() {
 async function loadEvents() {
     try {
         setApiStatus(true, "Sincronizando");
-        showLoading();
+        showLoading("lista-eventos", "Carregando eventos...");
         loadedEvents = await fetchEvents();
         updateMetrics(loadedEvents);
         applyMarkers();
