@@ -177,33 +177,11 @@ INSERT INTO regioes (nome, codigo, descricao) VALUES
 
 INSERT INTO fontes_dados (nome, tipo, descricao, ativo) VALUES
   ('Painel manual', 'manual', 'Cadastro manual via API', 1),
-  ('API Prefeitura', 'api', 'Integração com serviços municipais', 1),
-  ('YOLO — câmeras', 'yolo', 'Detecção por visão computacional', 0),
-  ('Motor Data Fusion', 'data_fusion', 'Fusão de múltiplas fontes', 0),
-  ('Estação meteorológica', 'sensor', 'Sensores de clima urbano', 1);
+  ('GX YOLO', 'yolo', 'Observações visuais revalidadas no servidor', 1),
+  ('Open-Meteo', 'api', 'Clima e qualidade do ar em tempo real', 1);
 
-INSERT INTO localizacoes (regiao_id, latitude, longitude, endereco, bairro, referencia) VALUES
-  (1, -23.550520, -46.633308, 'Av. Paulista, 1000', 'Bela Vista', 'Próximo ao MASP'),
-  (2, -23.561414, -46.655881, 'Rua Voluntários, 200', 'Santana', 'Entrada Zona Norte'),
-  (1, -23.542970, -46.629810, 'Rua Augusta, 500', 'Consolação', 'Área comercial');
-
-INSERT INTO eventos (titulo, descricao, tipo, severidade, status, localizacao_id, regiao_id, fonte_id, confianca) VALUES
-  ('Congestionamento na Av. Principal', 'Trânsito intenso no horário de pico', 'transito', 'media', 'ativo', 1, 1, 1, 0.8500),
-  ('Alagamento reportado', 'Acúmulo de água após chuva forte', 'alagamento', 'alta', 'ativo', 2, 2, 2, 0.9200),
-  ('Fumaça em área comercial', 'Possível incêndio — aguardando confirmação', 'incendio', 'alta', 'em_analise', 3, 1, 1, 0.7800);
-
-INSERT INTO evidencias_visuais (evento_id, fonte_id, tipo, url_externa, modelo_ia, classe_detectada, confianca) VALUES
-  (3, 3, 'frame', 'https://exemplo.local/evidencias/fumaca_001.jpg', 'yolov8n', 'smoke', 0.7800);
-
-INSERT INTO dados_contextuais (evento_id, regiao_id, fonte_id, categoria, chave, valor_numerico, unidade) VALUES
-  (2, 2, 5, 'clima', 'precipitacao_mm_h', 45.2, 'mm/h'),
-  (2, 2, 5, 'clima', 'umidade', 92.0, '%'),
-  (1, 1, 2, 'transito', 'indice_congestionamento', 8.5, 'escala_0_10');
-
-INSERT INTO notificacoes (evento_id, canal, titulo, mensagem, status) VALUES
-  (2, 'painel', 'Alerta: alagamento', 'Alagamento reportado na Zona Norte. Evite a região.', 'enviada'),
-  (3, 'push', 'Possível incêndio', 'Fumaça detectada na região Centro. Equipes em deslocamento.', 'pendente');
+-- O schema não popula eventos, evidências, contexto ou notificações. Esses
+-- registros só podem entrar por uma integração real ou por uma ação auditada.
 
 INSERT INTO logs_sistema (nivel, modulo, mensagem, evento_id, contexto) VALUES
-  ('INFO', 'api', 'Evento #1 listado via GET /eventos', 1, JSON_OBJECT('endpoint', '/eventos', 'limite', 100)),
-  ('INFO', 'api', 'Seed do banco aplicado com sucesso', NULL, JSON_OBJECT('versao_schema', '2.0'));
+  ('INFO', 'api', 'Schema inicializado sem eventos demonstrativos', NULL, JSON_OBJECT('versao_schema', '2.1'));

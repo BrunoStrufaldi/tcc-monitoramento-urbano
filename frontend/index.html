@@ -5,252 +5,403 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GX Operations Center | Urban Intelligence</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230D0D0D'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='15' font-weight='900' fill='%23FF8A00' text-anchor='middle'%3EGX%3C/text%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=20260826-geosampa-basemap-1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 <body>
+  <a href="#lista-eventos" class="skip-link">Pular para lista de eventos</a>
   <div class="app-shell">
-    <!-- TOPBAR -->
+    <!-- TOPBAR — 56px -->
     <header class="topbar">
       <div class="brand-block">
-        <span class="brand-mark">GX</span>
+        <svg class="gx-wordmark" viewBox="0 0 92 40" role="img" aria-label="GX" focusable="false">
+          <defs>
+            <linearGradient id="gx-wordmark-gradient" x1="8" y1="5" x2="82" y2="35" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#ff9a19" />
+              <stop offset=".52" stop-color="#ff6700" />
+              <stop offset="1" stop-color="#e44a00" />
+            </linearGradient>
+          </defs>
+          <path fill="url(#gx-wordmark-gradient)" d="M7 5h34l-4 7H17l-5 16h18l2-6H21l4-7h17l-6 20H5z" />
+          <path fill="url(#gx-wordmark-gradient)" d="M48 5h12l5 8 11-8h12L71 19l10 16H68l-6-10-12 10H38l18-16z" />
+        </svg>
         <div class="brand-text">
-          <h1>Urban Operations</h1>
-          <span class="brand-eyebrow">Urban Intelligence · Mission Control</span>
+          <h1>GX Urban Intelligence</h1>
+          <span class="brand-eyebrow">Operação em tempo real</span>
         </div>
       </div>
+      <div class="topbar-sep"></div>
+      <div class="topbar-center" aria-hidden="true"></div>
       <div class="topbar-actions">
+        <button type="button" id="btn-toggle-left" class="btn-icon left-toggle" title="Painel operacional" aria-label="Alternar painel operacional" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+        </button>
+        <button type="button" id="btn-novo-evento" class="btn-new-event" aria-label="Registrar nova ocorrência">+ Ocorrência</button>
         <label class="field">
           <span>Status</span>
           <select id="filtro-status" class="control">
-            <option value="" selected>Todos</option>
-            <option value="ativo">Ativo</option>
+            <option value="">Todos</option>
+            <option value="ativo" selected>Ativo</option>
             <option value="em_analise">Em análise</option>
             <option value="resolvido">Resolvido</option>
           </select>
         </label>
-        <button type="button" id="btn-atualizar" class="btn-primary">Atualizar</button>
         <span id="status-api" class="status-badge">Conectando...</span>
-        <span id="ultima-atualizacao" class="last-update" title="Última sincronização colaborativa"></span>
+        <span id="status-conexao" class="status-badge conn-off">Desconectado</span>
+        <span id="live-source-status" class="live-source-status">Clima: conectando…</span>
+        <span class="topbar-clock-block">
+          <span class="topbar-clock" id="topbar-clock" aria-label="Horário atual"></span>
+          <span class="topbar-date" id="topbar-date"></span>
+        </span>
+        <button type="button" id="topbar-map-search" class="topbar-map-search" aria-label="Buscar no mapa">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+          <span>Buscar no mapa...</span><kbd>⌘K</kbd>
+        </button>
+        <span id="ultima-atualizacao" class="last-update" title="Última sincronização"></span>
+        <div class="topbar-sep"></div>
+        <button type="button" id="btn-atualizar" class="btn-icon" title="Atualizar dados" aria-label="Atualizar dados">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        </button>
+        <button type="button" id="btn-config" class="btn-icon" title="Perfil e configurações" aria-label="Perfil e configurações">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="9" r="3"/><path d="M6.7 18c1.2-3 3-4.5 5.3-4.5s4.1 1.5 5.3 4.5"/></svg>
+        </button>
+        <button type="button" id="btn-toggle-right" class="btn-icon right-toggle" title="Painel de alertas" aria-label="Alternar painel de alertas" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+        </button>
       </div>
     </header>
 
-    <!-- OPS STRIP -->
-    <section class="ops-strip" aria-label="Estado operacional">
-      <span class="ops-chip strong">Ambiente local</span>
-      <span class="ops-chip">FastAPI</span>
-      <span class="ops-chip">Data Fusion</span>
-      <span class="ops-chip muted">Google Maps</span>
-    </section>
-
     <!-- WORKSPACE -->
     <main class="workspace">
-      <!-- SIDEBAR -->
-      <aside class="sidebar" aria-label="Painel de operações">
-        <!-- NAVIGATION RAIL -->
+      <!-- SIDEBAR (rail + left panel) -->
+      <aside class="sidebar" id="sidebar-shell" aria-label="Painel de operações">
+        <!-- NAVIGATION RAIL — 64px -->
         <nav class="rail" aria-label="Navegação por seções">
           <div class="rail-brand" aria-hidden="true">GX</div>
           <div class="rail-items">
             <button class="rail-btn active" data-rail="painel" data-view="dashboard" aria-label="Painel">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-              <span class="rail-tip">Painel</span>
+              <span class="rail-btn-label">Painel</span>
             </button>
             <button class="rail-btn" data-rail="operacoes" aria-label="Operações">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-              <span class="rail-tip">Operações</span>
+              <span class="rail-btn-label">Operações</span>
             </button>
             <button class="rail-btn" data-rail="inteligencia" aria-label="Inteligência">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
-              <span class="rail-tip">Inteligência</span>
+              <span class="rail-btn-label">Inteligência</span>
             </button>
             <button class="rail-btn" data-rail="sistema" aria-label="Sistema">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="20" height="7" rx="1.5"/><rect x="2" y="14" width="20" height="7" rx="1.5"/><path d="M6 6.5h.01M6 17.5h.01"/></svg>
-              <span class="rail-tip">Sistema</span>
+              <span class="rail-btn-label">Sistema</span>
+            </button>
+            <button class="rail-btn" data-rail="relatorios" aria-label="Relatórios">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h9l5 5v15H6z"/><path d="M15 2v6h5M9 13h8M9 17h8M9 9h2"/></svg>
+              <span class="rail-btn-label">Relatórios</span>
             </button>
           </div>
           <div class="rail-footer">
             <button class="rail-btn" data-rail="sistema" data-view="config" aria-label="Configurações">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h.01a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h.01a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.01a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-              <span class="rail-tip">Configurações</span>
+              <span class="rail-btn-label">Configurações</span>
             </button>
           </div>
         </nav>
 
         <!-- CONTEXTUAL NAVIGATION PANEL -->
-        <div class="rail-panel" id="rail-panel" aria-live="polite">
+        <div class="rail-panel" id="rail-panel" aria-live="polite" hidden>
           <div class="rail-panel-head">
             <span class="rail-panel-title" id="rail-panel-title">Visão Geral</span>
           </div>
           <div class="rail-panel-items" id="rail-panel-items"></div>
         </div>
 
-        <!-- VIEWS -->
-        <div class="sidebar-content">
+        <!-- LEFT PANEL (operational views) -->
+        <div class="left-panel">
+          <div class="sidebar-content">
 
-          <!-- Dashboard -->
-          <section class="view" id="view-dashboard">
-            <section class="kpi-grid" aria-label="Métricas operacionais">
-              <article class="kpi-card">
-                <div class="kpi-label">Eventos</div>
-                <div class="kpi-value" id="kpi-total">0</div>
-              </article>
-              <article class="kpi-card accent-success">
-                <div class="kpi-label">Ativos</div>
-                <div class="kpi-value" id="kpi-ativos">0</div>
-              </article>
-              <article class="kpi-card accent-danger">
-                <div class="kpi-label">Críticos</div>
-                <div class="kpi-value" id="kpi-criticos">0</div>
-              </article>
-              <article class="kpi-card accent-info">
-                <div class="kpi-label">Confiança</div>
-                <div class="kpi-value" id="kpi-confianca">--</div>
-              </article>
-            </section>
+            <!-- Dashboard -->
+            <section class="view" id="view-dashboard">
+              <div class="criticality-heading"><span>Eventos ativos</span><strong id="kpi-ativos">--</strong></div>
+              <section class="kpi-grid criticality-grid" id="kpi-grid" aria-label="Distribuição de criticidade dos eventos ativos">
+                <article class="kpi-card accent-danger">
+                  <div class="kpi-label">Críticos</div>
+                  <div class="kpi-value" id="kpi-criticos">--</div>
+                  <span class="kpi-delta">em monitoramento</span><svg class="kpi-spark" viewBox="0 0 72 20" aria-hidden="true"><polyline points="1,18 14,11 25,15 38,4 52,10 71,2"/></svg>
+                </article>
+                <article class="kpi-card accent-high">
+                  <div class="kpi-label">Altos</div>
+                  <div class="kpi-value" id="kpi-altos">--</div>
+                  <span class="kpi-delta">requer atenção</span><svg class="kpi-spark" viewBox="0 0 72 20" aria-hidden="true"><polyline points="1,16 13,15 27,8 40,12 55,5 71,8"/></svg>
+                </article>
+                <article class="kpi-card accent-warning">
+                  <div class="kpi-label">Médios</div>
+                  <div class="kpi-value" id="kpi-medios">--</div>
+                  <span class="kpi-delta">em observação</span><svg class="kpi-spark" viewBox="0 0 72 20" aria-hidden="true"><polyline points="1,14 13,6 29,10 42,3 55,13 71,9"/></svg>
+                </article>
+                <article class="kpi-card accent-success">
+                  <div class="kpi-label">Baixos</div>
+                  <div class="kpi-value" id="kpi-baixos">--</div>
+                  <span class="kpi-delta">sem impacto</span><svg class="kpi-spark" viewBox="0 0 72 20" aria-hidden="true"><polyline points="1,15 16,12 28,16 39,9 55,12 71,4"/></svg>
+                </article>
+              </section>
 
-            <section class="selected-event" id="evento-selecionado" aria-live="polite">
-              <div class="compact-heading">
-                <h2>Contexto Operacional</h2>
-                <span id="selected-severity" class="severity-badge" style="background: var(--color-muted);">--</span>
-              </div>
-              <h3 id="selected-title">Selecione um evento</h3>
-              <p id="selected-description" class="selected-description">Selecione um evento para visualizar os detalhes operacionais.</p>
-              <dl class="selected-grid">
-                <div><dt>Status</dt><dd id="selected-status">--</dd></div>
-                <div><dt>Categoria</dt><dd id="selected-type">--</dd></div>
-                <div><dt>Região</dt><dd id="selected-region">--</dd></div>
-                <div><dt>Confiabilidade</dt><dd id="selected-confidence">--</dd></div>
-                <div><dt>Fonte</dt><dd id="selected-source">--</dd></div>
-                <div><dt>Data Fusion</dt><dd id="selected-fusion">--</dd></div>
-              </dl>
-              <div id="fusion-breakdown" class="fusion-breakdown"></div>
-            </section>
+              <section class="operator-level" aria-label="Progresso do operador">
+                <div class="operator-level-head"><span>OPERADOR URBANO</span><strong id="operator-level">NÍVEL 1</strong></div>
+                <div class="operator-xp-track"><span id="operator-xp-fill"></span></div>
+                <div class="operator-level-meta"><span id="operator-xp">0 XP</span><span id="operator-goal">Próximo nível: 250 XP</span></div>
+                <div class="operator-objectives"><span>✓ Monitorar ocorrências</span><span id="operator-streak">🔥 Sequência: 0</span></div>
+              </section>
 
-            <section class="section">
-              <div class="section-header">
-                <span class="section-title">Criticidade</span>
-                <span id="contagem-strip" class="section-count">0</span>
-              </div>
-              <div id="legenda-criticidade" class="severity-filters segmented-control"></div>
-            </section>
-          </section>
-
-          <!-- Eventos -->
-          <section class="view" id="view-eventos" hidden>
-            <div class="search-field">
-              <div class="search-wrapper">
-                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-                <input id="busca-eventos" class="search-input" type="search" placeholder="Buscar evento, região ou fonte..." autocomplete="off" spellcheck="false" aria-label="Buscar evento, região ou fonte" />
-                <button id="busca-limpar" class="search-clear" type="button" aria-label="Limpar busca" hidden>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              <section class="selected-event" id="evento-selecionado" aria-live="polite">
+                <div class="selected-event-section-title"><span>Evento selecionado</span></div>
+                <div class="selected-event-header">
+                  <div class="selected-event-top">
+                    <span id="selected-severity" class="severity-badge" style="background: var(--text-muted);">--</span>
+                    <span id="selected-status-pill" class="status-pill">--</span>
+                  </div>
+                  <h3 id="selected-title" tabindex="-1">Selecione um evento</h3>
+                  <p id="selected-description" class="selected-description">Selecione um evento para visualizar os detalhes operacionais.</p>
+                </div>
+                <div class="selected-event-meta" id="selected-event-meta" hidden>
+                  <div class="selected-meta-row">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-6-5.2-6-10a6 6 0 1112 0c0 4.8-6 10-6 10z"/><circle cx="12" cy="11" r="2"/></svg>
+                    <span id="selected-region">--</span>
+                  </div>
+                  <div class="selected-meta-row">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    <span id="selected-time">--</span>
+                  </div>
+                  <div class="selected-meta-row">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v14c0 1.66 3.13 3 7 3s7-1.34 7-3V5M5 12c0 1.66 3.13 3 7 3s7-1.34 7-3"/></svg>
+                    <span id="selected-source">--</span>
+                  </div>
+                </div>
+                <div class="confidence-circle-wrap" id="confidence-circle-wrap" hidden>
+                  <svg class="confidence-circle" viewBox="0 0 72 72" aria-hidden="true">
+                    <circle class="confidence-track-ring" cx="36" cy="36" r="30" fill="none" stroke-width="5"/>
+                    <circle class="confidence-fill-ring" id="confidence-fill-ring" cx="36" cy="36" r="30" fill="none" stroke-width="5" stroke-dasharray="188.5" stroke-dashoffset="188.5" transform="rotate(-90 36 36)"/>
+                  </svg>
+                  <div class="confidence-circle-text">
+                    <span class="confidence-circle-value" id="confidence-circle-value">--</span>
+                    <span class="confidence-circle-label">Confiabilidade</span>
+                  </div>
+                </div>
+                <button type="button" id="selected-open-detail" class="selected-open-detail" hidden>
+                  Ver detalhes do evento
+                  <span aria-hidden="true">›</span>
                 </button>
-                <span class="search-hint">ESC</span>
-              </div>
-            </div>
-            <section class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-              <div class="section-header">
-                <span class="section-title">Alertas Recentes</span>
-                <span id="contagem-eventos" class="section-count">0</span>
-              </div>
-              <ul id="lista-eventos" class="event-list">
-                <li class="loading-state">Carregando eventos...</li>
-              </ul>
-            </section>
-          </section>
+              </section>
 
-          <!-- Alertas -->
-          <section class="view" id="view-alertas" hidden>
-            <section class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-              <div class="section-header">
-                <span class="section-title">Notificações</span>
-                <span id="contagem-notificacoes" class="section-count">0</span>
-              </div>
-              <ul id="lista-notificacoes" class="event-list">
-                <li class="loading-state">Carregando notificações...</li>
-              </ul>
-            </section>
-          </section>
+                <section class="fusion-section" id="fusion-section" hidden>
+                  <div class="fusion-section-header">
+                    <span class="fusion-section-title">Data Fusion explicável</span>
+                    <span class="fusion-section-level data-fusion-level">--</span>
+                  </div>
+                  <div class="fusion-audit-summary">
+                    <span class="fusion-audit-confidence data-fusion-confidence">--</span>
+                    <span class="fusion-audit-caption">Confiança consolidada</span>
+                    <span class="fusion-audit-time data-fusion-calculated-at">Cálculo pendente</span>
+                    <button type="button" class="fusion-recalculate" data-action="recalculate-fusion">Recalcular</button>
+                  </div>
+                  <div id="fusion-breakdown" class="fusion-breakdown"></div>
+                  <div class="fusion-final">
+                    <span>Contribuição final</span>
+                    <div class="fusion-final-track"><i></i></div>
+                    <strong class="data-fusion-confidence">--</strong>
+                  </div>
+                  <p class="yolo-disclaimer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                    YOLO produz evidência; não toma a decisão final. A confiança é definida pela Fusão de Dados.
+                  </p>
+                </section>
 
-          <!-- Regiões -->
-          <section class="view" id="view-regioes" hidden>
-            <section class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-              <div class="section-header">
-                <span class="section-title">Regiões Monitoradas</span>
-                <span id="contagem-regioes" class="section-count">0</span>
-              </div>
-              <ul id="lista-regioes" class="event-list">
-                <li class="loading-state">Carregando regiões...</li>
-              </ul>
+              <section class="section">
+                <div class="section-header">
+                  <span class="section-title">Criticidade</span>
+                  <span id="contagem-strip" class="section-count">0</span>
+                </div>
+                <div id="legenda-criticidade" class="severity-filters segmented-control"></div>
+              </section>
             </section>
-          </section>
 
-          <!-- Fontes -->
-          <section class="view" id="view-fontes" hidden>
-            <section class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-              <div class="section-header">
-                <span class="section-title">Fontes de Dados</span>
-                <span id="contagem-fontes" class="section-count">0</span>
+            <!-- Eventos -->
+            <section class="view" id="view-eventos" hidden>
+              <div class="search-field">
+                <div class="search-wrapper">
+                  <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+                  <input id="busca-eventos" class="search-input" type="search" placeholder="Buscar evento, região ou fonte..." autocomplete="off" spellcheck="false" aria-label="Buscar evento, região ou fonte" />
+                  <button id="busca-limpar" class="search-clear" type="button" aria-label="Limpar busca" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                  </button>
+                  <span class="search-hint">ESC</span>
+                </div>
               </div>
-              <ul id="lista-fontes" class="event-list">
-                <li class="loading-state">Carregando fontes...</li>
-              </ul>
+              <section class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+                <div class="section-header">
+                  <span class="section-title">Alertas Recentes</span>
+                  <span id="contagem-eventos" class="section-count">0</span>
+                </div>
+                <ul id="lista-eventos" class="event-list">
+                  <li class="loading-state">Carregando eventos...</li>
+                </ul>
+              </section>
             </section>
-          </section>
 
-          <!-- Fusão de Dados -->
-          <section class="view" id="view-fusao" hidden>
-            <section class="selected-event" id="evento-selecionado-fusao">
-              <div class="compact-heading">
-                <h2>Fusão de Dados</h2>
-                <span class="severity-badge" style="background:var(--color-neon);">Motor ativo</span>
-              </div>
-              <h3>Confiabilidade consolidada</h3>
-              <p class="selected-description">Selecione um evento para ver a contribuição de cada evidência na decisão.</p>
-              <div id="fusion-breakdown-panel" class="fusion-breakdown"></div>
+            <!-- Alertas -->
+            <section class="view" id="view-alertas" hidden>
+              <section class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+                <div class="section-header">
+                  <span class="section-title">Notificações</span>
+                  <span id="contagem-notificacoes" class="section-count">0</span>
+                </div>
+                <ul id="lista-notificacoes" class="event-list">
+                  <li class="loading-state">Carregando notificações...</li>
+                </ul>
+              </section>
             </section>
-            <div class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-              <div class="section-header">
-                <span class="section-title">Pipeline de Inteligência</span>
-              </div>
-              <ol class="pipeline-list">
-                <li><span class="pipe-idx">01</span><span><strong>Fontes</strong><small>Manuais, APIs, sensores e visão computacional</small></span></li>
-                <li><span class="pipe-idx">02</span><span><strong>Fusão de Dados</strong><small>Combinação ponderada das evidências</small></span></li>
-                <li><span class="pipe-idx">03</span><span><strong>Confiabilidade</strong><small>Score único por evento (0–100%)</small></span></li>
-                <li><span class="pipe-idx">04</span><span><strong>Criticidade</strong><small>Alerta georreferenciado no mapa</small></span></li>
-              </ol>
-            </div>
-          </section>
 
-          <!-- Visão Computacional -->
-          <section class="view" id="view-cv" hidden>
-            <section class="cv-placeholder">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
-              <span class="cv-label">Visão Computacional</span>
-              <h3>Módulo em desenvolvimento</h3>
-              <p>Detecção automática de ocorrências urbanas por YOLO.</p>
-              <div class="cv-flow">
-                <span>Imagem / Vídeo</span><i>→</i>
-                <span>YOLO</span><i>→</i>
-                <span>Detecção</span><i>→</i>
-                <span>Evidência</span><i>→</i>
-                <span>Evento</span><i>→</i>
-                <span>Fusão</span><i>→</i>
-                <span>Mapa</span>
+            <!-- Regiões -->
+            <section class="view" id="view-regioes" hidden>
+              <section class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+                <div class="section-header">
+                  <span class="section-title">Regiões Monitoradas</span>
+                  <span id="contagem-regioes" class="section-count">0</span>
+                </div>
+                <ul id="lista-regioes" class="event-list">
+                  <li class="loading-state">Carregando regiões...</li>
+                </ul>
+              </section>
+            </section>
+
+            <!-- Fontes -->
+            <section class="view" id="view-fontes" hidden>
+              <section class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+                <div class="section-header">
+                  <span class="section-title">Fontes de Dados</span>
+                  <span id="contagem-fontes" class="section-count">0</span>
+                </div>
+                <ul id="lista-fontes" class="event-list">
+                  <li class="loading-state">Carregando fontes...</li>
+                </ul>
+              </section>
+            </section>
+
+            <!-- Fusão de Dados -->
+            <section class="view" id="view-fusao" hidden>
+              <section class="selected-event" id="evento-selecionado-fusao">
+                <div class="compact-heading">
+                  <h2 style="font-size:16px;font-weight:700;color:var(--text-primary);">Fusão de Dados</h2>
+                  <span class="severity-badge" style="background:var(--gx-light);">Motor ativo</span>
+                </div>
+                <h3 style="font-size:14px;font-weight:700;color:var(--text-primary);margin:8px 0 4px;">Confiabilidade consolidada</h3>
+                <p class="selected-description">Selecione um evento para ver a contribuição de cada evidência na decisão.</p>
+                <div class="fusion-audit-summary">
+                  <span class="fusion-audit-confidence data-fusion-confidence">--</span>
+                  <span class="fusion-audit-caption">Confiança consolidada</span>
+                  <span class="fusion-section-level data-fusion-level">--</span>
+                  <span class="fusion-audit-time data-fusion-calculated-at">Cálculo pendente</span>
+                  <button type="button" class="fusion-recalculate" data-action="recalculate-fusion">Recalcular</button>
+                </div>
+                <div id="fusion-breakdown-panel" class="fusion-breakdown"></div>
+              </section>
+              <div class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+                <div class="section-header">
+                  <span class="section-title">Pipeline de Inteligência</span>
+                </div>
+                <ol class="pipeline-list">
+                  <li><span class="pipe-idx">01</span><span><strong>Fontes</strong><small>Manuais, APIs, sensores e visão computacional</small></span></li>
+                  <li><span class="pipe-idx">02</span><span><strong>Fusão de Dados</strong><small>Combinação ponderada das evidências</small></span></li>
+                  <li><span class="pipe-idx">03</span><span><strong>Confiabilidade</strong><small>Score único por evento (0–100%)</small></span></li>
+                  <li><span class="pipe-idx">04</span><span><strong>Criticidade</strong><small>Alerta georreferenciado no mapa</small></span></li>
+                </ol>
               </div>
             </section>
-          </section>
 
-          <!-- Configurações -->
-          <section class="view" id="view-config" hidden>
-            <section class="cv-placeholder compact">
-              <span class="cv-label">Configurações</span>
-              <h3>Preferências do ambiente</h3>
-              <p>Gestão de integrações e parâmetros operacionais.</p>
-              <span class="code-pill">Em desenvolvimento</span>
+            <!-- Visão Computacional -->
+            <section class="view" id="view-cv" hidden>
+              <section class="cv-workbench" aria-labelledby="cv-title">
+                <div class="cv-workbench-head">
+                  <div>
+                    <span class="cv-label">Visão Computacional</span>
+                    <h2 id="cv-title">Análise de evidência por YOLO</h2>
+                    <p>Envie uma imagem para localizar sinais de ocorrências urbanas.</p>
+                  </div>
+                  <span id="cv-model-status" class="cv-status">Verificando modelo…</span>
+                </div>
+                <label class="cv-dropzone" id="cv-dropzone" for="cv-file">
+                  <input id="cv-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4m0 0L8 8m4-4l4-4 4 4M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
+                  <strong id="cv-file-label">Selecionar imagem de evidência</strong>
+                  <span>PNG, JPG ou WEBP · até 10 MB</span>
+                </label>
+                <section class="cv-live-camera" aria-labelledby="cv-camera-title">
+                  <div class="cv-camera-head">
+                    <div><span class="cv-label" id="cv-camera-title">Câmera ao vivo</span><p id="cv-camera-status">Nenhuma câmera conectada.</p></div>
+                    <span class="cv-live-pill"><i></i> Fonte autorizada</span>
+                  </div>
+                  <div class="cv-video-frame">
+                    <video id="cv-video" autoplay muted playsinline aria-label="Prévia da câmera ao vivo"></video>
+                    <canvas id="cv-overlay" aria-label="Detecções no quadro da câmera" hidden></canvas>
+                    <span class="cv-video-empty" id="cv-video-empty">Autorize uma câmera para iniciar a prévia.</span>
+                  </div>
+                  <dl class="cv-metrics" aria-label="Métricas da validação visual"><div><dt>Conexão</dt><dd id="cv-connection-status">Upload sob demanda</dd></div><div><dt>FPS</dt><dd id="cv-fps">0</dd></div><div><dt>Latência</dt><dd id="cv-latency">--</dd></div></dl>
+                  <div class="cv-camera-actions">
+                    <button id="cv-camera-start" type="button" class="btn-secondary">Ativar câmera</button>
+                    <button id="cv-camera-capture" type="button" class="btn-primary" disabled>Capturar quadro</button>
+                    <button id="cv-camera-monitor" type="button" class="btn-secondary" disabled>Iniciar monitoramento (1 FPS)</button>
+                    <button id="cv-camera-stop" type="button" class="btn-quiet" disabled>Encerrar</button>
+                  </div>
+                </section>
+                <div class="cv-preview" id="cv-preview" hidden>
+                  <img id="cv-preview-image" alt="Prévia da evidência selecionada">
+                  <button id="cv-remove-file" type="button" class="cv-remove" aria-label="Remover imagem">×</button>
+                </div>
+                <div class="cv-actions">
+                  <label class="cv-threshold">Confiança mínima <output id="cv-threshold-value" for="cv-threshold">45%</output>
+                    <input id="cv-threshold" type="range" min="5" max="95" value="45">
+                  </label>
+                  <button id="cv-analyze" type="button" class="btn-primary" disabled>Analisar com YOLO</button>
+                </div>
+                <p id="cv-feedback" class="cv-feedback" role="status">Selecione uma imagem para iniciar a análise.</p>
+                <div id="cv-results" class="cv-results" aria-live="polite"></div>
+                <button id="cv-confirm" type="button" class="btn-primary cv-confirm" disabled>Adicionar observação ao mapa</button>
+                <div class="cv-flow" aria-label="Pipeline de inteligência">
+                  <span>Imagem</span><i>→</i><span>YOLO</span><i>→</i><span>Evidência</span><i>→</i><span>Fusão de Dados</span><i>→</i><span>Mapa</span>
+                </div>
+              </section>
+              <section class="cv-placeholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span class="cv-label">Visão Computacional</span>
+                <h3>Módulo em desenvolvimento</h3>
+                <p>Detecção automática de ocorrências urbanas por YOLO.</p>
+                <div class="cv-flow">
+                  <span>Imagem / Vídeo</span><i>→</i>
+                  <span>YOLO</span><i>→</i>
+                  <span>Detecção</span><i>→</i>
+                  <span>Evidência</span><i>→</i>
+                  <span>Evento</span><i>→</i>
+                  <span>Fusão</span><i>→</i>
+                  <span>Mapa</span>
+                </div>
+              </section>
             </section>
-          </section>
+
+            <!-- Configurações -->
+            <section class="view" id="view-config" hidden>
+              <section class="cv-placeholder compact">
+                <span class="cv-label">Configurações</span>
+                <h3>Preferências do ambiente</h3>
+                <p>Gestão de integrações e parâmetros operacionais.</p>
+                <span class="code-pill">Em desenvolvimento</span>
+              </section>
+            </section>
+
+          </div>
         </div>
       </aside>
 
@@ -258,10 +409,22 @@
       <section class="map-stage" aria-label="Mapa de eventos urbanos">
         <div id="mapa" role="application" aria-label="Mapa Google Maps com eventos urbanos"></div>
 
+        <div class="map-overlay map-controls">
+          <input type="search" class="map-search" id="map-search" placeholder="Buscar endereço ou região..." aria-label="Buscar eventos no mapa">
+          <button type="button" class="map-filter-button" id="map-filter-focus" aria-controls="legenda-criticidade">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M6 12h12m-8 7h4"/></svg>
+            Filtros
+          </button>
+          <button type="button" class="map-filter-button map-options-button" id="map-display-options" aria-label="Alternar contraste do mapa" title="Alternar contraste do mapa">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M10 14v6"/></svg>
+          </button>
+        </div>
+
         <div class="map-overlay map-command-card">
           <span class="command-label">Visão Operacional</span>
           <strong>Mapa de Riscos Urbanos</strong>
           <span class="command-meta">Eventos, confiança e criticidade em tempo real</span>
+          <span id="live-air-status" class="command-meta live-air-status">Qualidade do ar: conectando…</span>
         </div>
 
         <div class="map-overlay floating-summary">
@@ -272,18 +435,185 @@
         <div class="map-overlay map-legend">
           <span class="legend-title">Criticidade</span>
           <div class="legend-items">
-            <span><i style="background:var(--sev-info)"></i> Informação</span>
-            <span><i style="background:var(--sev-baixa)"></i> Baixa</span>
-            <span><i style="background:var(--sev-media)"></i> Média</span>
-            <span><i style="background:var(--sev-alta)"></i> Alta</span>
-            <span><i style="background:var(--sev-critica)"></i> Crítica</span>
+            <span class="legend-critical"><i style="background:var(--sev-critica)"></i> Crítico</span>
+            <span><i style="background:var(--sev-alta)"></i> Alto</span>
+            <span><i style="background:var(--sev-media)"></i> Médio</span>
+            <span><i style="background:var(--sev-baixa)"></i> Baixo</span>
           </div>
         </div>
+
+        <div class="map-overlay map-side-controls" aria-label="Controles de visualização do mapa">
+          <button type="button" id="map-layers" class="map-side-button map-layers-button" aria-label="Alternar contraste das camadas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5M3 16l9 5 9-5"/></svg>
+            <span>Camadas</span>
+          </button>
+          <button type="button" id="map-recenter" class="map-side-button map-recenter-button" aria-label="Centralizar mapa em São Paulo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/><circle cx="12" cy="12" r="8"/></svg>
+          </button>
+        </div>
       </section>
+
+      <!-- RIGHT PANEL (alerts & evidence) — 330px -->
+      <aside class="right-panel" id="right-panel" aria-label="Alertas e evidências">
+        <div class="right-panel-header">
+          <h2 class="right-panel-title">Alertas operacionais</h2>
+          <button type="button" class="right-panel-all" id="btn-view-alerts">Ver todos</button>
+          <button type="button" class="btn-icon right-panel-close" id="btn-close-right" aria-label="Fechar painel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="right-panel-content">
+          <div class="section">
+            <div class="section-header">
+              <span class="section-title">Sinais operacionais</span>
+            </div>
+            <div id="right-panel-alerts">
+              <div class="right-panel-empty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                <span>Carregando alertas...</span>
+              </div>
+            </div>
+          </div>
+          <div class="section">
+            <div class="section-header">
+              <span class="section-title">Evidência YOLO verificada</span>
+              <span class="evidence-live-metrics"><span>Frame real</span><strong id="evidence-live-confidence">--</strong></span>
+            </div>
+            <div id="right-panel-evidence">
+              <div class="right-panel-empty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span>Selecione um evento para ver evidências</span>
+                <p class="rp-empty-hint">A evidência de IA integra o Data Fusion para gerar o score de confiabilidade.</p>
+              </div>
+            </div>
+          </div>
+          <div class="section">
+            <div class="section-header">
+              <span class="section-title">Atividade da Sessão</span>
+            </div>
+            <div id="right-panel-activity">
+              <div class="right-panel-empty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                <span>Sem atividade registrada</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ACTIVITY FEED — 132px bottom -->
+      <footer class="activity-feed" aria-label="Feed de atividade da sessão">
+        <div class="feed-header">
+          <div class="feed-header-left">
+            <span class="feed-label">
+              <span class="pulse-dot feed-pulse"></span>
+              Atividade em tempo real
+            </span>
+          </div>
+          <button class="feed-action" id="feed-view-history" type="button">Ver histórico completo</button>
+        </div>
+        <button type="button" class="feed-nav feed-nav-prev" id="feed-nav-prev" aria-label="Atividades anteriores">‹</button>
+        <div class="feed-items" id="feed-items">
+          <div class="feed-empty">Nenhuma atividade na sessão</div>
+        </div>
+        <button type="button" class="feed-nav feed-nav-next" id="feed-nav-next" aria-label="Próximas atividades">›</button>
+      </footer>
     </main>
   </div>
 
-  <script src="js/config.js"></script>
-  <script type="module" src="dist/app.js"></script>
+  <div class="incident-modal" id="incident-modal" hidden role="dialog" aria-modal="true" aria-labelledby="incident-modal-title">
+    <form id="incident-form" class="incident-form">
+      <div class="incident-form-head"><div><span>COMANDO OPERACIONAL</span><h2 id="incident-modal-title">Registrar ocorrência</h2></div><button id="incident-close" type="button" aria-label="Fechar">×</button></div>
+      <label>Título<input name="titulo" required maxlength="200" placeholder="Ex.: Alagamento detectado"></label>
+      <label>Descrição<textarea name="descricao" rows="3" placeholder="Contexto operacional"></textarea></label>
+      <div class="incident-grid"><label>Tipo<input name="tipo" required value="incidente"></label><label>Severidade<select name="severidade"><option value="baixa">Baixa</option><option value="media" selected>Média</option><option value="alta">Alta</option><option value="critica">Crítica</option></select></label></div>
+      <div class="incident-grid"><label>Latitude<input name="latitude" type="number" step="any" required value="-23.5505"></label><label>Longitude<input name="longitude" type="number" step="any" required value="-46.6333"></label></div>
+      <p id="incident-feedback" class="incident-feedback" role="status"></p>
+      <button class="btn-primary" type="submit">Registrar e transmitir</button>
+    </form>
+  </div>
+
+  <div class="login-modal" id="login-modal" hidden role="dialog" aria-modal="true" aria-labelledby="login-title">
+    <form id="login-form" class="login-form" method="post" autocomplete="on">
+      <span class="login-eyebrow">GX URBAN INTELLIGENCE</span>
+      <h2 id="login-title">Acesso operacional</h2>
+      <p>Use a conta criada na configuração inicial da API.</p>
+      <label for="login-username">Usuário</label>
+      <input id="login-username" name="username" autocomplete="username" required maxlength="80">
+      <label for="login-password">Senha</label>
+      <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+      <p id="login-feedback" class="login-feedback" role="status" aria-live="polite"></p>
+      <button class="btn-primary" type="submit">Entrar no painel</button>
+    </form>
+  </div>
+
+  <div class="evidence-viewer" id="evidence-viewer" hidden role="dialog" aria-modal="true" aria-labelledby="evidence-viewer-title">
+    <div class="evidence-viewer-dialog" role="document">
+      <div class="evidence-viewer-head"><h2 id="evidence-viewer-title">Evidência visual</h2><button id="evidence-viewer-close" type="button" aria-label="Fechar visualização ampliada">×</button></div>
+      <img id="evidence-viewer-image" alt="">
+    </div>
+  </div>
+
+  <aside class="event-detail-drawer" id="event-detail-drawer" hidden aria-label="Detalhes do evento" aria-modal="true" role="dialog" aria-labelledby="event-detail-title">
+    <div class="event-detail-head">
+      <div><span class="event-detail-eyebrow">Evento selecionado</span><h2 id="event-detail-title">Detalhes do evento</h2></div>
+      <button id="event-detail-close" type="button" aria-label="Fechar detalhes">×</button>
+    </div>
+    <div class="event-detail-tabs" role="tablist" aria-label="Seções do evento">
+      <button type="button" role="tab" data-detail-tab="resumo" aria-selected="true">Resumo</button>
+      <button type="button" role="tab" data-detail-tab="linha-do-tempo">Linha do tempo</button>
+      <button type="button" role="tab" data-detail-tab="evidencias">Evidências</button>
+      <button type="button" role="tab" data-detail-tab="clima">Clima</button>
+      <button type="button" role="tab" data-detail-tab="fusion">Data Fusion</button>
+      <button type="button" role="tab" data-detail-tab="notificacoes">Notificações</button>
+      <button type="button" role="tab" data-detail-tab="historico">Histórico e logs</button>
+    </div>
+    <section class="event-detail-actions" aria-labelledby="event-detail-actions-title">
+      <div class="detail-actions-heading"><h3 id="event-detail-actions-title">Ações operacionais</h3><p>As alterações são enviadas para a API do GX.</p></div>
+      <div class="detail-action-status">
+        <label for="detail-event-status">Status</label>
+        <select id="detail-event-status" aria-label="Status do evento">
+          <option value="ativo">Ativo</option>
+          <option value="em_analise">Em análise</option>
+          <option value="resolvido">Resolvido</option>
+        </select>
+        <button type="button" class="detail-action-button" data-detail-action="update-status">Atualizar status</button>
+        <button type="button" class="detail-action-button detail-action-danger" data-detail-action="resolve-event">Marcar como resolvido</button>
+      </div>
+      <div class="detail-action-grid">
+        <button type="button" class="detail-action-button" data-detail-action="recalculate">Recalcular confiança</button>
+        <button type="button" class="detail-action-button" data-detail-action="copy-coordinates">Copiar coordenadas</button>
+        <a id="detail-route-link" class="detail-action-button" target="_blank" rel="noopener">Abrir rota</a>
+      </div>
+      <details class="detail-action-disclosure">
+        <summary>Criar notificação</summary>
+        <form id="detail-notification-form" class="detail-action-form">
+          <label>Canal<select name="canal"><option value="painel">Painel</option><option value="push">Push</option><option value="email">E-mail</option><option value="sms">SMS</option><option value="webhook">Webhook</option></select></label>
+          <label>Destinatário <input name="destinatario" maxlength="200" autocomplete="off"></label>
+          <label>Título <input name="titulo" maxlength="200" required></label>
+          <label>Mensagem <textarea name="mensagem" required rows="3"></textarea></label>
+          <button type="submit" class="detail-action-button" data-detail-action="create-notification">Criar notificação</button>
+        </form>
+      </details>
+      <details class="detail-action-disclosure">
+        <summary>Adicionar evidência</summary>
+        <p class="detail-action-help">O backend atual registra metadados e uma URL; não oferece upload de arquivo.</p>
+        <form id="detail-evidence-form" class="detail-action-form">
+          <label>Tipo <input name="tipo" maxlength="20" value="imagem" required></label>
+          <label>URL externa <input name="url_externa" type="url" maxlength="500" inputmode="url"></label>
+          <label>Modelo <input name="modelo_ia" maxlength="80"></label>
+          <label>Classe <input name="classe_detectada" maxlength="80"></label>
+          <label>Confiança (0–1) <input name="confianca" type="number" min="0" max="1" step="0.01"></label>
+          <button type="submit" class="detail-action-button" data-detail-action="create-evidence">Adicionar evidência</button>
+        </form>
+      </details>
+      <p class="detail-action-gap"><strong>Observações indisponíveis.</strong> Não há endpoint de observações no backend atual.</p>
+      <p id="detail-operation-feedback" class="detail-operation-feedback" role="status" aria-live="polite"></p>
+    </section>
+    <section id="event-detail-content" class="event-detail-content" aria-live="polite"></section>
+  </aside>
+
+  <script src="js/config.js?v=20260821"></script>
+  <script type="module" src="dist/app.js?v=20260826-geosampa-basemap-1"></script>
 </body>
 </html>

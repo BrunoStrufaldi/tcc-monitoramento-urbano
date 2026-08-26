@@ -4,8 +4,27 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.fonte_dados import FonteDados
 from app.schemas.fonte_dados import FonteDadosCreate, FonteDadosResponse, FonteDadosUpdate
+from app.services.weather_source import obter_condicoes_atuais, obter_qualidade_do_ar
 
 router = APIRouter(prefix="/fontes", tags=["fontes"])
+
+
+@router.get("/tempo-real/clima")
+def clima_tempo_real(
+    latitude: float = Query(-23.55052, ge=-90, le=90),
+    longitude: float = Query(-46.633308, ge=-180, le=180),
+) -> dict:
+    """Condições atuais de uma fonte meteorológica externa e pública."""
+    return obter_condicoes_atuais(latitude, longitude)
+
+
+@router.get("/tempo-real/ar")
+def qualidade_ar_tempo_real(
+    latitude: float = Query(-23.55052, ge=-90, le=90),
+    longitude: float = Query(-46.633308, ge=-180, le=180),
+) -> dict:
+    """Qualidade atual do ar de fonte externa, aberta e sem credenciais."""
+    return obter_qualidade_do_ar(latitude, longitude)
 
 
 @router.get("", response_model=list[FonteDadosResponse])

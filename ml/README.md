@@ -6,7 +6,8 @@ Prova de conceito de detecção de eventos urbanos via visão computacional.
 
 ```
 ml/
-├── detector.py     # Detector simulado (8 classes urbanas)
+├── detector.py     # Detector YOLO real + rota de demonstração separada
+├── models/         # Pesos locais (yolo11n.pt ou pesos urbanos GX)
 └── README.md
 ```
 
@@ -50,7 +51,11 @@ curl -X POST http://localhost:8000/deteccao/imagem -F "file=@foto.jpg"
 
 ## Integração com YOLO real
 
-Para usar YOLO real, substitua `detectar_imagem()` em `detector.py`:
+O GX já usa inferência YOLO real em `POST /deteccao/imagem`. O peso padrão é
+`ml/models/yolo11n.pt` (YOLO11 COCO), que reconhece veículos e os normaliza
+como o evento urbano `transito`.
+
+Para reconhecer as oito classes urbanas específicas, substitua o peso padrão:
 
 ```python
 from ultralytics import YOLO
@@ -61,3 +66,50 @@ def detectar_imagem(caminho: str):
     results = model(caminho)
     # Mapear results[0].boxes para Deteccao...
 ```
+
+## YOLO real no GX
+
+O endpoint `POST /deteccao/imagem` executa inferência real e não usa dados simulados. Para habilitá-lo na máquina de processamento:
+
+```bash
+cd backend
+venv\Scripts\python -m pip install -r requirements-yolo.txt
+set GX_YOLO_MODEL=ml/models/gx-urban.pt
+uvicorn app.main:app --reload
+```
+
+`GX_YOLO_MODEL` deve apontar para pesos Ultralytics treinados com as classes urbanas do GX. O modelo COCO padrão registra veículos apenas como `observacao_visual`; presença de carro não significa congestionamento. Alagamento, buraco e os demais incidentes precisam de pesos especializados e validação. Verifique `GET /deteccao/status` antes de enviar imagens.
+
+Os uploads são temporários, aceitam PNG/JPG/WEBP de até 10 MB e são removidos assim que a inferência termina. A rota `POST /deteccao/simular` permanece separada apenas para demonstração e testes.
+
+## Modelo dedicado de incidentes (alagamento / árvore caída)
+
+O peso COCO padrão não reconhece essas duas classes. Em vez de substituir o
+modelo global (o que quebraria a contagem de veículos do trânsito ao vivo), o
+GX carrega um **segundo modelo**, separado, só para isso: `GX_YOLO_INCIDENT_MODEL`
+(padrão `ml/models/gx-incident.pt`). Quando ele está disponível e detecta a
+classe esperada numa câmera próxima de uma ocorrência GeoSampa, isso vira
+confirmação visual direta em `context_monitor.py`; sem ele, o sistema
+continua no modo sinal indireto (COCO, teto de confiança 0.5) como hoje.
+
+Para treinar esse peso, use `ml/train_incident_model.py` (requer
+`pip install -r backend/requirements-yolo.txt` e uma API key gratuita do
+Roboflow em `ROBOFLOW_API_KEY`):
+
+```bash
+# 1. Ver as versões disponíveis de um dataset público do Roboflow Universe
+python ml/train_incident_model.py inspect --workspace testingforyolo --project floods-by-agroudy
+
+# 2. Baixar os dois datasets (alagamento e árvore caída) em formato YOLOv8
+python ml/train_incident_model.py download --workspace testingforyolo --project floods-by-agroudy --version 1 --out ml/datasets/flood
+python ml/train_incident_model.py download --workspace fallen-tree-on-roads --project fallen-trees-on-road --version 2 --out ml/datasets/tree
+
+# 3. Fundir num único conjunto de 2 classes (nomes de classe reais confirmados no passo 2)
+python ml/train_incident_model.py merge --flood ml/datasets/flood --flood-classes "flood" --tree ml/datasets/tree --tree-classes "fallen tree" --out ml/datasets/incidentes
+
+# 4. Treinar (usa GPU CUDA por padrão; ~80 épocas em yolo11n)
+python ml/train_incident_model.py train --data ml/datasets/incidentes/data.yaml --epochs 80
+```
+
+O resultado é copiado para `ml/models/gx-incident.pt`. Ative apontando
+`GX_YOLO_INCIDENT_MODEL` pra esse caminho (já é o padrão) e reinicie o backend.

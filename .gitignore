@@ -13,9 +13,31 @@ node_modules/
 # Frontend — não commitar chaves
 frontend/js/config.js
 
+# Pesos grandes de modelos locais (baixados na máquina de inferência)
+ml/models/*.pt
+backend/ml/models/*.pt
+weights/
+
+# Datasets baixados e runs de treino do modelo de incidentes (grandes, não são código)
+ml/datasets/
+ml/runs/
+runs/
+
+# Bancos SQLite locais
+*.db
+*.db-shm
+*.db-wal
+
+# Dados de runtime (evidências capturadas, logs, backups locais)
+backend/app/data/
+backend/data/
+
 # IDE / OS
 .idea/
 .vscode/
 *.swp
 Thumbs.db
 .DS_Store
+
+# Ferramentas locais
+.codex/

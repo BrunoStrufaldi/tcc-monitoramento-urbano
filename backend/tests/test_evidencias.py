@@ -3,6 +3,36 @@
 from fastapi.testclient import TestClient
 
 
+def test_pasta_de_arquivo_bate_com_a_pasta_onde_detection_events_grava():
+    """Regressão: o router já serviu arquivo de uma pasta diferente de onde
+    detection_events.py grava (parents[2] vs parents[1]) — toda evidência
+    criada por detecção real (câmera contínua, confirmação manual) resultava
+    em 404 ao tentar exibir a imagem, mesmo o arquivo existindo de verdade."""
+    from app.routers import evidencias
+    from app.services import detection_events
+
+    assert evidencias._EVIDENCIAS_DIR == detection_events._EVIDENCIAS_DIR
+
+
+def test_obter_arquivo_de_evidencia(client: TestClient, tmp_path, monkeypatch):
+    from app.routers import evidencias
+
+    monkeypatch.setattr(evidencias, "_EVIDENCIAS_DIR", tmp_path)
+    (tmp_path / "foto-teste.jpg").write_bytes(b"conteudo-fake-de-imagem")
+
+    response = client.get("/evidencias/arquivo/foto-teste.jpg")
+    assert response.status_code == 200
+    assert response.content == b"conteudo-fake-de-imagem"
+
+
+def test_obter_arquivo_de_evidencia_inexistente(client: TestClient, tmp_path, monkeypatch):
+    from app.routers import evidencias
+
+    monkeypatch.setattr(evidencias, "_EVIDENCIAS_DIR", tmp_path)
+    response = client.get("/evidencias/arquivo/nao-existe.jpg")
+    assert response.status_code == 404
+
+
 def _criar_evento(client: TestClient) -> int:
     r = client.post(
         "/eventos",

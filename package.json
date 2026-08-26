@@ -1,10 +1,9 @@
 {
+  "type": "module",
   "scripts": {
     "build:frontend": "tsc -p frontend/tsconfig.json",
+    "test:frontend": "node --test frontend/tests/fusion-format.test.mjs frontend/tests/event-detail-format.test.mjs frontend/tests/event-actions-format.test.mjs",
     "serve:frontend": "python -m http.server 5500 -d frontend"
-  },
-  "dependencies": {
-    "http": "^0.0.1-security"
   },
   "devDependencies": {
     "typescript": "^5.5.0"

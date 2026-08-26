@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -18,3 +20,4 @@ class ConfiabilidadeResponse(BaseModel):
         None, description="Valor atual em eventos.confianca no banco"
     )
     persistido: bool = False
+    calculado_em: datetime = Field(..., description="Horário UTC em que a fusão foi calculada")

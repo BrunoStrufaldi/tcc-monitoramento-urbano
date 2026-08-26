@@ -1,12 +1,27 @@
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.evento import Evento
 from app.models.evidencia_visual import EvidenciaVisual
 from app.schemas.evidencia_visual import EvidenciaVisualCreate, EvidenciaVisualResponse
+from app.models.usuario import Usuario
+from app.security import record_audit, require_operator
 
 router = APIRouter(prefix="/evidencias", tags=["evidencias"])
+_EVIDENCIAS_DIR = Path(__file__).resolve().parents[1] / "data" / "evidencias"
+
+
+@router.get("/arquivo/{nome_arquivo}")
+def obter_arquivo(nome_arquivo: str) -> FileResponse:
+    """Entrega uma evidência local sem permitir travessia de diretórios."""
+    caminho = _EVIDENCIAS_DIR / Path(nome_arquivo).name
+    if not caminho.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arquivo não encontrado")
+    return FileResponse(caminho)
 
 
 @router.get("", response_model=list[EvidenciaVisualResponse])
@@ -42,6 +57,7 @@ def obter_evidencia(
 def criar_evidencia(
     payload: EvidenciaVisualCreate,
     db: Session = Depends(get_db),
+    user: Usuario = Depends(require_operator),
 ) -> EvidenciaVisual:
     evento = db.get(Evento, payload.evento_id)
     if not evento:
@@ -54,6 +70,7 @@ def criar_evidencia(
     db.add(evidencia)
     db.commit()
     db.refresh(evidencia)
+    record_audit(db, usuario_id=user.id, acao="EVIDENCIA_CRIAR", evento_id=evidencia.evento_id, resultado="sucesso", detalhes={"evidencia_id": evidencia.id, "tipo": evidencia.tipo})
     return evidencia
 
 

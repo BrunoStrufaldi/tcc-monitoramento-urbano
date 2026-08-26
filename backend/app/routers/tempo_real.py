@@ -40,6 +40,10 @@ async def _event_stream(queue: asyncio.Queue[str]) -> AsyncGenerator[str, None]:
                 yield ": heartbeat\n\n"
     except asyncio.CancelledError:
         pass
+    finally:
+        async with _lock:
+            if queue in _clients:
+                _clients.remove(queue)
 
 
 @router.get("/events/stream")
@@ -55,12 +59,7 @@ async def stream_events(request: Request) -> StreamingResponse:
     async with _lock:
         _clients.append(queue)
 
-    async def _cleanup():
-        async with _lock:
-            if queue in _clients:
-                _clients.remove(queue)
-
-    response = StreamingResponse(
+    return StreamingResponse(
         _event_stream(queue),
         media_type="text/event-stream",
         headers={
@@ -69,8 +68,6 @@ async def stream_events(request: Request) -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
-    response.headers["on_close"] = "cleanup"
-    return response
 
 
 @router.get("/events/connected")

@@ -1,9 +1,15 @@
-from fastapi import FastAPI
+import asyncio
+from contextlib import asynccontextmanager
+
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.broadcast import set_main_loop
 from app.config import settings
+from app.database import Base, SessionLocal, engine
 from app.routers import (
     dados_contextuais,
+    auth,
     deteccao,
     evidencias,
     eventos,
@@ -14,12 +20,35 @@ from app.routers import (
     notificacoes,
     regioes,
     tempo_real,
+    websocket,
 )
+from app.security import ensure_bootstrap_admin, get_current_user
+from app.services import context_monitor, live_detection
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # O SQLite local permite executar o projeto sem depender de um MySQL externo.
+    # Em produção, o schema MySQL continua sendo aplicado via database/schema.sql.
+    if settings.database_url.startswith("sqlite"):
+        Base.metadata.create_all(bind=engine)
+    with SessionLocal() as db:
+        ensure_bootstrap_admin(db)
+    set_main_loop(asyncio.get_running_loop())
+    # Desligado por padrão (inclusive em testes) — evita threads de rede reais
+    # subindo sozinhas. Ative com GX_MONITORAMENTO_ATIVO=true no .env.
+    if settings.gx_monitoramento_ativo:
+        live_detection.iniciar()
+        context_monitor.iniciar()
+    yield
+    live_detection.parar()
+    context_monitor.parar()
+
 
 app = FastAPI(
     title="Notificações Urbanas",
     description="Sistema de notificações urbanas em tempo real para TCC",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -30,17 +59,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(eventos.router)
-app.include_router(fusion.router)
-app.include_router(notificacoes.router)
-app.include_router(logs.router)
-app.include_router(regioes.router)
-app.include_router(fontes.router)
-app.include_router(localizacoes.router)
-app.include_router(evidencias.router)
-app.include_router(dados_contextuais.router)
-app.include_router(tempo_real.router)
-app.include_router(deteccao.router)
+app.include_router(auth.router)
+authenticated = [Depends(get_current_user)]
+app.include_router(eventos.router, dependencies=authenticated)
+app.include_router(fusion.router, dependencies=authenticated)
+app.include_router(notificacoes.router, dependencies=authenticated)
+app.include_router(logs.router, dependencies=authenticated)
+app.include_router(regioes.router, dependencies=authenticated)
+app.include_router(fontes.router, dependencies=authenticated)
+app.include_router(localizacoes.router, dependencies=authenticated)
+app.include_router(evidencias.router, dependencies=authenticated)
+app.include_router(dados_contextuais.router, dependencies=authenticated)
+app.include_router(tempo_real.router, dependencies=authenticated)
+app.include_router(deteccao.router, dependencies=authenticated)
+# WebSocket exige autenticação própria por handshake; permanece fora até que o
+# cliente envie token sem expô-lo em URL.
+app.include_router(websocket.router)
 
 
 @app.get("/")
