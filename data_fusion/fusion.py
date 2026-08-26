@@ -31,16 +31,17 @@ def calcular_confiabilidade(entrada: EventoFusionInput) -> ResultadoFusao:
 
     componentes: list[ComponenteConfiabilidade] = []
     total = 0.0
+    peso_disponivel = sum(PESOS[chave] for chave, (pontuacao, _) in dimensoes if pontuacao > 0)
 
     for chave, (pontuacao, detalhe) in dimensoes:
-        peso = PESOS[chave]
+        peso = (PESOS[chave] / peso_disponivel) if pontuacao > 0 and peso_disponivel else 0.0
         contribuicao = round(pontuacao * peso, 4)
         total += contribuicao
         componentes.append(
             ComponenteConfiabilidade(
                 nome=chave,
                 pontuacao=round(pontuacao, 4),
-                peso=peso,
+                peso=round(peso, 4),
                 contribuicao=contribuicao,
                 detalhe=detalhe,
             )

@@ -11,15 +11,14 @@ def _clamp(valor: float, minimo: float = 0.0, maximo: float = 1.0) -> float:
 
 def pontuar_ia(evidencias: list[EvidenciaIA]) -> tuple[float, str]:
     if not evidencias:
-        return 0.25, "Sem evidência visual de IA"
+        return 0.0, "Sem evidência visual de IA — dimensão não utilizada"
 
     confiancas = [e.confianca for e in evidencias if e.confianca is not None]
     if not confiancas:
-        return 0.45, "Evidência visual presente, sem score de confiança"
+        return 0.0, "Evidência visual sem score — dimensão não utilizada"
 
     melhor = max(confiancas)
     tem_modelo = any(e.modelo_ia for e in evidencias)
-    bonus = 0.05 if tem_modelo else 0.0
     classes = [e.classe_detectada for e in evidencias if e.classe_detectada]
     detalhe = f"Melhor detecção IA: {melhor:.0%}"
     if classes:
@@ -27,7 +26,7 @@ def pontuar_ia(evidencias: list[EvidenciaIA]) -> tuple[float, str]:
     if tem_modelo:
         detalhe += " · modelo validado"
 
-    return _clamp(melhor + bonus), detalhe
+    return _clamp(melhor), detalhe
 
 
 def _pontuar_clima_por_tipo(tipo: str, dados: list[DadoClima]) -> tuple[float, str]:
@@ -47,14 +46,43 @@ def _pontuar_clima_por_tipo(tipo: str, dados: list[DadoClima]) -> tuple[float, s
         return 0.35, f"Baixa precipitação ({chuva:.1f} mm/h) — contexto fraco"
 
     if tipo_norm == "transito":
-        indice = valores.get("indice_congestionamento") or valores.get("congestionamento")
-        if indice is None:
+        indices = [
+            valores[chave] for chave in ("indice_congestionamento", "indice_congestionamento_tomtom", "congestionamento")
+            if chave in valores
+        ]
+        if not indices:
             return 0.50, "Dados de trânsito sem índice de congestionamento"
+        indice = sum(indices) / len(indices)
+        origem = f" (média de {len(indices)} fontes)" if len(indices) > 1 else ""
         if indice >= 7:
-            return 0.92, f"Índice de congestionamento alto ({indice:.1f}/10)"
+            return 0.92, f"Índice de congestionamento alto ({indice:.1f}/10){origem}"
         if indice >= 4:
-            return 0.72, f"Congestionamento moderado ({indice:.1f}/10)"
-        return 0.40, f"Índice baixo ({indice:.1f}/10) — contexto fraco para trânsito"
+            return 0.72, f"Congestionamento moderado ({indice:.1f}/10){origem}"
+        return 0.40, f"Índice baixo ({indice:.1f}/10){origem} — contexto fraco para trânsito"
+
+    if tipo_norm == "acidente_transito":
+        chuva = valores.get("precipitacao_mm_h") or valores.get("precipitacao")
+        if chuva is None:
+            return 0.45, "Dados climáticos sem precipitação registrada"
+        if chuva >= 10:
+            return 0.80, f"Chuva forte ({chuva:.1f} mm/h) — pista provavelmente escorregadia"
+        if chuva >= 3:
+            return 0.65, f"Chuva moderada ({chuva:.1f} mm/h) — aderência reduzida"
+        if chuva > 0:
+            return 0.55, f"Chuvisco leve ({chuva:.1f} mm/h)"
+        return 0.42, "Sem chuva registrada — fator climático fraco para o acidente"
+
+    if tipo_norm == "arvore_caida":
+        vento = valores.get("vento_kmh") or valores.get("vento")
+        if vento is None:
+            return 0.45, "Dados climáticos sem velocidade do vento registrada"
+        if vento >= 80:
+            return 0.90, f"Vento muito forte ({vento:.0f} km/h) — alto risco de queda"
+        if vento >= 60:
+            return 0.75, f"Vento forte ({vento:.0f} km/h) — risco elevado de queda"
+        if vento >= 40:
+            return 0.55, f"Vento moderado ({vento:.0f} km/h) — risco presente"
+        return 0.30, f"Vento fraco ({vento:.0f} km/h) — contexto fraco para queda de árvore"
 
     if tipo_norm == "incendio":
         umidade = valores.get("umidade")
@@ -72,13 +100,13 @@ def _pontuar_clima_por_tipo(tipo: str, dados: list[DadoClima]) -> tuple[float, s
 
 def pontuar_clima(tipo: str, dados: list[DadoClima]) -> tuple[float, str]:
     if not dados:
-        return 0.30, "Sem dados climáticos vinculados ao evento"
+        return 0.0, "Sem dados climáticos vinculados — dimensão não utilizada"
     return _pontuar_clima_por_tipo(tipo, dados)
 
 
 def pontuar_fonte_oficial(fonte: FonteInfo | None) -> tuple[float, str]:
     if fonte is None:
-        return 0.20, "Evento sem fonte de dados identificada"
+        return 0.0, "Sem fonte independente — dimensão não utilizada"
 
     tipo = fonte.tipo.lower().strip()
 
@@ -90,7 +118,7 @@ def pontuar_fonte_oficial(fonte: FonteInfo | None) -> tuple[float, str]:
         return _clamp(base), f"Fonte oficial: {nome} ({tipo})"
 
     if tipo == "yolo":
-        return 0.55, "Apenas detecção IA — aguarda confirmação oficial"
+        return 0.0, "YOLO já contabilizado na dimensão IA — aguarda fonte independente"
 
     if tipo == "manual":
         return 0.50, "Registro manual — validação oficial pendente"

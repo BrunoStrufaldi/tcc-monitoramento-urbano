@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -5,6 +7,8 @@ from app.database import get_db
 from app.models.evento import Evento
 from app.schemas.fusion import ComponenteConfiabilidadeResponse, ConfiabilidadeResponse
 from app.services.data_fusion_service import aplicar_fusao_evento
+from app.models.usuario import Usuario
+from app.security import record_audit, require_operator
 
 router = APIRouter(prefix="/fusion", tags=["data-fusion"])
 
@@ -32,6 +36,7 @@ def _resultado_para_response(
         ],
         confianca_registrada=confianca_db,
         persistido=persistido,
+        calculado_em=datetime.now(timezone.utc),
     )
 
 
@@ -49,12 +54,15 @@ def recalcular_confiabilidade(
     evento_id: int,
     persistir: bool = Query(True, description="Grava score em eventos.confianca"),
     db: Session = Depends(get_db),
+    user: Usuario = Depends(require_operator),
 ) -> ConfiabilidadeResponse:
     try:
         resultado, evento = aplicar_fusao_evento(db, evento_id, persistir=persistir)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evento não encontrado")
-    return _resultado_para_response(resultado, evento, persistido=persistir)
+    response = _resultado_para_response(resultado, evento, persistido=persistir)
+    record_audit(db, usuario_id=user.id, acao="FUSION_RECALCULAR", evento_id=evento_id, resultado="sucesso", detalhes={"persistido": persistir})
+    return response
 
 
 @router.post("/recalcular-todos", response_model=list[ConfiabilidadeResponse])
@@ -62,6 +70,7 @@ def recalcular_todos(
     persistir: bool = Query(True),
     limite: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
+    user: Usuario = Depends(require_operator),
 ) -> list[ConfiabilidadeResponse]:
     ids = [row[0] for row in db.query(Evento.id).limit(limite).all()]
     respostas: list[ConfiabilidadeResponse] = []
@@ -71,4 +80,5 @@ def recalcular_todos(
             respostas.append(_resultado_para_response(resultado, evento, persistido=persistir))
         except ValueError:
             continue
+    record_audit(db, usuario_id=user.id, acao="FUSION_RECALCULAR_TODOS", evento_id=None, resultado="sucesso", detalhes={"limite": limite, "quantidade": len(respostas), "persistido": persistir})
     return respostas

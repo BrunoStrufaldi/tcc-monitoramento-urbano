@@ -1,27 +1,23 @@
-import asyncio
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 
+from app.broadcast import schedule_coroutine
 from app.database import get_db
 from app.models.evento import Evento
 from app.models.localizacao import Localizacao
 from app.routers.tempo_real import _broadcast
+from app.ws_manager import WSMessage, manager as ws_manager
 from app.schemas.evento import EventoCreate, EventoResponse, EventoUpdate
 from app.schemas.localizacao import LocalizacaoCreate
+from app.models.usuario import Usuario
+from app.security import record_audit, require_admin, require_operator
 
 
 def _schedule_broadcast(event_type: str, data: dict) -> None:
-    """Agenda broadcast — ignora silenciosamente em contextos sem event loop ativo."""
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return
-    if loop.is_running():
-        try:
-            loop.call_soon_threadsafe(asyncio.ensure_future, _broadcast(event_type, data))
-        except Exception:
-            pass
+    """Agenda broadcast via SSE e WebSocket a partir de endpoints sync."""
+    schedule_coroutine(_broadcast(event_type, data))
+    schedule_coroutine(ws_manager.broadcast_evento(event_type, data))
+
 
 router = APIRouter(prefix="/eventos", tags=["eventos"])
 
@@ -92,7 +88,7 @@ def obter_evento(evento_id: int, db: Session = Depends(get_db)) -> Evento:
 
 
 @router.post("", response_model=EventoResponse, status_code=status.HTTP_201_CREATED)
-def criar_evento(payload: EventoCreate, db: Session = Depends(get_db)) -> Evento:
+def criar_evento(payload: EventoCreate, db: Session = Depends(get_db), user: Usuario = Depends(require_operator)) -> Evento:
     localizacao = _resolver_localizacao(db, payload)
     dados_evento = payload.model_dump(
         exclude={"localizacao", "localizacao_id", "latitude", "longitude"}
@@ -108,6 +104,7 @@ def criar_evento(payload: EventoCreate, db: Session = Depends(get_db)) -> Evento
         .first()
     )
     _schedule_broadcast("evento_criado", EventoResponse.model_validate(resultado, from_attributes=True).model_dump(mode="json"))
+    record_audit(db, usuario_id=user.id, acao="EVENTO_CRIAR", evento_id=resultado.id, resultado="sucesso")
     return resultado
 
 
@@ -116,6 +113,7 @@ def atualizar_evento(
     evento_id: int,
     payload: EventoUpdate,
     db: Session = Depends(get_db),
+    user: Usuario = Depends(require_operator),
 ) -> Evento:
     evento = db.get(Evento, evento_id)
     if not evento:
@@ -134,6 +132,7 @@ def atualizar_evento(
         .first()
     )
     _schedule_broadcast("evento_atualizado", EventoResponse.model_validate(resultado, from_attributes=True).model_dump(mode="json"))
+    record_audit(db, usuario_id=user.id, acao="EVENTO_ATUALIZAR", evento_id=resultado.id, resultado="sucesso", detalhes={"campos": sorted(dados)})
     return resultado
 
 
@@ -141,6 +140,7 @@ def atualizar_evento(
 def remover_evento(
     evento_id: int,
     db: Session = Depends(get_db),
+    user: Usuario = Depends(require_admin),
 ) -> dict:
     evento = (
         db.query(Evento)
@@ -154,5 +154,6 @@ def remover_evento(
     dados = EventoResponse.model_validate(evento, from_attributes=True).model_dump()
     db.delete(evento)
     db.commit()
+    record_audit(db, usuario_id=user.id, acao="EVENTO_REMOVER", evento_id=evento_id, resultado="sucesso")
     _schedule_broadcast("evento_removido", {"id": evento_id})
     return dados

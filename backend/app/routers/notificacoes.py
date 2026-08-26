@@ -3,6 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.broadcast import schedule_coroutine
 from app.database import get_db
 from app.models.evento import Evento
 from app.models.notificacao import Notificacao
@@ -11,8 +12,16 @@ from app.schemas.notificacao import (
     NotificacaoResponse,
     NotificacaoUpdate,
 )
+from app.ws_manager import manager as ws_manager
+from app.models.usuario import Usuario
+from app.security import record_audit, require_operator
 
 router = APIRouter(prefix="/notificacoes", tags=["notificacoes"])
+
+
+def _schedule_ws_broadcast(event_type: str, data: dict) -> None:
+    """Agenda broadcast WebSocket a partir de endpoints sync."""
+    schedule_coroutine(ws_manager.broadcast_evento(event_type, data))
 
 
 @router.get("", response_model=list[NotificacaoResponse])
@@ -50,7 +59,7 @@ def obter_notificacao(
 
 
 @router.post("", response_model=NotificacaoResponse, status_code=status.HTTP_201_CREATED)
-def criar_notificacao(payload: NotificacaoCreate, db: Session = Depends(get_db)) -> Notificacao:
+def criar_notificacao(payload: NotificacaoCreate, db: Session = Depends(get_db), user: Usuario = Depends(require_operator)) -> Notificacao:
     evento = db.get(Evento, payload.evento_id)
     if not evento:
         raise HTTPException(
@@ -62,6 +71,9 @@ def criar_notificacao(payload: NotificacaoCreate, db: Session = Depends(get_db))
     db.add(notificacao)
     db.commit()
     db.refresh(notificacao)
+    notif_data = NotificacaoResponse.model_validate(notificacao, from_attributes=True).model_dump(mode="json")
+    _schedule_ws_broadcast("notificacao_criada", notif_data)
+    record_audit(db, usuario_id=user.id, acao="NOTIFICACAO_CRIAR", evento_id=notificacao.evento_id, resultado="sucesso", detalhes={"notificacao_id": notificacao.id, "canal": notificacao.canal})
     return notificacao
 
 
@@ -84,6 +96,8 @@ def atualizar_notificacao(
 
     db.commit()
     db.refresh(notificacao)
+    notif_data = NotificacaoResponse.model_validate(notificacao, from_attributes=True).model_dump(mode="json")
+    _schedule_ws_broadcast("notificacao_atualizada", notif_data)
     return notificacao
 
 
@@ -103,6 +117,8 @@ def marcar_como_lida(
     notificacao.lida_em = datetime.now()
     db.commit()
     db.refresh(notificacao)
+    notif_data = NotificacaoResponse.model_validate(notificacao, from_attributes=True).model_dump(mode="json")
+    _schedule_ws_broadcast("notificacao_atualizada", notif_data)
     return notificacao
 
 
@@ -121,6 +137,8 @@ def arquivar_notificacao(
     notificacao.status = "arquivada"
     db.commit()
     db.refresh(notificacao)
+    notif_data = NotificacaoResponse.model_validate(notificacao, from_attributes=True).model_dump(mode="json")
+    _schedule_ws_broadcast("notificacao_atualizada", notif_data)
     return notificacao
 
 
@@ -139,4 +157,5 @@ def remover_notificacao(
     dados = NotificacaoResponse.model_validate(notificacao, from_attributes=True).model_dump()
     db.delete(notificacao)
     db.commit()
+    _schedule_ws_broadcast("notificacao_removida", {"id": notificacao_id})
     return dados
