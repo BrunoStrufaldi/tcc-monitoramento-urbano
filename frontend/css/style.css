@@ -336,12 +336,16 @@ input, select, textarea { font-family: inherit; }
 .workspace {
   display: grid;
   grid-template-columns: 64px 310px minmax(420px, 1fr) 330px;
-  grid-template-rows: 1fr 132px;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   height: calc(100vh - 56px);
   overflow: hidden;
   gap: 0;
 }
+
+/* Feed de atividade inferior removido — mantém uma única linha em todos os
+   breakpoints, que ainda redefinem grid-template-rows com a faixa antiga. */
+.workspace { grid-template-rows: minmax(0, 1fr) !important; }
 
 /* ============================================================
    SIDEBAR (rail + left panel)
@@ -1169,6 +1173,32 @@ input, select, textarea { font-family: inherit; }
 }
 .map-controls .map-search:focus { border-color: var(--gx-light); }
 .map-controls .map-search::placeholder { color: var(--text-muted); }
+
+/* Filtro de status (menu suspenso) no overlay do mapa */
+.map-filter-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 8px 0 10px;
+  border-radius: var(--r-sm);
+  background: rgba(17, 22, 27, 0.92);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  backdrop-filter: blur(12px);
+}
+.map-filter-select svg { width: 15px; height: 15px; flex-shrink: 0; }
+.map-filter-select select {
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: 600 12px/1 var(--font-sans);
+  cursor: pointer;
+  outline: none;
+}
+.map-filter-select select option { background: var(--bg-panel); color: var(--text-primary); }
+.map-filter-select:focus-within { border-color: var(--gx-light); }
 
 /* Map Fallback */
 .map-fallback {

@@ -223,18 +223,8 @@ const evidenceObjectUrls = new Set<string>();
 
 const byId = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
-type LoginResponse = { access_token: string; expires_in: number; usuario: { nome_usuario: string; perfil: string } };
-
 function accessToken(): string | null {
   try { return sessionStorage.getItem("gx_access_token"); } catch { return null; }
-}
-
-function showLogin(message = "Entre com suas credenciais para acessar a operação."): void {
-  const modal = byId("login-modal");
-  const feedback = byId("login-feedback");
-  feedback.textContent = message;
-  modal.hidden = false;
-  window.setTimeout(() => byId<HTMLInputElement>("login-username")?.focus(), 0);
 }
 
 async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
@@ -253,40 +243,8 @@ async function apiFetch(path: string, init: RequestInit = {}): Promise<Response>
   }
   if (response.status === 401 && token) {
     try { sessionStorage.removeItem("gx_access_token"); } catch { /* armazenamento indisponível */ }
-    clearAllConnections();
-    showLogin("Sua sessão expirou. Entre novamente para continuar.");
   }
   return response;
-}
-
-function initAuthentication(): void {
-  if (accessToken()) { loadGoogleMaps(); return; }
-  const form = byId<HTMLFormElement>("login-form");
-  const feedback = byId("login-feedback");
-  showLogin();
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const username = byId<HTMLInputElement>("login-username").value.trim();
-    const password = byId<HTMLInputElement>("login-password").value;
-    feedback.textContent = "Autenticando…";
-    try {
-      const response = await fetch(window.CONFIG.API_BASE_URL + "/auth/login", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome_usuario: username, senha: password }),
-      });
-      const payload = await response.json() as LoginResponse | { detail?: string };
-      if (!response.ok || !("access_token" in payload)) throw new Error("detail" in payload ? payload.detail || "Não foi possível entrar." : "Não foi possível entrar.");
-      sessionStorage.setItem("gx_access_token", payload.access_token);
-      byId("login-modal").hidden = true;
-      loadGoogleMaps();
-      if (appInitialized) {
-        void loadEvents();
-        connectWebSocket();
-      }
-    } catch (error) {
-      feedback.textContent = error instanceof Error ? error.message : "Falha ao autenticar.";
-    }
-  });
 }
 
 function escapeHtml(value: unknown): string {
@@ -331,8 +289,7 @@ function clearAllConnections(): void {
 
 function connectWebSocket(): void {
   clearAllConnections();
-  const token = accessToken();
-  if (!token) { connectionMode = "disconnected"; updateConnectionStatus(); return; }
+  const token = accessToken() || "";
   const wsUrl = window.CONFIG.API_BASE_URL.replace(/^http/, "ws") + "/ws";
   try {
     wsConnection = new WebSocket(wsUrl);
@@ -462,7 +419,6 @@ function handleRealtimeMessage(tipo: string, dados: Record<string, unknown>): vo
       renderEventList(loadedEvents);
       updateMetrics(loadedEvents);
       updateMarker(evento);
-      renderActivityFeed();
       logSessionActivity("evento_criado", "Evento criado: " + evento.titulo, evento.id, evento.severidade);
       break;
     }
@@ -477,7 +433,6 @@ function handleRealtimeMessage(tipo: string, dados: Record<string, unknown>): vo
       renderEventList(loadedEvents);
       updateMetrics(loadedEvents);
       updateMarker(atualizado);
-      renderActivityFeed();
       logSessionActivity("evento_atualizado", "Evento atualizado: " + (atualizado.titulo || "#" + atualizado.id), atualizado.id, atualizado.severidade);
       if (selectedEventId === atualizado.id) {
         renderSelectedEvent(atualizado);
@@ -490,7 +445,6 @@ function handleRealtimeMessage(tipo: string, dados: Record<string, unknown>): vo
       renderEventList(loadedEvents);
       updateMetrics(loadedEvents);
       removeMarker(id);
-      renderActivityFeed();
       if (selectedEventId === id) {
         selectedEventId = null;
         clearEventEvidence();
@@ -577,9 +531,8 @@ function cvAccessToken(): string | null {
 }
 
 function cvConnectFrames(): void {
-  const token = cvAccessToken();
-  if (!token || cvFrameSocket?.readyState === WebSocket.OPEN || cvFrameSocket?.readyState === WebSocket.CONNECTING) {
-    if (!token) cvSetMetrics("Upload sob demanda");
+  const token = cvAccessToken() || "";
+  if (cvFrameSocket?.readyState === WebSocket.OPEN || cvFrameSocket?.readyState === WebSocket.CONNECTING) {
     return;
   }
   const url = window.CONFIG.API_BASE_URL.replace(/^http/, "ws") + "/ws/cv";
@@ -1447,7 +1400,6 @@ function renderSelectedEvent(event: UrbanEvent | null): void {
   const confidenceWrap = byId("confidence-circle-wrap");
   const confidenceValue = byId("confidence-circle-value");
   const confidenceRing = byId("confidence-fill-ring") as unknown as SVGCircleElement;
-  const fusionSection = byId("fusion-section");
   const openDetail = byId<HTMLButtonElement>("selected-open-detail");
   const breakdowns = document.querySelectorAll<HTMLElement>("#fusion-breakdown, #fusion-breakdown-panel");
 
@@ -1464,7 +1416,6 @@ function renderSelectedEvent(event: UrbanEvent | null): void {
     meta.hidden = true;
     confidenceWrap.hidden = true;
     openDetail.hidden = true;
-    fusionSection.hidden = true;
     setFusionSummary(null);
     breakdowns.forEach((b) => { b.innerHTML = ""; });
     return;
@@ -1502,7 +1453,6 @@ function renderSelectedEvent(event: UrbanEvent | null): void {
     confidenceWrap.hidden = true;
   }
 
-  fusionSection.hidden = false;
   openDetail.hidden = false;
   setFusionLoadingState();
   breakdowns.forEach((b) => { b.innerHTML = ""; });
@@ -1939,61 +1889,16 @@ function updateClock(): void {
   }
 }
 
-function renderActivityFeed(): void {
-  const container = byId("feed-items");
-  if (!sessionActivity.length) {
-    container.innerHTML = '<div class="feed-empty">Nenhuma atividade na sessão</div>';
-    return;
-  }
-  container.innerHTML = sessionActivity.slice(0, 20).map((entry) => {
-    const time = formatTime(new Date(entry.timestamp).toISOString());
-    const systemColor = /websocket|câmera|camera/i.test(entry.message) ? "#00b8d9" : "#21c875";
-    const sevColor = entry.severity ? severityStyle(entry.severity).color : entry.kind === "notificacao" ? "#f5b301" : systemColor;
-
-    const kindIcons: Record<string, string> = {
-      evento_criado: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M12 5v14M5 12h14"/></svg>',
-      evento_atualizado: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/></svg>',
-      notificacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5"/></svg>',
-      sincronizacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/></svg>',
-    };
-    const icon = kindIcons[entry.kind] || kindIcons.sincronizacao;
-    const linkedEvent = entry.eventId ? loadedEvents.find((item) => item.id === entry.eventId) : undefined;
-    const metaPrimary = linkedEvent?.fonte?.nome || (entry.kind === "sincronizacao" ? "Plataforma GX" : "Sistema operacional");
-    const metaSecondary = linkedEvent
-      ? [linkedEvent.localizacao?.bairro, linkedEvent.regiao?.nome].filter(Boolean).join(" · ")
-      : entry.kind === "sincronizacao" ? "Sincronização verificada" : "Operação em tempo real";
-
-    return '<div class="feed-card' + (entry.eventId ? '" data-id="' + entry.eventId : "") + '">' +
-      '<div class="feed-card-head">' +
-        '<span class="feed-card-icon" style="background:' + sevColor + '20;color:' + sevColor + '">' + icon + '</span>' +
-        '<span class="feed-card-time">' + time + '</span>' +
-      '</div>' +
-      '<div class="feed-card-title" title="' + escapeHtml(entry.message) + '">' + escapeHtml(entry.message) + '</div>' +
-      '<div class="feed-card-meta">' + escapeHtml(metaPrimary) + '</div>' +
-      '<div class="feed-card-submeta">' + escapeHtml(metaSecondary || "São Paulo") + '</div>' +
-      '</div>';
-  }).join("");
-
-  container.querySelectorAll<HTMLElement>(".feed-card[data-id]").forEach((card) => {
-    card.addEventListener("click", () => {
-      const id = Number(card.dataset.id);
-      if (id) selectEvent(id);
-    });
-  });
-}
-
 function logSessionActivity(kind: SessionActivity["kind"], message: string, eventId?: number, severity?: string): void {
   const duplicate = sessionActivity.find((entry) => entry.kind === kind && entry.message === message && Date.now() - entry.timestamp < 60000);
   if (duplicate) {
     duplicate.timestamp = Date.now();
     sessionActivity.sort((a, b) => b.timestamp - a.timestamp);
-    renderActivityFeed();
     renderRightPanelActivity();
     return;
   }
   sessionActivity.unshift({ kind, message, timestamp: Date.now(), eventId, severity });
   if (sessionActivity.length > MAX_SESSION_ACTIVITY) sessionActivity.length = MAX_SESSION_ACTIVITY;
-  renderActivityFeed();
   renderRightPanelActivity();
 }
 
@@ -2232,50 +2137,8 @@ function setRailButtonActive(key: string): void {
 }
 
 function initRail(): void {
-  const rail = document.querySelector<HTMLElement>(".rail");
-  const railButtons = document.querySelectorAll<HTMLButtonElement>(".rail-btn");
-  let openTimer: number | null = null;
-  let closeTimer: number | null = null;
-
-  railButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const key = btn.dataset.rail || "painel";
-      const section = RAIL_SECTIONS.find((s) => s.key === key);
-      if (railPanelOpen && document.querySelector<HTMLElement>("#rail-panel")?.dataset.section === key) {
-        closeRailPanel();
-        return;
-      }
-      openRailPanel(key);
-      if (section && section.items.length === 1) switchView(section.items[0].view);
-    });
-    btn.addEventListener("mouseenter", () => {
-      if (closeTimer) { window.clearTimeout(closeTimer); closeTimer = null; }
-      openTimer = window.setTimeout(() => openRailPanel(btn.dataset.rail || "painel"), 60);
-    });
-    btn.addEventListener("mouseleave", () => {
-      if (openTimer) { window.clearTimeout(openTimer); openTimer = null; }
-      closeTimer = window.setTimeout(closeRailPanel, 220);
-    });
-  });
-
-  const panel = byId("rail-panel");
-  panel.addEventListener("mouseenter", () => {
-    if (closeTimer) { window.clearTimeout(closeTimer); closeTimer = null; }
-  });
-  panel.addEventListener("mouseleave", () => {
-    closeTimer = window.setTimeout(closeRailPanel, 180);
-  });
-
-  if (rail) {
-    rail.addEventListener("mouseleave", () => {
-      closeTimer = window.setTimeout(closeRailPanel, 200);
-    });
-  }
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeRailPanel();
-  });
-
+  // A barra de ícones foi esvaziada; a navegação será reconstruída.
+  // Mantém apenas o atalho "Ver todos" do painel de alertas à direita.
   byId<HTMLButtonElement>("btn-view-alerts")?.addEventListener("click", () => switchView("alertas"));
 }
 
@@ -2379,7 +2242,6 @@ async function loadEvents(): Promise<void> {
     updateLastUpdate();
     setApiStatus(true, "Conectado");
     refreshFeeds();
-    renderActivityFeed();
     logSessionActivity("sincronizacao", "API operacional");
     logSessionActivity("sincronizacao", "Sincronização concluída — " + loadedEvents.length + (loadedEvents.length === 1 ? " evento" : " eventos"));
     if (!cvDetectorAvailable) void cvLoadStatus();
@@ -2593,34 +2455,11 @@ function initMapa(): void {
     });
   }
 
-  byId<HTMLButtonElement>("map-filter-focus")?.addEventListener("click", () => {
-    const severityButton = byId("legenda-criticidade").querySelector<HTMLButtonElement>("button");
-    if (severityButton && severityButton.offsetParent) {
-      severityButton.focus();
-      return;
-    }
-    switchView("eventos");
-    window.requestAnimationFrame(() => byId<HTMLInputElement>("busca-eventos")?.focus());
-  });
-
-  byId<HTMLButtonElement>("feed-view-history")?.addEventListener("click", () => {
-    switchView("eventos");
-    window.requestAnimationFrame(() => byId<HTMLInputElement>("busca-eventos")?.focus());
-  });
-
-  const activityFeed = byId<HTMLElement>("feed-items");
-  byId<HTMLButtonElement>("feed-nav-prev")?.addEventListener("click", () => {
-    activityFeed.scrollBy({ left: -Math.max(240, activityFeed.clientWidth * 0.45), behavior: "smooth" });
-  });
-  byId<HTMLButtonElement>("feed-nav-next")?.addEventListener("click", () => {
-    activityFeed.scrollBy({ left: Math.max(240, activityFeed.clientWidth * 0.45), behavior: "smooth" });
-  });
-
   loadEvents();
   connectWebSocket();
 }
 
 window.initMapa = initMapa;
-initAuthentication();
+loadGoogleMaps();
 
 export {};
