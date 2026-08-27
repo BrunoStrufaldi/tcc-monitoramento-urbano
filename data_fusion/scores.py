@@ -72,18 +72,6 @@ def _pontuar_clima_por_tipo(tipo: str, dados: list[DadoClima]) -> tuple[float, s
             return 0.55, f"Chuvisco leve ({chuva:.1f} mm/h)"
         return 0.42, "Sem chuva registrada — fator climático fraco para o acidente"
 
-    if tipo_norm == "arvore_caida":
-        vento = valores.get("vento_kmh") or valores.get("vento")
-        if vento is None:
-            return 0.45, "Dados climáticos sem velocidade do vento registrada"
-        if vento >= 80:
-            return 0.90, f"Vento muito forte ({vento:.0f} km/h) — alto risco de queda"
-        if vento >= 60:
-            return 0.75, f"Vento forte ({vento:.0f} km/h) — risco elevado de queda"
-        if vento >= 40:
-            return 0.55, f"Vento moderado ({vento:.0f} km/h) — risco presente"
-        return 0.30, f"Vento fraco ({vento:.0f} km/h) — contexto fraco para queda de árvore"
-
     if tipo_norm == "incendio":
         umidade = valores.get("umidade")
         temp = valores.get("temperatura")

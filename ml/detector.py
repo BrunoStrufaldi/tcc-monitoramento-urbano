@@ -21,7 +21,6 @@ CLASSES_URBANAS = {
     3: {"nome": "lixo", "severidade": "baixa", "tipo": "meio_ambiente"},
     4: {"nome": "incendio", "severidade": "critica", "tipo": "seguranca"},
     5: {"nome": "construcao_irregular", "severidade": "alta", "tipo": "urbanismo"},
-    6: {"nome": "arvore_caida", "severidade": "media", "tipo": "infraestrutura"},
     7: {"nome": "vazamento", "severidade": "alta", "tipo": "infraestrutura"},
     # Classes COCO abaixo são observações visuais. A presença de um veículo ou
     # hidrante não comprova congestionamento, acidente ou vazamento.
@@ -44,9 +43,14 @@ _model: Any | None = None
 _model_error: str | None = None
 _DEFAULT_MODEL = Path(__file__).resolve().parent / "models" / "yolo11n.pt"
 
-# Modelo dedicado a alagamento/árvore caída — pesos próprios (não vêm do COCO),
-# carregado separado do modelo padrão para não perder a detecção de veículos
-# usada pela contagem de trânsito ao trocar de peso.
+# Modelo dedicado a alagamento — pesos próprios (não vêm do COCO), carregado
+# separado do modelo padrão para não perder a detecção de veículos usada pela
+# contagem de trânsito ao trocar de peso. O peso ainda reconhece árvore caída
+# internamente (foi treinado com as duas classes), mas essa classe não tem
+# entrada em CLASSES_URBANAS — decisão do grupo de tirar esse tipo de escopo —
+# então `_normalizar_classe` descarta qualquer detecção dela antes de virar
+# Deteccao/evento.
+
 _incident_model: Any | None = None
 _incident_model_error: str | None = None
 _DEFAULT_INCIDENT_MODEL = Path(__file__).resolve().parent / "models" / "gx-incident.pt"
@@ -132,7 +136,7 @@ def _incident_model_path() -> str:
 
 
 def _load_incident_model() -> Any | None:
-    """Carrega o peso de incidentes (alagamento/árvore caída) sob demanda."""
+    """Carrega o peso de incidentes (alagamento) sob demanda."""
     global _incident_model, _incident_model_error
     if _incident_model is not None:
         return _incident_model
@@ -156,7 +160,7 @@ def _load_incident_model() -> Any | None:
 
 
 def status_incident_detector() -> dict[str, Any]:
-    """Informa se o modelo de alagamento/árvore caída está disponível, sem executar a imagem."""
+    """Informa se o modelo de alagamento está disponível, sem executar a imagem."""
     model = _load_incident_model()
     return {
         "disponivel": model is not None,
@@ -166,7 +170,7 @@ def status_incident_detector() -> dict[str, Any]:
 
 
 def detectar_incidentes_imagem(caminho_imagem: str, confianca_minima: float = 0.45) -> list[Deteccao]:
-    """Roda o modelo dedicado a alagamento/árvore caída — confirmação direta, não sinal indireto."""
+    """Roda o modelo dedicado a alagamento — confirmação direta, não sinal indireto."""
     model = _load_incident_model()
     if model is None:
         raise RuntimeError(_incident_model_error or "Detector de incidentes indisponível")

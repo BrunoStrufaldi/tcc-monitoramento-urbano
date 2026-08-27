@@ -114,11 +114,11 @@ def test_processar_ocorrencia_sem_clima_disponivel_ainda_funciona(db_session: Se
     from app.models.dado_contextual import DadoContextual
     from app.models.evento import Evento
 
-    context_monitor._processar_ocorrencia(db_session, "geosampa_queda_arvore", _ocorrencia("444"))
+    context_monitor._processar_ocorrencia(db_session, "geosampa_acidente_transito", _ocorrencia_acidente("444"))
 
     evento = db_session.query(Evento).first()
     assert evento is not None
-    assert evento.tipo == "arvore_caida"
+    assert evento.tipo == "acidente_transito"
     assert db_session.query(DadoContextual).filter(DadoContextual.evento_id == evento.id).count() == 0
 
 
@@ -130,7 +130,6 @@ def test_checar_geosampa_processa_apenas_ocorrencias_novas(db_session: Session, 
         lambda _lat, _lon: {"disponivel": True, "chuva_mm": 5.0, "vento_kmh": 5.0},
     )
     monkeypatch.setattr(context_monitor.geosampa_source, "buscar_alagamentos", lambda _data: [_ocorrencia("555"), _ocorrencia("556")])
-    monkeypatch.setattr(context_monitor.geosampa_source, "buscar_quedas_de_arvore", lambda _data: [])
     monkeypatch.setattr(context_monitor.geosampa_source, "buscar_acidentes_transito", lambda _data: [])
 
     from app.models.evento import Evento
@@ -207,7 +206,7 @@ def test_buscar_corroboracao_visual_com_camera_registra_sinal_limitado(db_sessio
     from ml.detector import Deteccao
 
     referencia = CAMERAS[0]
-    evento = Evento(titulo="t", tipo="arvore_caida", severidade="media", status="em_analise", localizacao_id=_criar_localizacao(db_session, referencia.latitude, referencia.longitude))
+    evento = Evento(titulo="t", tipo="alagamento", severidade="alta", status="em_analise", localizacao_id=_criar_localizacao(db_session, referencia.latitude, referencia.longitude))
     db_session.add(evento)
     db_session.commit()
 
@@ -220,7 +219,7 @@ def test_buscar_corroboracao_visual_com_camera_registra_sinal_limitado(db_sessio
         lambda _path, _threshold: [Deteccao(8, "veiculo", 0.95, "baixa", "observacao_visual", (0, 0, 10, 10), "car")],
     )
 
-    context_monitor._buscar_corroboracao_visual(db_session, evento.id, referencia.latitude, referencia.longitude, "arvore_caida")
+    context_monitor._buscar_corroboracao_visual(db_session, evento.id, referencia.latitude, referencia.longitude, "alagamento")
     db_session.flush()
 
     evidencia = db_session.query(EvidenciaVisual).filter(EvidenciaVisual.evento_id == evento.id).first()
@@ -237,7 +236,7 @@ def test_buscar_corroboracao_visual_com_modelo_de_incidentes_confirma_direto(db_
     from ml.detector import Deteccao
 
     referencia = CAMERAS[0]
-    evento = Evento(titulo="t", tipo="arvore_caida", severidade="media", status="em_analise", localizacao_id=_criar_localizacao(db_session, referencia.latitude, referencia.longitude))
+    evento = Evento(titulo="t", tipo="alagamento", severidade="alta", status="em_analise", localizacao_id=_criar_localizacao(db_session, referencia.latitude, referencia.longitude))
     db_session.add(evento)
     db_session.commit()
 
@@ -246,10 +245,10 @@ def test_buscar_corroboracao_visual_com_modelo_de_incidentes_confirma_direto(db_
     monkeypatch.setattr(
         context_monitor,
         "detectar_incidentes_imagem",
-        lambda _path, _threshold: [Deteccao(6, "arvore_caida", 0.88, "media", "infraestrutura", (0, 0, 10, 10), "fallen tree")],
+        lambda _path, _threshold: [Deteccao(1, "alagamento", 0.88, "critica", "clima", (0, 0, 10, 10), "flood")],
     )
 
-    context_monitor._buscar_corroboracao_visual(db_session, evento.id, referencia.latitude, referencia.longitude, "arvore_caida")
+    context_monitor._buscar_corroboracao_visual(db_session, evento.id, referencia.latitude, referencia.longitude, "alagamento")
     db_session.flush()
 
     evidencia = db_session.query(EvidenciaVisual).filter(EvidenciaVisual.evento_id == evento.id).first()
@@ -266,7 +265,7 @@ def test_buscar_corroboracao_visual_falha_de_rede_nao_propaga(db_session: Sessio
     from app.services.cet_camera_catalog import CAMERAS
 
     referencia = CAMERAS[0]
-    evento = Evento(titulo="t", tipo="arvore_caida", severidade="media", status="em_analise", localizacao_id=_criar_localizacao(db_session, referencia.latitude, referencia.longitude))
+    evento = Evento(titulo="t", tipo="alagamento", severidade="alta", status="em_analise", localizacao_id=_criar_localizacao(db_session, referencia.latitude, referencia.longitude))
     db_session.add(evento)
     db_session.commit()
 
@@ -277,6 +276,6 @@ def test_buscar_corroboracao_visual_falha_de_rede_nao_propaga(db_session: Sessio
     monkeypatch.setattr(context_monitor, "status_incident_detector", lambda: {"disponivel": False})
     monkeypatch.setattr(context_monitor.httpx, "get", _falha)
 
-    context_monitor._buscar_corroboracao_visual(db_session, evento.id, referencia.latitude, referencia.longitude, "arvore_caida")
+    context_monitor._buscar_corroboracao_visual(db_session, evento.id, referencia.latitude, referencia.longitude, "alagamento")
 
     assert db_session.query(EvidenciaVisual).filter(EvidenciaVisual.evento_id == evento.id).count() == 0

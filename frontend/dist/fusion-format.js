@@ -9,7 +9,9 @@ export function formatFusionPercent(value, fractionDigits = 1) {
 export function calculateVisualContribution(score, weight) {
     return score * weight;
 }
-export function fusionComponentLabel(name) {
+export function fusionComponentLabel(name, eventoTipo) {
+    if (name === "clima" && eventoTipo === "transito")
+        return "Congestionamento";
     const labels = {
         ia: "IA / visão computacional",
         clima: "Clima",
@@ -17,8 +19,8 @@ export function fusionComponentLabel(name) {
     };
     return labels[name] || name;
 }
-export function formatFusionEquation(component) {
-    return fusionComponentLabel(component.nome) + " " +
+export function formatFusionEquation(component, eventoTipo) {
+    return fusionComponentLabel(component.nome, eventoTipo) + " " +
         formatFusionPercent(component.pontuacao) + " × peso " +
         formatFusionPercent(component.peso) + " = " +
         formatFusionPercent(component.contribuicao);
