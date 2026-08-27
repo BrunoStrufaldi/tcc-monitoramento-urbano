@@ -35,11 +35,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
     try:
         initial = json.loads(await websocket.receive_text())
-        if initial.get("tipo") != "auth":
-            await websocket.send_json({"tipo": "erro", "detalhe": "Autentique antes de iniciar o canal"})
-            await websocket.close(code=1008)
-            return
-        decode_access_token(str(initial.get("token", "")))
+        token = str(initial.get("token", "")) if initial.get("tipo") == "auth" else ""
+        if token:
+            # Sistema sem login: só validamos quando um token é enviado.
+            try:
+                decode_access_token(token)
+            except Exception:
+                await websocket.send_json({"tipo": "erro", "detalhe": "Token inválido"})
+                await websocket.close(code=1008)
+                return
         await manager.register(websocket)
         await websocket.send_json({"tipo": "auth_ok"})
         while True:
@@ -71,20 +75,21 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 async def websocket_cv(websocket: WebSocket) -> None:
     """Canal de frames: exige mensagem inicial auth e nunca persiste imagens."""
     await websocket.accept()
-    authenticated = False
     last_frame_at = 0.0
     try:
         while True:
             message = json.loads(await websocket.receive_text())
             if message.get("tipo") == "auth":
-                decode_access_token(str(message.get("token", "")))
-                authenticated = True
+                token = str(message.get("token", ""))
+                if token:
+                    try:
+                        decode_access_token(token)
+                    except Exception:
+                        await websocket.send_json({"tipo": "erro", "detalhe": "Token inválido"})
+                        await websocket.close(code=1008)
+                        return
                 await websocket.send_json({"tipo": "auth_ok", "max_fps": settings.yolo_max_fps})
                 continue
-            if not authenticated:
-                await websocket.send_json({"tipo": "erro", "detalhe": "Autentique antes de enviar frames"})
-                await websocket.close(code=1008)
-                return
             if message.get("tipo") != "frame":
                 await websocket.send_json({"tipo": "erro", "detalhe": "Mensagem não suportada"})
                 continue

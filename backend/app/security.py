@@ -80,13 +80,37 @@ def record_audit(db: Session, *, usuario_id: int | None, acao: str, evento_id: i
     db.commit()
 
 
+ACESSO_LIVRE_USERNAME = "acesso-livre"
+
+
+def acesso_livre_user(db: Session) -> Usuario:
+    """Sistema sem tela de login: qualquer requisição sem token opera como este
+    usuário. Reaproveita um administrador já existente ou cria um dedicado."""
+    user = (
+        db.query(Usuario)
+        .filter(Usuario.ativo.is_(True), Usuario.perfil == "administrador")
+        .order_by(Usuario.id)
+        .first()
+    )
+    if user is None:
+        user = db.query(Usuario).filter(Usuario.ativo.is_(True)).order_by(Usuario.id).first()
+    if user is None:
+        user = Usuario(nome_usuario=ACESSO_LIVRE_USERNAME, senha_hash="!sem-login", perfil="administrador")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return user
+
+
 def get_current_user(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     db: Session = Depends(get_db),
 ) -> Usuario:
     if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autenticação Bearer obrigatória", headers={"WWW-Authenticate": "Bearer"})
+        user = acesso_livre_user(db)
+        request.state.current_user = user
+        return user
     payload = decode_access_token(credentials.credentials)
     try:
         user_id = int(payload["sub"])
