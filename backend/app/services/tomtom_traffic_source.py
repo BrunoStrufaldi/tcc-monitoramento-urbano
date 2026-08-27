@@ -1,11 +1,11 @@
 """Fluxo de trânsito ao vivo via TomTom Traffic API (Flow Segment Data).
 
-Diferente do GeoSampa (recarregado em lote — semanas a anos de defasagem, ver
-``geosampa_source.py``), essa API responde com a velocidade média atual do
-trecho de via mais próximo do ponto pedido, comparada à velocidade livre
-esperada — dado genuinamente ao vivo. Cadastro self-service e gratuito em
-developer.tomtom.com (sem convênio institucional, ao contrário do Waze for
-Cities). Requer ``TOMTOM_API_KEY``.
+Diferente do GeoSampa (recarregado em lote — semanas a anos de defasagem;
+removido do sistema por decisão do grupo de manter só dado em tempo real),
+essa API responde com a velocidade média atual do trecho de via mais próximo
+do ponto pedido, comparada à velocidade livre esperada — dado genuinamente ao
+vivo. Cadastro self-service e gratuito em developer.tomtom.com (sem convênio
+institucional, ao contrário do Waze for Cities). Requer ``TOMTOM_API_KEY``.
 """
 
 import json

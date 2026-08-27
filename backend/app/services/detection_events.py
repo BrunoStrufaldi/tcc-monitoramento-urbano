@@ -30,7 +30,6 @@ _DISPLAY_NAMES = {
     "onibus": "Ônibus",
     "caminhao": "Caminhão",
     "transito": "Trânsito",
-    "incendio": "Incêndio",
 }
 
 

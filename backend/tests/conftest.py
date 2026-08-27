@@ -19,7 +19,7 @@ from app.security import create_access_token, hash_password
 TEST_DATABASE_URL = "sqlite:///:memory:"
 settings.auth_secret_key = secrets.token_urlsafe(32)
 # Nunca deixa o .env local ligar as threads de monitoramento contínuo durante
-# os testes — elas fariam chamadas de rede reais (câmera, GeoSampa) a cada
+# os testes — elas fariam chamadas de rede reais (câmera CET) a cada
 # TestClient criado.
 settings.gx_monitoramento_ativo = False
 TEST_PASSWORD_HASH = hash_password("senha-de-teste-segura")

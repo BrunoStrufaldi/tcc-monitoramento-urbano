@@ -27,10 +27,8 @@ class Settings(BaseSettings):
     gx_transito_min_veiculos: int = 20
     gx_alerta_cooldown_seconds: float = 1800.0
     gx_transito_monitorar_catalogo: bool = False
-    gx_camera_busca_raio_km: float = 2.0
-    gx_geosampa_janela_dias: int = 60
-    gx_geosampa_interval_seconds: float = 3600.0
-    gx_confirmacao_confianca_minima: float = 0.75
+    gx_alagamento_monitorar_catalogo: bool = False
+    gx_camera_frescor_maximo_segundos: float = 300.0
 
     @field_validator("database_url")
     @classmethod

@@ -15,16 +15,13 @@ ml/
 
 | ID | Classe | Severidade | Tipo |
 |----|--------|------------|------|
-| 0 | buraco | alta | infraestrutura |
 | 1 | alagamento | critica | clima |
 | 2 | transito | media | mobilidade |
-| 3 | lixo | baixa | meio_ambiente |
-| 4 | incendio | critica | seguranca |
-| 5 | construcao_irregular | alta | urbanismo |
-| 7 | vazamento | alta | infraestrutura |
 
-(Havia uma classe 6, `arvore_caida`, removida por decisão do grupo de tirar
-esse tipo do escopo do TCC — o ID não foi reaproveitado.)
+(Havia também buraco (0), lixo (3), incêndio (4), construção irregular (5),
+`arvore_caida` (6) e vazamento (7) — todas removidas por decisão do grupo de
+focar o escopo do TCC só em alagamento e trânsito, os dois tipos com detector
+de verdade rodando contínuo. Os IDs não foram reaproveitados.)
 
 ## Uso
 
@@ -89,10 +86,15 @@ Os uploads são temporários, aceitam PNG/JPG/WEBP de até 10 MB e são removido
 O peso COCO padrão não reconhece essa classe. Em vez de substituir o modelo
 global (o que quebraria a contagem de veículos do trânsito ao vivo), o GX
 carrega um **segundo modelo**, separado, só para isso: `GX_YOLO_INCIDENT_MODEL`
-(padrão `ml/models/gx-incident.pt`). Quando ele está disponível e detecta a
-classe esperada numa câmera próxima de uma ocorrência GeoSampa, isso vira
-confirmação visual direta em `context_monitor.py`; sem ele, o sistema
-continua no modo sinal indireto (COCO, teto de confiança 0.5) como hoje.
+(padrão `ml/models/gx-incident.pt`). Com `GX_ALAGAMENTO_MONITORAR_CATALOGO=true`,
+`backend/app/services/flood_detection.py` roda esse modelo direto nas 11
+câmeras públicas da CET (mesmo padrão do `live_detection.py` de trânsito,
+inclusive a checagem de frame desatualizado) — sem o modelo dedicado
+configurado, o loop sobe mas cada frame é descartado silenciosamente.
+
+(Havia também um caminho reativo, disparado por ocorrências em lote do
+GeoSampa em `context_monitor.py` — removido junto com o GeoSampa, por
+decisão do grupo de manter só dado em tempo real.)
 
 O peso atual foi treinado com duas classes (alagamento e árvore caída — passo
 a passo abaixo, mantido por precisão histórica), mas o app não usa mais a

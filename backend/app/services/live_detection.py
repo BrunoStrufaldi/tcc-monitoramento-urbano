@@ -5,6 +5,15 @@ por ID (ex.: ``https://cameras.cetsp.com.br/Cams/225/1.jpg``), atualizada
 periodicamente pelo próprio servidor deles. Por isso o loop aqui é HTTP GET
 em intervalo, não captura de vídeo.
 
+Nem sempre esse "atualizada periodicamente" é verdade: descoberto na prática
+(26/08/2026) que uma câmera específica travou servindo sempre o mesmo JPEG de
+meses atrás (200 OK, bytes válidos, só o conteúdo é velho) — sem checagem,
+isso vira um evento de "trânsito agora" carimbado com o horário de execução
+mas com uma foto de outra hora do dia. Por isso todo frame baixado passa por
+``cet_camera_catalog.frame_esta_desatualizado`` (usa o cabeçalho HTTP
+``Last-Modified``) antes de virar detecção; frame velho é descartado como se
+fosse falha de rede.
+
 O YOLO/COCO padrão só reconhece objetos (veículo, ônibus, caminhão, moto), não
 "trânsito" como classe. Por isso não criamos mais um evento por veículo
 avulso: contamos quantos veículos aparecem juntos no mesmo frame e, acima de
@@ -157,6 +166,14 @@ def _loop(snapshot_url: str, latitude: float, longitude: float, interval: float,
                 conteudo = response.content
             except httpx.HTTPError as exc:
                 logger.warning("Falha ao baixar snapshot de %s (%s): %s", nome_camera, snapshot_url, exc)
+                _stop_event.wait(interval)
+                continue
+
+            if cet_camera_catalog.frame_esta_desatualizado(response.headers, settings.gx_camera_frescor_maximo_segundos):
+                logger.warning(
+                    "Câmera %s travada num frame antigo (Last-Modified: %s) — ignorando, não é tempo real",
+                    nome_camera, response.headers.get("last-modified"),
+                )
                 _stop_event.wait(interval)
                 continue
 

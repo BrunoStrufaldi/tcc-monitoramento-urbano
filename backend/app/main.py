@@ -23,7 +23,7 @@ from app.routers import (
     websocket,
 )
 from app.security import ensure_bootstrap_admin, get_current_user
-from app.services import context_monitor, live_detection
+from app.services import flood_detection, live_detection
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -38,10 +38,10 @@ async def lifespan(_app: FastAPI):
     # subindo sozinhas. Ative com GX_MONITORAMENTO_ATIVO=true no .env.
     if settings.gx_monitoramento_ativo:
         live_detection.iniciar()
-        context_monitor.iniciar()
+        flood_detection.iniciar()
     yield
     live_detection.parar()
-    context_monitor.parar()
+    flood_detection.parar()
 
 
 app = FastAPI(

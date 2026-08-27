@@ -8,8 +8,8 @@ def test_listar_classes(client: TestClient):
     assert response.status_code == 200
     data = response.json()
     assert "classes" in data
-    assert len(data["classes"]) == 12
-    assert data["classes"][0]["nome"] == "buraco"
+    assert len(data["classes"]) == 7
+    assert data["classes"][0]["nome"] == "alagamento"
 
 
 def test_status_detector_explica_o_modo_ativo(client: TestClient):

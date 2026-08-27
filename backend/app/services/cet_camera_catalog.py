@@ -15,6 +15,8 @@ não para navegação de precisão.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from math import atan2, cos, radians, sin, sqrt
 
 SNAPSHOT_URL_TEMPLATE = "https://cameras.cetsp.com.br/Cams/{id}/1.jpg"
@@ -64,3 +66,30 @@ def camera_mais_proxima(latitude: float, longitude: float, raio_km: float) -> Ca
     if _distancia_km(latitude, longitude, mais_proxima.latitude, mais_proxima.longitude) > raio_km:
         return None
     return mais_proxima
+
+
+def frame_esta_desatualizado(headers, max_idade_segundos: float) -> bool:
+    """``True`` se o snapshot HTTP não é realmente ao vivo.
+
+    Descoberto na prática (26/08/2026, câmera 22 "Paulista - Metrô
+    Consolação"): a CET às vezes trava numa câmera e o endpoint
+    ``.../Cams/{id}/1.jpg`` passa a devolver sempre o mesmo JPEG antigo — 200
+    OK, bytes válidos, mas com ``Last-Modified`` de meses atrás (nesse caso,
+    imagem de meio-dia sendo processada às 22h como se fosse agora). Sem essa
+    checagem, o sistema cria um evento de "trânsito ao vivo" com timestamp de
+    agora a partir de uma foto de outra época — o oposto do que o usuário
+    pediu (tempo real). Câmeras sem o cabeçalho ``Last-Modified`` (não é
+    garantido por HTTP) são tratadas como frescas, já que não dá pra provar
+    o contrário.
+    """
+    valor = headers.get("last-modified")
+    if not valor:
+        return False
+    try:
+        modificado_em = parsedate_to_datetime(valor)
+    except (TypeError, ValueError):
+        return False
+    if modificado_em.tzinfo is None:
+        modificado_em = modificado_em.replace(tzinfo=UTC)
+    idade_segundos = (datetime.now(UTC) - modificado_em).total_seconds()
+    return idade_segundos > max_idade_segundos
