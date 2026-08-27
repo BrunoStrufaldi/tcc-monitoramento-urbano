@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.broadcast import schedule_coroutine
+from app.config import settings
 from app.database import get_db
 from app.models.evento import Evento
 from app.models.localizacao import Localizacao
@@ -11,6 +12,7 @@ from app.schemas.evento import EventoCreate, EventoResponse, EventoUpdate
 from app.schemas.localizacao import LocalizacaoCreate
 from app.models.usuario import Usuario
 from app.security import record_audit, require_admin, require_operator
+from app.services.event_retention import limite_da_janela
 
 
 def _schedule_broadcast(event_type: str, data: dict) -> None:
@@ -63,8 +65,15 @@ def listar_eventos(
     status_filtro: str | None = Query(None, alias="status"),
     tipo: str | None = None,
     limite: int = Query(100, ge=1, le=500),
+    janela_minutos: int | None = Query(None, ge=0, description="0 = sem janela (histórico completo)"),
 ) -> list[Evento]:
     query = db.query(Evento).options(*_EVENTO_LOAD_OPTIONS)
+
+    # Quadro em tempo real: por padrão só retorna eventos detectados dentro da
+    # janela configurada. janela_minutos=0 desliga o corte (auditoria/debug).
+    minutos = settings.gx_evento_janela_minutos if janela_minutos is None else janela_minutos
+    if minutos > 0:
+        query = query.filter(Evento.detectado_em >= limite_da_janela(minutos))
 
     if status_filtro:
         query = query.filter(Evento.status == status_filtro)

@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.broadcast import schedule_coroutine
@@ -41,6 +43,41 @@ def _fonte(db: Session, nome: str, descricao: str) -> FonteDados:
     db.add(source)
     db.flush()
     return source
+
+
+def refrescar_evento_no_ponto(
+    db: Session,
+    *,
+    tipo: str,
+    latitude: float,
+    longitude: float,
+    dentro_de_segundos: float,
+    tolerancia_graus: float = 1e-4,
+) -> Evento | None:
+    """Detecção contínua: se já existe um evento vivo do mesmo tipo no mesmo
+    ponto dentro da janela, apenas renova o ``detectado_em`` (mantém uma única
+    marcação "ao vivo" no mapa) em vez de empilhar um novo evento.
+    """
+    limite = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=dentro_de_segundos)
+    evento = (
+        db.query(Evento)
+        .join(Localizacao, Evento.localizacao_id == Localizacao.id)
+        .filter(
+            Evento.tipo == tipo,
+            Evento.status.in_(("em_analise", "ativo")),
+            Evento.detectado_em >= limite,
+            func.abs(Localizacao.latitude - latitude) < tolerancia_graus,
+            func.abs(Localizacao.longitude - longitude) < tolerancia_graus,
+        )
+        .order_by(Evento.detectado_em.desc())
+        .first()
+    )
+    if evento is None:
+        return None
+    evento.detectado_em = datetime.now(UTC).replace(tzinfo=None)
+    db.commit()
+    publicar_evento(db, evento.id)
+    return evento
 
 
 def registrar_deteccao(

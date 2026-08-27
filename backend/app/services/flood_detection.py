@@ -47,7 +47,7 @@ from app.database import SessionLocal
 from app.models.dado_contextual import DadoContextual
 from app.services import cet_camera_catalog
 from app.services.data_fusion_service import aplicar_fusao_evento
-from app.services.detection_events import publicar_evento, registrar_deteccao
+from app.services.detection_events import publicar_evento, refrescar_evento_no_ponto, registrar_deteccao
 from app.services.inmet_alert_source import obter_aviso_ativo
 from app.services.weather_source import obter_condicoes_atuais
 from ml.detector import detectar_incidentes_imagem
@@ -89,6 +89,12 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
     alagamento = replace(bruto, tipo="alagamento")
 
     with SessionLocal() as db:
+        if refrescar_evento_no_ponto(
+            db, tipo="alagamento", latitude=latitude, longitude=longitude,
+            dentro_de_segundos=settings.gx_alerta_cooldown_seconds,
+        ):
+            logger.info("Alagamento em %s renovado (evento ainda vivo no ponto)", nome_camera)
+            return
         try:
             evento = registrar_deteccao(
                 db,
