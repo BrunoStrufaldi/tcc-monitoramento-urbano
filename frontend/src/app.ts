@@ -972,7 +972,6 @@ function markerGlyph(event: UrbanEvent): string {
   if (event.tipo === "observacao_visual") return "◎";
   if (value.includes("alag") || value.includes("chuva")) return "≋";
   if (value.includes("trâns") || value.includes("trans") || value.includes("via")) return "▲";
-  if (value.includes("árvore") || value.includes("arvore")) return "⌁";
   if (value.includes("câmera") || value.includes("camera")) return "◉";
   if (value.includes("bloque")) return "▰";
   return "!";
@@ -1343,8 +1342,9 @@ async function loadDetailSection(): Promise<void> {
       content.innerHTML = (contextRows.length || liveRows.length) ? '<section class="detail-subsection"><h3>Contexto vinculado ao evento</h3>' + (contextRows.length ? detailRows(contextRows) : detailEmpty("contexto climático vinculado")) + '</section><section class="detail-subsection"><h3>Clima atual da fonte pública</h3>' + (liveRows.length ? detailRows(liveRows) : detailEmpty("clima atual")) + '</section>' : detailEmpty("clima");
     } else if (detailActiveTab === "fusion") {
       const fusion = await fetchOperationalData<FusionResult>("/fusion/eventos/" + eventId + "/confiabilidade");
+      const eventoTipo = loadedEvents.find((e) => e.id === eventId)?.tipo;
       content.innerHTML = '<section class="detail-fusion"><div class="detail-fusion-score"><strong>' + formatFusionPercent(fusion.confiabilidade) + '</strong><span>' + escapeHtml(formatFusionLevel(fusion.nivel)) + '</span><small>Calculado em ' + escapeHtml(formatDate(fusion.calculado_em)) + '</small></div>' +
-        fusion.componentes.map((component) => '<article><strong>' + escapeHtml(fusionComponentLabel(component.nome)) + '</strong><p>' + escapeHtml(formatFusionEquation(component)) + '</p><span>Justificativa: ' + escapeHtml(detailValue(component.detalhe)) + '</span></article>').join("") +
+        fusion.componentes.map((component) => '<article><strong>' + escapeHtml(fusionComponentLabel(component.nome, eventoTipo)) + '</strong><p>' + escapeHtml(formatFusionEquation(component, eventoTipo)) + '</p><span>Justificativa: ' + escapeHtml(detailValue(component.detalhe)) + '</span></article>').join("") +
         '<p class="detail-note">YOLO produz evidência; a decisão final vem da Fusão de Dados.</p></section>';
     } else if (detailActiveTab === "notificacoes") {
       const notifications = await fetchOperationalData<UrbanNotification[]>("/notificacoes?evento_id=" + eventId + "&limite=100");
@@ -1792,16 +1792,16 @@ function setFusionSummary(result: FusionResult | null): void {
   document.querySelectorAll<HTMLButtonElement>("[data-action='recalculate-fusion']").forEach((button) => { button.disabled = !result || selectedEventId == null; });
 }
 
-function renderFusionResult(result: FusionResult): void {
+function renderFusionResult(result: FusionResult, eventoTipo?: string): void {
   const containers = document.querySelectorAll<HTMLElement>("#fusion-breakdown, #fusion-breakdown-panel");
   setFusionSummary(result);
   const html = result.componentes.map((component) => {
     const pct = Math.round(component.pontuacao * 100);
-    const equation = formatFusionEquation(component);
+    const equation = formatFusionEquation(component, eventoTipo);
     const detail = component.detalhe || "Não informada pela API";
     return '<article class="fusion-item">' +
       '<div class="fusion-row"><span class="fusion-component-icon" data-component="' + escapeHtml(component.nome) + '"></span>' +
-        '<span class="fusion-name">' + escapeHtml(fusionComponentLabel(component.nome)) + '</span>' +
+        '<span class="fusion-name">' + escapeHtml(fusionComponentLabel(component.nome, eventoTipo)) + '</span>' +
         '<span class="fusion-score">' + formatFusionPercent(component.pontuacao, 0) + '</span>' +
         '<span class="fusion-weight">Peso ' + formatFusionPercent(component.peso, 0) + '</span>' +
         '<span class="fusion-value">' + formatFusionPercent(component.contribuicao) + '</span></div>' +
@@ -1820,7 +1820,8 @@ async function loadFusionBreakdown(eventId: number): Promise<void> {
   const containers = document.querySelectorAll<HTMLElement>("#fusion-breakdown, #fusion-breakdown-panel");
   setFusionLoadingState();
   try {
-    renderFusionResult(await fetchOperationalData<FusionResult>("/fusion/eventos/" + eventId + "/confiabilidade"));
+    const eventoTipo = loadedEvents.find((e) => e.id === eventId)?.tipo;
+    renderFusionResult(await fetchOperationalData<FusionResult>("/fusion/eventos/" + eventId + "/confiabilidade"), eventoTipo);
   } catch {
     setFusionSummary(null);
     containers.forEach((container) => { container.innerHTML = '<p class="fusion-empty">Não foi possível carregar o cálculo da API.</p>'; });
@@ -1837,7 +1838,8 @@ async function recalculateFusion(eventId: number): Promise<void> {
   try {
     const response = await apiFetch("/fusion/eventos/" + eventId + "/recalcular", { method: "POST" });
     if (!response.ok) throw new Error("API retornou " + response.status);
-    renderFusionResult(await response.json() as FusionResult);
+    const eventoTipo = loadedEvents.find((e) => e.id === eventId)?.tipo;
+    renderFusionResult(await response.json() as FusionResult, eventoTipo);
   } catch {
     setFusionSummary(null);
     document.querySelectorAll<HTMLElement>("#fusion-breakdown, #fusion-breakdown-panel").forEach((container) => { container.innerHTML = '<p class="fusion-empty">Não foi possível recalcular pela API.</p>'; });
@@ -2065,9 +2067,7 @@ async function loadRightPanelAlerts(): Promise<void> {
         ? '<path d="M4 13c1.3 1.4 3 1.4 4.3 0 1.3-1.4 3-1.4 4.3 0 1.3 1.4 3 1.4 4.3 0M4 18c1.3 1.4 3 1.4 4.3 0 1.3-1.4 3-1.4 4.3 0 1.3 1.4 3 1.4 4.3 0M12 4v5"/>'
         : /transito|congestion|via|carro/.test(iconSource)
           ? '<path d="M5 16l1-6h12l1 6M4 16h16v3H4zM7.5 13h.01M16.5 13h.01M7 19v1M17 19v1"/>'
-          : /arvore|árvore/.test(iconSource)
-            ? '<path d="M12 4v16M12 4c-3.6 0-5 2.5-5 5 0 2.1 1.4 3.5 3.1 4.2M12 7c3.6 0 5 2.5 5 5 0 2.1-1.4 3.5-3.1 4.2M8 20h8"/>'
-            : '<path d="M12 4l8 15H4L12 4zM12 10v4m0 2h.01"/>';
+          : '<path d="M12 4l8 15H4L12 4zM12 10v4m0 2h.01"/>';
       return '<button type="button" class="rp-alert-card' + statusClass + (notif.evento_id ? '" data-event-id="' + notif.evento_id : "") + '" style="--alert-color:' + (sevStyle?.color || "var(--gx-light)") + '">' +
         '<span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">' + icon + '</svg></span>' +
         '<span class="rp-alert-body">' +

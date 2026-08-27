@@ -19,7 +19,8 @@ export function calculateVisualContribution(score: number, weight: number): numb
   return score * weight;
 }
 
-export function fusionComponentLabel(name: string): string {
+export function fusionComponentLabel(name: string, eventoTipo?: string): string {
+  if (name === "clima" && eventoTipo === "transito") return "Congestionamento";
   const labels: Record<string, string> = {
     ia: "IA / visão computacional",
     clima: "Clima",
@@ -28,8 +29,8 @@ export function fusionComponentLabel(name: string): string {
   return labels[name] || name;
 }
 
-export function formatFusionEquation(component: FusionDisplayComponent): string {
-  return fusionComponentLabel(component.nome) + " " +
+export function formatFusionEquation(component: FusionDisplayComponent, eventoTipo?: string): string {
+  return fusionComponentLabel(component.nome, eventoTipo) + " " +
     formatFusionPercent(component.pontuacao) + " × peso " +
     formatFusionPercent(component.peso) + " = " +
     formatFusionPercent(component.contribuicao);

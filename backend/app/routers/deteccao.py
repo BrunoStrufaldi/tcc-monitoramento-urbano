@@ -178,9 +178,9 @@ async def detectar_incidente_em_imagem(
     file: UploadFile = File(...),
     confianca_minima: float = Query(0.3, ge=0.05, le=0.95),
 ):
-    """Roda o modelo dedicado a alagamento/árvore caída (GX_YOLO_INCIDENT_MODEL)
-    sobre um upload de teste — não passa pelo pipeline de eventos/evidências,
-    é só pra validar a inferência isoladamente."""
+    """Roda o modelo dedicado a alagamento (GX_YOLO_INCIDENT_MODEL) sobre um
+    upload de teste — não passa pelo pipeline de eventos/evidências, é só pra
+    validar a inferência isoladamente."""
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Apenas imagens são aceitas (image/*)")
     conteudo = await file.read()

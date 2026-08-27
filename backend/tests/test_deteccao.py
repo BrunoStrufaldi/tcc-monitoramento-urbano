@@ -8,7 +8,7 @@ def test_listar_classes(client: TestClient):
     assert response.status_code == 200
     data = response.json()
     assert "classes" in data
-    assert len(data["classes"]) == 13
+    assert len(data["classes"]) == 12
     assert data["classes"][0]["nome"] == "buraco"
 
 

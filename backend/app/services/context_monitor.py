@@ -1,27 +1,30 @@
 """Monitoramento automático de ocorrências oficiais (GeoSampa/Defesa Civil/CET) —
-alagamento, queda de árvore e acidente de trânsito, sem depender de relato
-humano nem de câmera.
+alagamento e acidente de trânsito, sem depender de relato humano nem de câmera.
 
-Nenhuma delas tem classe visual no YOLO/COCO padrão, e não existe (verificado
-consultando o serviço de verdade) uma API pública de "aconteceu agora" para
-essas ocorrências em SP — nem para as três camadas do GeoSampa nem para o CGE
-(não tem API pública, só HTML) nem para o Waze for Cities (exige convênio
-formal da prefeitura com o Google, não é algo que dá pra obter sozinho). O que
-existe são datasets oficiais recarregados em lote (GeoSampa/Defesa Civil/CET,
-ver ``geosampa_source.py``), com coordenada real mas defasagem de semanas a
-poucos meses entre o ocorrido e a publicação. Por isso o loop aqui:
+(A detecção de queda de árvore existiu neste módulo e foi removida por
+decisão do grupo de reduzir o escopo do TCC — o modelo dedicado ainda
+reconhece a classe internamente, mas ela não gera mais evento.)
+
+Nenhuma das duas tem classe visual no YOLO/COCO padrão, e não existe
+(verificado consultando o serviço de verdade) uma API pública de "aconteceu
+agora" para essas ocorrências em SP — nem para as camadas do GeoSampa nem para
+o CGE (não tem API pública, só HTML) nem para o Waze for Cities (exige
+convênio formal da prefeitura com o Google, não é algo que dá pra obter
+sozinho). O que existe são datasets oficiais recarregados em lote
+(GeoSampa/Defesa Civil/CET, ver ``geosampa_source.py``), com coordenada real
+mas defasagem de semanas a poucos meses entre o ocorrido e a publicação. Por
+isso o loop aqui:
 
 1. Consulta periodicamente esses datasets, descartando o que já foi visto
    (tabela ``ocorrencias_externas``, evita duplicar evento pro mesmo registro).
 2. Para cada registro novo, busca o clima atual naquele ponto exato e, se
    houver uma câmera pública da CET conhecida a poucos km (``cet_camera_catalog``),
-   roda o YOLO nela também. Só alagamento e árvore caída têm classe no modelo
-   dedicado (``GX_YOLO_INCIDENT_MODEL``) — nesse caso é confirmação visual
-   direta. Para acidente de trânsito (e para os outros dois sem o modelo
-   dedicado disponível) o YOLO/COCO padrão só reconhece objetos, então vira
-   sinal indireto ("a câmera está ativa e capturou algo ali perto"), NUNCA
-   confirma o incidente sozinho, registrado com confiança deliberadamente
-   limitada.
+   roda o YOLO nela também. Só alagamento tem classe no modelo dedicado
+   (``GX_YOLO_INCIDENT_MODEL``) — nesse caso é confirmação visual direta. Para
+   acidente de trânsito (sem o modelo dedicado disponível) o YOLO/COCO padrão
+   só reconhece objetos, então vira sinal indireto ("a câmera está ativa e
+   capturou algo ali perto"), NUNCA confirma o incidente sozinho, registrado
+   com confiança deliberadamente limitada.
 3. Roda o mesmo motor de Data Fusion do resto do sistema com o que houver
    disponível (IA do passo 2, se existiu; clima do passo 2; fonte oficial).
    Só confirma (status -> ativo) e dispara uma Notificacao de verdade quando a
@@ -69,8 +72,8 @@ from ml.detector import (
 )
 
 # Sinal indireto: a câmera não confirma o incidente (YOLO/COCO não reconhece
-# alagamento nem árvore caída), só que há atividade real captada por perto.
-# O teto evita que isso pese como se fosse uma confirmação visual do incidente.
+# alagamento), só que há atividade real captada por perto. O teto evita que
+# isso pese como se fosse uma confirmação visual do incidente.
 _CONFIANCA_MAXIMA_SINAL_INDIRETO = 0.5
 
 logger = logging.getLogger(__name__)
@@ -85,13 +88,6 @@ _FONTES = {
         "severidade": "alta",
         "chave_clima": "precipitacao_mm_h",
         "unidade_clima": "mm/h",
-    },
-    "geosampa_queda_arvore": {
-        "tipo_evento": "arvore_caida",
-        "titulo": "Possível queda de árvore — ocorrência registrada pela Defesa Civil",
-        "severidade": "media",
-        "chave_clima": "vento_kmh",
-        "unidade_clima": "km/h",
     },
     "geosampa_acidente_transito": {
         "tipo_evento": "acidente_transito",
@@ -241,7 +237,7 @@ def _buscar_corroboracao_visual(db: Session, evento_id: int, latitude: float, lo
         confianca=min(melhor.confianca, _CONFIANCA_MAXIMA_SINAL_INDIRETO),
         metadados={
             "sinal_indireto": True,
-            "aviso": "Não confirma o incidente; a câmera não reconhece alagamento/queda de árvore, só objetos.",
+            "aviso": "Não confirma o incidente; a câmera não reconhece alagamento, só objetos.",
             "camera_id": camera.id,
             "camera_nome": camera.nome,
             "classe_bruta_confianca": melhor.confianca,
@@ -329,7 +325,6 @@ def _checar_geosampa() -> None:
 
     for fonte_chave, buscar in (
         ("geosampa_alagamento", geosampa_source.buscar_alagamentos),
-        ("geosampa_queda_arvore", geosampa_source.buscar_quedas_de_arvore),
         ("geosampa_acidente_transito", geosampa_source.buscar_acidentes_transito),
     ):
         try:

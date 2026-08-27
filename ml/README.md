@@ -21,8 +21,10 @@ ml/
 | 3 | lixo | baixa | meio_ambiente |
 | 4 | incendio | critica | seguranca |
 | 5 | construcao_irregular | alta | urbanismo |
-| 6 | arvore_caida | media | infraestrutura |
 | 7 | vazamento | alta | infraestrutura |
+
+(Havia uma classe 6, `arvore_caida`, removida por decisão do grupo de tirar
+esse tipo do escopo do TCC — o ID não foi reaproveitado.)
 
 ## Uso
 
@@ -82,15 +84,21 @@ uvicorn app.main:app --reload
 
 Os uploads são temporários, aceitam PNG/JPG/WEBP de até 10 MB e são removidos assim que a inferência termina. A rota `POST /deteccao/simular` permanece separada apenas para demonstração e testes.
 
-## Modelo dedicado de incidentes (alagamento / árvore caída)
+## Modelo dedicado de incidentes (alagamento)
 
-O peso COCO padrão não reconhece essas duas classes. Em vez de substituir o
-modelo global (o que quebraria a contagem de veículos do trânsito ao vivo), o
-GX carrega um **segundo modelo**, separado, só para isso: `GX_YOLO_INCIDENT_MODEL`
+O peso COCO padrão não reconhece essa classe. Em vez de substituir o modelo
+global (o que quebraria a contagem de veículos do trânsito ao vivo), o GX
+carrega um **segundo modelo**, separado, só para isso: `GX_YOLO_INCIDENT_MODEL`
 (padrão `ml/models/gx-incident.pt`). Quando ele está disponível e detecta a
 classe esperada numa câmera próxima de uma ocorrência GeoSampa, isso vira
 confirmação visual direta em `context_monitor.py`; sem ele, o sistema
 continua no modo sinal indireto (COCO, teto de confiança 0.5) como hoje.
+
+O peso atual foi treinado com duas classes (alagamento e árvore caída — passo
+a passo abaixo, mantido por precisão histórica), mas o app não usa mais a
+classe de árvore caída desde que o grupo decidiu tirar esse tipo do escopo do
+TCC: ela não tem entrada em `CLASSES_URBANAS` (`ml/detector.py`), então
+qualquer detecção dela é descartada antes de virar evento.
 
 Para treinar esse peso, use `ml/train_incident_model.py` (requer
 `pip install -r backend/requirements-yolo.txt` e uma API key gratuita do

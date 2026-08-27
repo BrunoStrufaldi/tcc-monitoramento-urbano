@@ -1,17 +1,21 @@
 """Cliente WFS do GeoSampa para ocorrências oficiais da Defesa Civil e da CET.
 
-As camadas ``risco_ocorrencia_alagamento``, ``risco_ocorrencia_queda_arvore`` e
-``acidente_cet`` existem de verdade (confirmado em 2026-08-26 consultando o
-serviço) e trazem coordenada real de cada ocorrência — mas são recarregadas em
-lote, com defasagem de semanas a poucos meses entre o ocorrido e a publicação
-(não é um feed de "aconteceu agora"). Por isso o consumidor deste módulo trata
-cada registro ainda não visto como uma ocorrência a verificar via Data Fusion,
-não como um evento em andamento — a confirmação depende de corroboração
-adicional (clima atual no ponto, por exemplo), não só de existir o registro.
+As camadas ``risco_ocorrencia_alagamento`` e ``acidente_cet`` existem de
+verdade (confirmado em 2026-08-26 consultando o serviço) e trazem coordenada
+real de cada ocorrência — mas são recarregadas em lote, com defasagem de
+semanas a poucos meses entre o ocorrido e a publicação (não é um feed de
+"aconteceu agora"). Por isso o consumidor deste módulo trata cada registro
+ainda não visto como uma ocorrência a verificar via Data Fusion, não como um
+evento em andamento — a confirmação depende de corroboração adicional (clima
+atual no ponto, por exemplo), não só de existir o registro.
+
+(Havia também ``risco_ocorrencia_queda_arvore`` aqui; removida por decisão do
+grupo de tirar a detecção de queda de árvore do escopo do TCC.)
 
 ``acidente_cet`` é a camada de acidentes de trânsito levantados pela CET —
-schema diferente das duas primeiras (campo de data é ``dt_acidente``, não tem
-subprefeitura, mas traz contagem de feridos/óbitos e tipo do acidente).
+schema diferente de ``risco_ocorrencia_alagamento`` (campo de data é
+``dt_acidente``, não tem subprefeitura, mas traz contagem de feridos/óbitos e
+tipo do acidente).
 
 As coordenadas vêm em SIRGAS2000 / UTM 23S (EPSG:31983) e são convertidas para
 latitude/longitude (EPSG:4326, compatível com o resto do sistema).
@@ -65,10 +69,6 @@ def _buscar_camada(nome_camada: str, data_minima: str, *, timeout: float = 20.0)
 def buscar_alagamentos(data_minima: str) -> list[dict]:
     """``data_minima`` no formato ISO (YYYY-MM-DD)."""
     return _buscar_camada("risco_ocorrencia_alagamento", data_minima)
-
-
-def buscar_quedas_de_arvore(data_minima: str) -> list[dict]:
-    return _buscar_camada("risco_ocorrencia_queda_arvore", data_minima)
 
 
 def buscar_acidentes_transito(data_minima: str, *, timeout: float = 20.0) -> list[dict]:

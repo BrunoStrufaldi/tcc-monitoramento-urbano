@@ -29,19 +29,6 @@ def test_incendio_com_ia():
     assert 0.3 < r.confiabilidade < 0.9
 
 
-def test_arvore_caida_com_vento_forte():
-    entrada = EventoFusionInput(
-        evento_id=4,
-        tipo="arvore_caida",
-        evidencias_ia=[],
-        dados_clima=[DadoClima(chave="vento_kmh", valor_numerico=72.0, unidade="km/h")],
-        fonte=FonteInfo(tipo="api", nome="Open-Meteo"),
-    )
-    r = calcular_confiabilidade(entrada)
-    assert r.confiabilidade > 0.6
-    assert r.nivel in ("media", "alta")
-
-
 def test_transito_combina_indice_de_veiculos_e_tomtom():
     entrada = EventoFusionInput(
         evento_id=7,
@@ -78,5 +65,4 @@ def test_dimensoes_ausentes_nao_inventam_contribuicao():
 if __name__ == "__main__":
     test_alagamento_com_clima_e_api()
     test_incendio_com_ia()
-    test_arvore_caida_com_vento_forte()
     print("OK — testes de fusão passaram")
