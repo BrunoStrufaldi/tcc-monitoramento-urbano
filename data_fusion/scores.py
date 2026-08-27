@@ -29,21 +29,49 @@ def pontuar_ia(evidencias: list[EvidenciaIA]) -> tuple[float, str]:
     return _clamp(melhor), detalhe
 
 
+def _pontuar_chuva(chuva: float) -> tuple[float, str]:
+    if chuva >= 30:
+        return 0.95, f"chuva intensa ({chuva:.1f} mm/h)"
+    if chuva >= 15:
+        return 0.82, f"precipitação elevada ({chuva:.1f} mm/h)"
+    if chuva >= 5:
+        return 0.62, f"chuva moderada ({chuva:.1f} mm/h)"
+    return 0.35, f"baixa precipitação ({chuva:.1f} mm/h)"
+
+
+def _pontuar_aviso_inmet(indice: float) -> tuple[float, str]:
+    if indice >= 9:
+        return 0.93, "aviso INMET de grande perigo ativo"
+    if indice >= 6:
+        return 0.80, "aviso INMET de perigo ativo"
+    if indice >= 3:
+        return 0.60, "aviso INMET de perigo potencial ativo"
+    return 0.40, "sem aviso oficial relevante no momento"
+
+
 def _pontuar_clima_por_tipo(tipo: str, dados: list[DadoClima]) -> tuple[float, str]:
     tipo_norm = tipo.lower().strip()
     valores = {d.chave.lower(): d.valor_numerico for d in dados if d.valor_numerico is not None}
 
     if tipo_norm == "alagamento":
+        # Duas fontes independentes, mesmo padrão do trânsito (índice de
+        # veículos + TomTom): chuva medida agora (Open-Meteo, sensor bruto) e
+        # aviso oficial ativo do INMET (julgamento institucional) — quando as
+        # duas existem, a pontuação é a média; sem nenhuma, cai pro genérico.
         chuva = valores.get("precipitacao_mm_h") or valores.get("precipitacao")
-        if chuva is None:
-            return 0.45, "Dados climáticos sem precipitação registrada"
-        if chuva >= 30:
-            return 0.95, f"Chuva intensa ({chuva:.1f} mm/h) corrobora alagamento"
-        if chuva >= 15:
-            return 0.82, f"Precipitação elevada ({chuva:.1f} mm/h)"
-        if chuva >= 5:
-            return 0.62, f"Chuva moderada ({chuva:.1f} mm/h)"
-        return 0.35, f"Baixa precipitação ({chuva:.1f} mm/h) — contexto fraco"
+        aviso_inmet = valores.get("alerta_inmet_severidade")
+
+        partes = [_pontuar_chuva(chuva)] if chuva is not None else []
+        if aviso_inmet is not None:
+            partes.append(_pontuar_aviso_inmet(aviso_inmet))
+
+        if not partes:
+            return 0.45, "Dados climáticos sem precipitação nem aviso oficial registrados"
+
+        pontuacao = sum(p for p, _ in partes) / len(partes)
+        detalhe = " + ".join(texto for _, texto in partes)
+        origem = f" (combina {len(partes)} fontes)" if len(partes) > 1 else ""
+        return pontuacao, f"Corroboração de alagamento: {detalhe}{origem}"
 
     if tipo_norm == "transito":
         indices = [
@@ -59,29 +87,6 @@ def _pontuar_clima_por_tipo(tipo: str, dados: list[DadoClima]) -> tuple[float, s
         if indice >= 4:
             return 0.72, f"Congestionamento moderado ({indice:.1f}/10){origem}"
         return 0.40, f"Índice baixo ({indice:.1f}/10){origem} — contexto fraco para trânsito"
-
-    if tipo_norm == "acidente_transito":
-        chuva = valores.get("precipitacao_mm_h") or valores.get("precipitacao")
-        if chuva is None:
-            return 0.45, "Dados climáticos sem precipitação registrada"
-        if chuva >= 10:
-            return 0.80, f"Chuva forte ({chuva:.1f} mm/h) — pista provavelmente escorregadia"
-        if chuva >= 3:
-            return 0.65, f"Chuva moderada ({chuva:.1f} mm/h) — aderência reduzida"
-        if chuva > 0:
-            return 0.55, f"Chuvisco leve ({chuva:.1f} mm/h)"
-        return 0.42, "Sem chuva registrada — fator climático fraco para o acidente"
-
-    if tipo_norm == "incendio":
-        umidade = valores.get("umidade")
-        temp = valores.get("temperatura")
-        if umidade is not None and umidade < 40:
-            return 0.78, f"Umidade baixa ({umidade:.0f}%) favorece risco de incêndio"
-        if temp is not None and temp >= 32:
-            return 0.75, f"Temperatura alta ({temp:.0f}°C)"
-        if umidade is not None or temp is not None:
-            return 0.55, "Condições climáticas neutras para incêndio"
-        return 0.48, "Dados climáticos genéricos disponíveis"
 
     return 0.58, f"Contexto climático genérico para evento tipo '{tipo_norm}'"
 

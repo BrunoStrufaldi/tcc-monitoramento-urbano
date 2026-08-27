@@ -15,7 +15,7 @@ STATUS_EVENTO = Literal["ativo", "em_analise", "resolvido"]
 class EventoBase(BaseModel):
     titulo: str = Field(..., max_length=200)
     descricao: str | None = None
-    tipo: str = Field(..., max_length=50, examples=["transito", "incendio", "alagamento"])
+    tipo: str = Field(..., max_length=50, examples=["transito", "alagamento"])
     severidade: SEVERIDADES = "media"
     status: STATUS_EVENTO = "ativo"
     regiao_id: int | None = None

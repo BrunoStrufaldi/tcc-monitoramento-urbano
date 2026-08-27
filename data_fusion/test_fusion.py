@@ -17,16 +17,21 @@ def test_alagamento_com_clima_e_api():
     assert r.nivel in ("media", "alta")
 
 
-def test_incendio_com_ia():
+def test_alagamento_combina_chuva_e_aviso_inmet():
     entrada = EventoFusionInput(
-        evento_id=3,
-        tipo="incendio",
-        evidencias_ia=[EvidenciaIA(confianca=0.78, modelo_ia="yolov8n", classe_detectada="smoke")],
-        dados_clima=[],
-        fonte=FonteInfo(tipo="manual", nome="Painel manual"),
+        evento_id=8,
+        tipo="alagamento",
+        evidencias_ia=[],
+        dados_clima=[
+            DadoClima(chave="precipitacao_mm_h", valor_numerico=32.0, unidade="mm/h"),  # pontuação 0.95
+            DadoClima(chave="alerta_inmet_severidade", valor_numerico=4.0, unidade="indice_0_10"),  # "perigo potencial" -> 0.60
+        ],
+        fonte=FonteInfo(tipo="yolo", nome="GX YOLO Contínuo (alagamento)"),
     )
     r = calcular_confiabilidade(entrada)
-    assert 0.3 < r.confiabilidade < 0.9
+    componente_clima = next(c for c in r.componentes if c.nome == "clima")
+    assert "combina 2 fontes" in componente_clima.detalhe
+    assert componente_clima.pontuacao == round((0.95 + 0.60) / 2, 4)
 
 
 def test_transito_combina_indice_de_veiculos_e_tomtom():
@@ -64,5 +69,4 @@ def test_dimensoes_ausentes_nao_inventam_contribuicao():
 
 if __name__ == "__main__":
     test_alagamento_com_clima_e_api()
-    test_incendio_com_ia()
     print("OK — testes de fusão passaram")

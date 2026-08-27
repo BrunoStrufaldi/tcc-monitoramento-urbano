@@ -15,15 +15,15 @@ from typing import Any
 
 
 CLASSES_URBANAS = {
-    0: {"nome": "buraco", "severidade": "alta", "tipo": "infraestrutura"},
+    # Havia também buraco, lixo, incêndio, construção irregular e vazamento
+    # aqui (IDs 0, 3, 4, 5, 7) — removidos por decisão do grupo de focar o
+    # escopo do TCC só em alagamento e trânsito, os dois tipos com detector
+    # de verdade rodando contínuo (ver flood_detection.py e
+    # live_detection.py). Os IDs não foram reaproveitados.
     1: {"nome": "alagamento", "severidade": "critica", "tipo": "clima"},
     2: {"nome": "transito", "severidade": "media", "tipo": "mobilidade"},
-    3: {"nome": "lixo", "severidade": "baixa", "tipo": "meio_ambiente"},
-    4: {"nome": "incendio", "severidade": "critica", "tipo": "seguranca"},
-    5: {"nome": "construcao_irregular", "severidade": "alta", "tipo": "urbanismo"},
-    7: {"nome": "vazamento", "severidade": "alta", "tipo": "infraestrutura"},
     # Classes COCO abaixo são observações visuais. A presença de um veículo ou
-    # hidrante não comprova congestionamento, acidente ou vazamento.
+    # hidrante não comprova congestionamento nem alagamento.
     8: {"nome": "veiculo", "severidade": "baixa", "tipo": "observacao_visual"},
     9: {"nome": "motocicleta", "severidade": "baixa", "tipo": "observacao_visual"},
     10: {"nome": "onibus", "severidade": "baixa", "tipo": "observacao_visual"},

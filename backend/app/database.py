@@ -7,7 +7,7 @@ from app.config import settings
 
 _engine_kwargs: dict = {"pool_pre_ping": True, "pool_recycle": 3600}
 if settings.database_url.startswith("sqlite"):
-    # As threads de monitoramento contínuo (live_detection, context_monitor)
+    # As threads de monitoramento contínuo (live_detection, flood_detection)
     # escrevem no banco em paralelo com as requisições HTTP; sem isso o SQLite
     # erra "database is locked" em vez de esperar a outra escrita liberar.
     _engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}

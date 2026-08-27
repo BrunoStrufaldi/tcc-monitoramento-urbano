@@ -1,6 +1,7 @@
 """Testes da detecção contínua (câmera IP/RTSP) — cobre o processamento de
-frame, a contagem de veículos para sinalizar trânsito e o cooldown; a captura
-via HTTP em si não é exercitada aqui."""
+frame, a contagem de veículos para sinalizar trânsito, o cooldown e o filtro
+de frame desatualizado (``_loop``, HTTP mockado); download HTTP de verdade
+não é exercitado aqui."""
 
 from contextlib import contextmanager
 
@@ -114,6 +115,45 @@ def test_processar_frame_ignora_quando_modelo_indisponivel(db_session: Session, 
 
     live_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {})
     assert db_session.query(Evento).count() == 0
+
+
+def test_loop_ignora_frame_desatualizado_e_nao_processa(monkeypatch):
+    """Caso real que motivou o filtro: câmera CET travada, sempre devolvendo
+    o mesmo JPEG de meses atrás — precisa ser descartado antes de virar
+    Deteccao, senão vira evento "ao vivo" com foto de outra hora do dia."""
+    import httpx as httpx_module
+
+    class _RespostaFalsa:
+        def __init__(self) -> None:
+            self.content = b"frame-fake"
+            self.headers = httpx_module.Headers({"last-modified": "Wed, 25 Feb 2026 12:02:13 GMT"})
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class _ClienteFalso:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> bool:
+            return False
+
+        def get(self, _url):
+            return _RespostaFalsa()
+
+    monkeypatch.setattr(httpx_module, "Client", _ClienteFalso)
+    chamadas: list[int] = []
+    monkeypatch.setattr(live_detection, "_processar_frame", lambda *_a, **_k: chamadas.append(1))
+
+    live_detection._stop_event.clear()
+    monkeypatch.setattr(live_detection._stop_event, "wait", lambda _segundos: live_detection._stop_event.set())
+
+    live_detection._loop("http://fake/1.jpg", -23.55, -46.63, 1.0, 0.45, "câmera teste")
+
+    assert chamadas == []
 
 
 def test_iniciar_sem_snapshot_url_nao_sobe_thread(monkeypatch):
