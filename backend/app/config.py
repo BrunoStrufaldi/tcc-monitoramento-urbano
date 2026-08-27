@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     gx_transito_monitorar_catalogo: bool = False
     gx_alagamento_monitorar_catalogo: bool = False
     gx_camera_frescor_maximo_segundos: float = 300.0
+    # "Tempo real" é literal: eventos (qualquer status) só aparecem e só ficam
+    # no banco enquanto detectados dentro desta janela. Mantido acima do
+    # cooldown de alerta para não abrir buracos entre uma detecção e a próxima.
+    gx_evento_janela_minutos: int = 45
 
     @field_validator("database_url")
     @classmethod

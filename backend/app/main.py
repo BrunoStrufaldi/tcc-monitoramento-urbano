@@ -24,6 +24,21 @@ from app.routers import (
 )
 from app.security import ensure_bootstrap_admin, get_current_user
 from app.services import flood_detection, live_detection
+from app.services.event_retention import colapsar_eventos_duplicados, purgar_eventos_expirados
+
+
+async def _limpar_eventos_expirados_periodicamente() -> None:
+    """Mantém o quadro estritamente em tempo real: remove eventos fora da janela
+    e colapsa pilhas do mesmo tipo no mesmo ponto."""
+    while True:
+        try:
+            with SessionLocal() as db:
+                purgar_eventos_expirados(db)
+                colapsar_eventos_duplicados(db)
+        except Exception:
+            pass
+        await asyncio.sleep(120)
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -33,13 +48,17 @@ async def lifespan(_app: FastAPI):
         Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         ensure_bootstrap_admin(db)
+        purgar_eventos_expirados(db)
+        colapsar_eventos_duplicados(db)
     set_main_loop(asyncio.get_running_loop())
+    retencao_task = asyncio.create_task(_limpar_eventos_expirados_periodicamente())
     # Desligado por padrão (inclusive em testes) — evita threads de rede reais
     # subindo sozinhas. Ative com GX_MONITORAMENTO_ATIVO=true no .env.
     if settings.gx_monitoramento_ativo:
         live_detection.iniciar()
         flood_detection.iniciar()
     yield
+    retencao_task.cancel()
     live_detection.parar()
     flood_detection.parar()
 

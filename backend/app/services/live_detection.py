@@ -51,7 +51,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models.dado_contextual import DadoContextual
 from app.services import cet_camera_catalog
-from app.services.detection_events import publicar_evento, registrar_deteccao
+from app.services.detection_events import publicar_evento, refrescar_evento_no_ponto, registrar_deteccao
 from app.services.data_fusion_service import aplicar_fusao_evento
 from app.services.tomtom_traffic_source import obter_fluxo_transito
 from ml.detector import CLASSES_URBANAS, Deteccao, detectar_imagem_real
@@ -116,6 +116,15 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
     indice = round(min(10.0, len(veiculos) / 2), 1)
 
     with SessionLocal() as db:
+        # Congestionamento ainda ativo no mesmo ponto → renova a marcação
+        # existente em vez de criar outra (o cooldown em memória se perde a
+        # cada restart; a checagem no banco não).
+        if refrescar_evento_no_ponto(
+            db, tipo="transito", latitude=latitude, longitude=longitude,
+            dentro_de_segundos=settings.gx_alerta_cooldown_seconds,
+        ):
+            logger.info("Trânsito em %s renovado (evento ainda vivo no ponto)", nome_camera)
+            return
         try:
             evento = registrar_deteccao(
                 db,
