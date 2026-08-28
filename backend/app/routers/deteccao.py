@@ -138,6 +138,7 @@ def obter_status_detector() -> dict:
     """Estado do modelo, para que a interface não confunda demo com YOLO real."""
     resultado = status_detector()
     resultado["incidente"] = status_incident_detector()
+    resultado["min_veiculos_transito"] = settings.gx_transito_min_veiculos
     return resultado
 
 
