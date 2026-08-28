@@ -1206,7 +1206,7 @@ input, select, textarea { font-family: inherit; }
 /* ============================================================
    TESTADOR YOLO (barra esquerda)
    ============================================================ */
-#view-yolo-teste { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px 16px; overflow-y: auto; min-height: 0; }
+#view-yolo-teste { gap: 12px; padding: 4px 2px 16px; overflow-y: auto; min-height: 0; }
 .yt-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .yt-head h2 { margin: 2px 0 0; font-size: 15px; font-weight: 750; color: var(--text-primary); }
 .yt-eyebrow { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--gx-light); }

@@ -765,18 +765,19 @@ let ytObjectUrl = null;
 let ytAnalyzing = false;
 let ytMinVeiculos = 8;
 const YT_CLASSES_VEICULO = ["veiculo", "motocicleta", "onibus", "caminhao"];
-function ytOpen(open) {
-    const view = byId("view-yolo-teste");
-    const railBtn = byId("rail-yolo-teste");
+function ytShow(destino) {
     document.querySelectorAll(".view").forEach((v) => {
         v.hidden = true;
         v.classList.remove("view-active");
     });
-    const alvo = open ? view : byId("view-dashboard");
+    const yolo = destino === "yolo";
+    const alvo = byId(yolo ? "view-yolo-teste" : "view-dashboard");
     alvo.hidden = false;
     alvo.classList.add("view-active");
-    railBtn.classList.toggle("active", open);
-    railBtn.setAttribute("aria-pressed", String(open));
+    byId("rail-inicio")?.classList.toggle("active", !yolo);
+    byId("rail-inicio")?.setAttribute("aria-pressed", String(!yolo));
+    byId("rail-yolo-teste")?.classList.toggle("active", yolo);
+    byId("rail-yolo-teste")?.setAttribute("aria-pressed", String(yolo));
 }
 function ytSetFeedback(message, tone = "") {
     const el = byId("yt-feedback");
@@ -938,7 +939,8 @@ function initYoloTester() {
     const railBtn = byId("rail-yolo-teste");
     if (!railBtn)
         return;
-    railBtn.addEventListener("click", () => ytOpen(byId("view-yolo-teste").hidden));
+    railBtn.addEventListener("click", () => ytShow("yolo"));
+    byId("rail-inicio")?.addEventListener("click", () => ytShow("inicio"));
     const input = byId("yt-file");
     input.addEventListener("change", () => {
         const file = input.files?.[0];

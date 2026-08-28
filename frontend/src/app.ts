@@ -853,18 +853,19 @@ let ytAnalyzing = false;
 let ytMinVeiculos = 8;
 const YT_CLASSES_VEICULO = ["veiculo", "motocicleta", "onibus", "caminhao"];
 
-function ytOpen(open: boolean): void {
-  const view = byId("view-yolo-teste");
-  const railBtn = byId("rail-yolo-teste");
+function ytShow(destino: "inicio" | "yolo"): void {
   document.querySelectorAll<HTMLElement>(".view").forEach((v) => {
     v.hidden = true;
     v.classList.remove("view-active");
   });
-  const alvo = open ? view : byId("view-dashboard");
+  const yolo = destino === "yolo";
+  const alvo = byId(yolo ? "view-yolo-teste" : "view-dashboard");
   alvo.hidden = false;
   alvo.classList.add("view-active");
-  railBtn.classList.toggle("active", open);
-  railBtn.setAttribute("aria-pressed", String(open));
+  byId("rail-inicio")?.classList.toggle("active", !yolo);
+  byId("rail-inicio")?.setAttribute("aria-pressed", String(!yolo));
+  byId("rail-yolo-teste")?.classList.toggle("active", yolo);
+  byId("rail-yolo-teste")?.setAttribute("aria-pressed", String(yolo));
 }
 
 function ytSetFeedback(message: string, tone: "" | "error" | "success" = ""): void {
@@ -1023,7 +1024,8 @@ async function ytCarregarStatus(): Promise<void> {
 function initYoloTester(): void {
   const railBtn = byId("rail-yolo-teste");
   if (!railBtn) return;
-  railBtn.addEventListener("click", () => ytOpen(byId("view-yolo-teste").hidden));
+  railBtn.addEventListener("click", () => ytShow("yolo"));
+  byId("rail-inicio")?.addEventListener("click", () => ytShow("inicio"));
 
   const input = byId<HTMLInputElement>("yt-file");
   input.addEventListener("change", () => {
