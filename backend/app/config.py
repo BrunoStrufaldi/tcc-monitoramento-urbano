@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # no banco enquanto detectados dentro desta janela. Mantido acima do
     # cooldown de alerta para não abrir buracos entre uma detecção e a próxima.
     gx_evento_janela_minutos: int = 45
+    # Confiabilidade (Data Fusion) a partir da qual um evento "em_analise" é
+    # promovido automaticamente para "ativo".
+    gx_fusion_auto_ativo_min: float = 0.75
 
     @field_validator("database_url")
     @classmethod

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import settings
 from app.models.evento import Evento
 from app.models.log_sistema import LogSistema
 
@@ -88,14 +89,25 @@ def aplicar_fusao_evento(
 
     if persistir:
         evento.confianca = Decimal(str(resultado.confiabilidade))
+        promovido = False
+        if (
+            evento.status == "em_analise"
+            and resultado.confiabilidade >= settings.gx_fusion_auto_ativo_min
+        ):
+            evento.status = "ativo"
+            promovido = True
         log = LogSistema(
             nivel="INFO",
             modulo="data_fusion",
-            mensagem=f"Confiabilidade recalculada: {resultado.confiabilidade:.2%} ({resultado.nivel})",
+            mensagem=(
+                f"Confiabilidade recalculada: {resultado.confiabilidade:.2%} ({resultado.nivel})"
+                + (" — evento promovido para ativo" if promovido else "")
+            ),
             evento_id=evento.id,
             contexto={
                 "confiabilidade": resultado.confiabilidade,
                 "nivel": resultado.nivel,
+                "promovido_para_ativo": promovido,
                 "componentes": [
                     {
                         "nome": c.nome,
@@ -109,5 +121,33 @@ def aplicar_fusao_evento(
         db.add(log)
         db.commit()
         db.refresh(evento)
+        if promovido:
+            _publicar_evento_atualizado(db, evento.id)
 
     return resultado, evento
+
+
+def _publicar_evento_atualizado(db: Session, evento_id: int) -> None:
+    """Import tardio para evitar ciclo com detection_events."""
+    try:
+        from app.services.detection_events import publicar_evento
+
+        publicar_evento(db, evento_id)
+    except Exception:
+        pass
+
+
+def promover_eventos_por_confiabilidade(db: Session) -> int:
+    """Recalcula os eventos ainda em análise e promove os que já batem o
+    limiar de confiabilidade. Rede de segurança para eventos que só passariam
+    a "ativo" num recálculo posterior (ex.: dado de clima que chegou depois)."""
+    ids = [row[0] for row in db.query(Evento.id).filter(Evento.status == "em_analise").all()]
+    promovidos = 0
+    for evento_id in ids:
+        try:
+            _, evento = aplicar_fusao_evento(db, evento_id, persistir=True)
+            if evento.status == "ativo":
+                promovidos += 1
+        except ValueError:
+            continue
+    return promovidos
