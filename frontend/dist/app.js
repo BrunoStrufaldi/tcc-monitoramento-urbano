@@ -1641,16 +1641,10 @@ function seedActivityFromEvents(events) {
     })));
 }
 function updateMetrics(events) {
-    const kpiAtivos = byId("kpi-ativos");
-    const kpiMedios = byId("kpi-medios");
-    const kpiCriticos = byId("kpi-criticos");
-    const kpiAltos = byId("kpi-altos");
-    const kpiBaixos = byId("kpi-baixos");
-    animateKpi(kpiAtivos, String(events.filter((e) => e.status !== "resolvido").length));
-    animateKpi(kpiCriticos, String(events.filter((e) => normalizeSeverity(e.severidade) === "critica").length));
-    animateKpi(kpiAltos, String(events.filter((e) => normalizeSeverity(e.severidade) === "alta").length));
-    animateKpi(kpiMedios, String(events.filter((e) => normalizeSeverity(e.severidade) === "media").length));
-    animateKpi(kpiBaixos, String(events.filter((e) => normalizeSeverity(e.severidade) === "baixa").length));
+    const naoResolvidos = events.filter((e) => e.status !== "resolvido");
+    animateKpi(byId("kpi-ativos"), String(naoResolvidos.length));
+    animateKpi(byId("kpi-status-ativos"), String(events.filter((e) => e.status === "ativo").length));
+    animateKpi(byId("kpi-status-analise"), String(events.filter((e) => e.status === "em_analise").length));
     renderSeverityFilters();
     renderOperatorProgress(events);
 }

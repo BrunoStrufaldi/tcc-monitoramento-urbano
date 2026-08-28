@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GX Operations Center | Urban Intelligence</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230D0D0D'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='15' font-weight='900' fill='%23FF8A00' text-anchor='middle'%3EGX%3C/text%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="css/style.css?v=20260827-yolo-teste-5" />
+  <link rel="stylesheet" href="css/style.css?v=20260827-kpi-status-6" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -88,27 +88,17 @@
 
             <!-- Dashboard -->
             <section class="view" id="view-dashboard">
-              <div class="criticality-heading"><span>Eventos ativos</span><strong id="kpi-ativos">--</strong></div>
-              <section class="kpi-grid criticality-grid" id="kpi-grid" aria-label="Distribuição de criticidade dos eventos ativos">
+              <div class="criticality-heading"><span>Eventos no mapa</span><strong id="kpi-ativos">--</strong></div>
+              <section class="kpi-grid criticality-grid" id="kpi-grid" aria-label="Distribuição dos eventos por status">
                 <article class="kpi-card accent-danger">
-                  <div class="kpi-label">Críticos</div>
-                  <div class="kpi-value" id="kpi-criticos">--</div>
-                  <span class="kpi-delta">em monitoramento</span><svg class="kpi-spark" viewBox="0 0 72 20" aria-hidden="true"><polyline points="1,18 14,11 25,15 38,4 52,10 71,2"/></svg>
-                </article>
-                <article class="kpi-card accent-high">
-                  <div class="kpi-label">Altos</div>
-                  <div class="kpi-value" id="kpi-altos">--</div>
-                  <span class="kpi-delta">requer atenção</span><svg class="kpi-spark" viewBox="0 0 72 20" aria-hidden="true"><polyline points="1,16 13,15 27,8 40,12 55,5 71,8"/></svg>
+                  <div class="kpi-label">Ativos</div>
+                  <div class="kpi-value" id="kpi-status-ativos">--</div>
+                  <span class="kpi-delta">confirmados</span><svg class="kpi-spark" viewBox="0 0 72 20" aria-hidden="true"><polyline points="1,18 14,11 25,15 38,4 52,10 71,2"/></svg>
                 </article>
                 <article class="kpi-card accent-warning">
-                  <div class="kpi-label">Médios</div>
-                  <div class="kpi-value" id="kpi-medios">--</div>
-                  <span class="kpi-delta">em observação</span><svg class="kpi-spark" viewBox="0 0 72 20" aria-hidden="true"><polyline points="1,14 13,6 29,10 42,3 55,13 71,9"/></svg>
-                </article>
-                <article class="kpi-card accent-success">
-                  <div class="kpi-label">Baixos</div>
-                  <div class="kpi-value" id="kpi-baixos">--</div>
-                  <span class="kpi-delta">sem impacto</span><svg class="kpi-spark" viewBox="0 0 72 20" aria-hidden="true"><polyline points="1,15 16,12 28,16 39,9 55,12 71,4"/></svg>
+                  <div class="kpi-label">Em análise</div>
+                  <div class="kpi-value" id="kpi-status-analise">--</div>
+                  <span class="kpi-delta">aguardando validação</span><svg class="kpi-spark" viewBox="0 0 72 20" aria-hidden="true"><polyline points="1,14 13,6 29,10 42,3 55,13 71,9"/></svg>
                 </article>
               </section>
 
@@ -552,6 +542,6 @@
   </aside>
 
   <script src="js/config.js?v=20260821"></script>
-  <script type="module" src="dist/app.js?v=20260827-yolo-teste-5"></script>
+  <script type="module" src="dist/app.js?v=20260827-kpi-status-6"></script>
 </body>
 </html>

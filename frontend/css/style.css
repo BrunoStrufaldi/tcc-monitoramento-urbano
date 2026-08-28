@@ -541,6 +541,9 @@ input, select, textarea { font-family: inherit; }
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
+/* Grade de status (Ativos / Em análise): sempre 2 colunas, altura pelo conteúdo,
+   sobrepondo as variações de .kpi-grid nos breakpoints (eram 4 cards). */
+.criticality-grid { grid-template-columns: 1fr 1fr !important; height: auto !important; }
 .criticality-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; color: var(--text-secondary); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
 .criticality-heading strong { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--r-pill); background: rgba(220,53,69,.18); color: #ff6a79; font-size: 11px; font-variant-numeric: tabular-nums; }
 .kpi-card {
