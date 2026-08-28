@@ -1199,6 +1199,52 @@ input, select, textarea { font-family: inherit; }
 }
 .map-filter-select select option { background: var(--bg-panel); color: var(--text-primary); }
 .map-filter-select:focus-within { border-color: var(--gx-light); }
+.map-controls .map-filter-button { height: 38px; background: rgba(17, 22, 27, 0.92); border-color: var(--border-strong); }
+.map-controls .map-icon-only { width: 38px; min-width: 38px; padding: 0; justify-content: center; }
+.map-controls .map-icon-only svg { width: 17px; height: 17px; }
+
+/* ============================================================
+   TESTADOR YOLO (barra esquerda)
+   ============================================================ */
+#view-yolo-teste { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px 16px; overflow-y: auto; min-height: 0; }
+.yt-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.yt-head h2 { margin: 2px 0 0; font-size: 15px; font-weight: 750; color: var(--text-primary); }
+.yt-eyebrow { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--gx-light); }
+.yt-intro { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--text-secondary); }
+.yt-status { flex-shrink: 0; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
+.yt-status.ready { color: var(--ok); border-color: rgba(46, 170, 90, .5); }
+.yt-status.partial { color: var(--warn); border-color: rgba(230, 168, 23, .5); }
+.yt-status.unavailable { color: var(--danger); border-color: rgba(220, 53, 69, .5); }
+.yt-dropzone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-height: 116px; padding: 16px; border: 1px dashed var(--border-strong); border-radius: var(--r-lg); background: var(--bg-base); color: var(--text-secondary); text-align: center; cursor: pointer; transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease); }
+.yt-dropzone:hover { border-color: var(--gx-light); background: var(--gx-dim); }
+.yt-dropzone svg { width: 24px; height: 24px; }
+.yt-dropzone strong { font-size: 12.5px; color: var(--text-primary); word-break: break-all; }
+.yt-dropzone span { font-size: 10.5px; }
+.yt-preview { position: relative; }
+.yt-canvas-wrap { position: relative; line-height: 0; border-radius: var(--r-md); overflow: hidden; border: 1px solid var(--border); }
+.yt-canvas-wrap img { display: block; width: 100%; height: auto; }
+.yt-canvas-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.yt-clear { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border: 0; border-radius: 6px; background: rgba(0,0,0,.65); color: #fff; font-size: 15px; line-height: 1; cursor: pointer; }
+.yt-clear:hover { background: var(--danger); }
+.yt-threshold { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; font-size: 11px; font-weight: 650; color: var(--text-secondary); }
+.yt-threshold input { grid-column: 1 / -1; width: 100%; accent-color: var(--gx-light); }
+#view-yolo-teste .btn-primary { width: 100%; }
+.yt-feedback { margin: 0; font-size: 11px; color: var(--text-muted); min-height: 15px; }
+.yt-feedback.error { color: var(--danger); }
+.yt-feedback.success { color: var(--ok); }
+.yt-verdict { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--border); border-left-width: 3px; background: var(--bg-card); }
+.yt-verdict strong { font-size: 13px; font-weight: 750; }
+.yt-verdict span { font-size: 11px; color: var(--text-secondary); }
+.yt-verdict.yt-danger { border-left-color: var(--danger); } .yt-verdict.yt-danger strong { color: var(--danger); }
+.yt-verdict.yt-warn { border-left-color: var(--warn); } .yt-verdict.yt-warn strong { color: var(--warn); }
+.yt-verdict.yt-ok { border-left-color: var(--ok); } .yt-verdict.yt-ok strong { color: var(--ok); }
+.yt-detections { display: flex; flex-direction: column; gap: 4px; }
+.yt-list-head { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin-top: 2px; }
+.yt-empty { margin: 0; font-size: 11px; color: var(--text-muted); }
+.yt-det-row { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; align-items: baseline; padding: 6px 9px; border: 1px solid var(--border); border-left: 3px solid var(--text-muted); border-radius: var(--r-sm); background: var(--bg-card); }
+.yt-det-name { font-size: 12px; font-weight: 650; color: var(--text-primary); text-transform: capitalize; }
+.yt-det-conf { font-size: 12px; font-weight: 750; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.yt-det-src { grid-column: 1 / -1; font-size: 10px; color: var(--text-muted); }
 
 /* Map Fallback */
 .map-fallback {

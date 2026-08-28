@@ -760,6 +760,197 @@ function initComputerVision() {
     });
     void cvLoadStatus();
 }
+let ytFile = null;
+let ytObjectUrl = null;
+let ytAnalyzing = false;
+let ytMinVeiculos = 8;
+const YT_CLASSES_VEICULO = ["veiculo", "motocicleta", "onibus", "caminhao"];
+function ytOpen(open) {
+    const view = byId("view-yolo-teste");
+    const railBtn = byId("rail-yolo-teste");
+    document.querySelectorAll(".view").forEach((v) => {
+        v.hidden = true;
+        v.classList.remove("view-active");
+    });
+    const alvo = open ? view : byId("view-dashboard");
+    alvo.hidden = false;
+    alvo.classList.add("view-active");
+    railBtn.classList.toggle("active", open);
+    railBtn.setAttribute("aria-pressed", String(open));
+}
+function ytSetFeedback(message, tone = "") {
+    const el = byId("yt-feedback");
+    el.textContent = message;
+    el.className = "yt-feedback" + (tone ? " " + tone : "");
+}
+function ytClearImage() {
+    ytFile = null;
+    if (ytObjectUrl) {
+        URL.revokeObjectURL(ytObjectUrl);
+        ytObjectUrl = null;
+    }
+    byId("yt-file").value = "";
+    byId("yt-preview").hidden = true;
+    byId("yt-image").removeAttribute("src");
+    const canvas = byId("yt-overlay");
+    canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    byId("yt-file-label").textContent = "Selecionar imagem";
+    byId("yt-analyze").disabled = true;
+    byId("yt-verdict").hidden = true;
+    byId("yt-detections").innerHTML = "";
+    ytSetFeedback("Selecione uma imagem para começar.");
+}
+function ytSetImage(file) {
+    if (file.size > 10 * 1024 * 1024) {
+        ytSetFeedback("A imagem ultrapassa o limite de 10 MB.", "error");
+        return;
+    }
+    ytFile = file;
+    if (ytObjectUrl)
+        URL.revokeObjectURL(ytObjectUrl);
+    ytObjectUrl = URL.createObjectURL(file);
+    byId("yt-image").src = ytObjectUrl;
+    byId("yt-preview").hidden = false;
+    byId("yt-file-label").textContent = file.name;
+    byId("yt-analyze").disabled = false;
+    byId("yt-verdict").hidden = true;
+    byId("yt-detections").innerHTML = "";
+    ytSetFeedback("Imagem pronta. Clique em “Analisar imagem”.");
+}
+function ytDrawBoxes(deteccoes) {
+    const img = byId("yt-image");
+    const canvas = byId("yt-overlay");
+    if (!img.naturalWidth)
+        return;
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx)
+        return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const escala = Math.max(2, canvas.width / 320);
+    deteccoes.forEach((d) => {
+        const [x1, y1, x2, y2] = d.bbox;
+        const cor = severityStyle(d.severidade).color;
+        ctx.strokeStyle = cor;
+        ctx.lineWidth = escala;
+        ctx.strokeRect(x1, y1, Math.max(1, x2 - x1), Math.max(1, y2 - y1));
+        ctx.fillStyle = cor;
+        ctx.font = "700 " + Math.max(12, canvas.width / 40) + "px Inter, sans-serif";
+        ctx.fillText(d.nome + " " + Math.round(d.confianca * 100) + "%", x1 + 3, Math.max(14, y1 - 4));
+    });
+}
+async function ytChamarModelo(rota, threshold) {
+    const form = new FormData();
+    form.append("file", ytFile);
+    const response = await apiFetch(rota + "?confianca_minima=" + threshold, { method: "POST", body: form });
+    if (response.status === 503)
+        return []; // modelo indisponível — tratado no resumo
+    if (!response.ok)
+        throw new Error("O modelo retornou " + response.status);
+    return response.json();
+}
+async function ytAnalisar() {
+    if (!ytFile || ytAnalyzing)
+        return;
+    ytAnalyzing = true;
+    const botao = byId("yt-analyze");
+    botao.disabled = true;
+    ytSetFeedback("Rodando inferência YOLO nos dois modelos…");
+    const threshold = Number(byId("yt-threshold").value) / 100;
+    try {
+        const [incidentes, objetos] = await Promise.all([
+            ytChamarModelo("/deteccao/incidente", threshold),
+            ytChamarModelo("/deteccao/imagem", threshold),
+        ]);
+        const alagamentos = incidentes.filter((d) => d.nome === "alagamento");
+        const veiculos = objetos.filter((d) => YT_CLASSES_VEICULO.includes(d.nome));
+        const todas = [...alagamentos, ...incidentes.filter((d) => d.nome !== "alagamento"), ...objetos];
+        let tone = "ok";
+        let titulo = "Nada relevante detectado";
+        let detalhe = veiculos.length
+            ? veiculos.length + " veículo(s) reconhecido(s) — abaixo do limite de trânsito (" + ytMinVeiculos + ")"
+            : "Nenhum objeto ou incidente reconhecido acima do limiar";
+        if (alagamentos.length) {
+            const maxConf = Math.max(...alagamentos.map((d) => d.confianca));
+            tone = "danger";
+            titulo = "Alagamento detectado";
+            detalhe = alagamentos.length + " região(ões) de água · confiança máx. " + Math.round(maxConf * 100) + "%";
+        }
+        else if (veiculos.length >= ytMinVeiculos) {
+            tone = "warn";
+            titulo = "Trânsito intenso";
+            detalhe = veiculos.length + " veículos no quadro (limite de congestionamento: " + ytMinVeiculos + ")";
+        }
+        const verdict = byId("yt-verdict");
+        verdict.className = "yt-verdict yt-" + tone;
+        verdict.hidden = false;
+        verdict.innerHTML = '<strong>' + titulo + '</strong><span>' + escapeHtml(detalhe) + '</span>';
+        const lista = byId("yt-detections");
+        if (!todas.length) {
+            lista.innerHTML = '<p class="yt-empty">O YOLO não retornou nenhuma caixa nesta imagem com confiança ≥ ' + Math.round(threshold * 100) + '%.</p>';
+        }
+        else {
+            lista.innerHTML = '<div class="yt-list-head">Detecções do modelo (' + todas.length + ')</div>' +
+                todas.map((d) => {
+                    const cor = severityStyle(d.severidade).color;
+                    const origem = d.nome === "alagamento" ? "modelo de incidentes" : "modelo de objetos";
+                    return '<div class="yt-det-row" style="border-left-color:' + cor + '">' +
+                        '<span class="yt-det-name">' + escapeHtml(d.nome.replace(/_/g, " ")) + '</span>' +
+                        '<span class="yt-det-src">' + origem + (d.classe_modelo ? " · " + escapeHtml(d.classe_modelo) : "") + '</span>' +
+                        '<span class="yt-det-conf">' + Math.round(d.confianca * 100) + '%</span>' +
+                        '</div>';
+                }).join("");
+        }
+        ytDrawBoxes(todas);
+        ytSetFeedback("Análise concluída.", "success");
+    }
+    catch (error) {
+        ytSetFeedback(error instanceof Error ? error.message : "Falha ao analisar a imagem.", "error");
+    }
+    finally {
+        ytAnalyzing = false;
+        botao.disabled = false;
+    }
+}
+async function ytCarregarStatus() {
+    const badge = byId("yt-model-status");
+    try {
+        const response = await apiFetch("/deteccao/status");
+        if (!response.ok)
+            throw new Error("status indisponível");
+        const status = await response.json();
+        if (typeof status.min_veiculos_transito === "number")
+            ytMinVeiculos = status.min_veiculos_transito;
+        const objOk = status.disponivel;
+        const incOk = Boolean(status.incidente?.disponivel);
+        badge.textContent = objOk && incOk ? "2 modelos prontos" : objOk || incOk ? "1 de 2 modelos" : "Modelos indisponíveis";
+        badge.className = "yt-status " + (objOk && incOk ? "ready" : objOk || incOk ? "partial" : "unavailable");
+        if (!incOk)
+            ytSetFeedback("Modelo de alagamento indisponível no servidor — só a detecção de objetos vai responder.", "error");
+    }
+    catch {
+        badge.textContent = "API indisponível";
+        badge.className = "yt-status unavailable";
+    }
+}
+function initYoloTester() {
+    const railBtn = byId("rail-yolo-teste");
+    if (!railBtn)
+        return;
+    railBtn.addEventListener("click", () => ytOpen(byId("view-yolo-teste").hidden));
+    const input = byId("yt-file");
+    input.addEventListener("change", () => {
+        const file = input.files?.[0];
+        if (file)
+            ytSetImage(file);
+    });
+    byId("yt-clear").addEventListener("click", ytClearImage);
+    const threshold = byId("yt-threshold");
+    threshold.addEventListener("input", () => { byId("yt-th-out").textContent = threshold.value + "%"; });
+    byId("yt-analyze").addEventListener("click", () => { void ytAnalisar(); });
+    void ytCarregarStatus();
+}
 async function fetchEvents() {
     const params = new URLSearchParams({ limite: "200" });
     const statusElement = byId("filtro-status");
@@ -2230,6 +2421,7 @@ function initMapa() {
         renderSeverityFilters();
         initRail();
         initComputerVision();
+        initYoloTester();
         initIncidentComposer();
         initEvidenceViewer();
         initFusionControls();
@@ -2301,18 +2493,13 @@ function initMapa() {
             return;
         map.closePopup(openInfoWindow);
     });
-    byId("map-layers").addEventListener("click", () => {
-        document.querySelector(".map-stage")?.classList.toggle("map-contrast");
-    });
-    byId("map-display-options")?.addEventListener("click", () => {
-        document.querySelector(".map-stage")?.classList.toggle("map-contrast");
-    });
-    byId("map-recenter").addEventListener("click", () => {
+    byId("map-recenter")?.addEventListener("click", () => {
         map?.setView([window.CONFIG.MAP_CENTER.lat, window.CONFIG.MAP_CENTER.lng], Math.max(window.CONFIG.MAP_ZOOM, 12));
     });
     renderSeverityFilters();
     initRail();
     initComputerVision();
+    initYoloTester();
     initIncidentComposer();
     initEvidenceViewer();
     initFusionControls();
