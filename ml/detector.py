@@ -3,7 +3,8 @@
 O detector real é carregado sob demanda para que a API continue utilizável em
 ambientes sem GPU ou sem os pesos treinados. O peso COCO padrão reconhece
 objetos (por exemplo, carro e ônibus), não incidentes como congestionamento,
-alagamento ou incêndio. ``GX_YOLO_MODEL`` permite trocar pelos pesos urbanos.
+alagamento ou incêndio. O peso padrão é ``yolo11m.pt`` (COCO); ``GX_YOLO_MODEL``
+permite trocar por outro peso urbano próprio.
 """
 
 import os
@@ -41,15 +42,20 @@ _COCO_PARA_URBANO = {
 }
 _model: Any | None = None
 _model_error: str | None = None
-_DEFAULT_MODEL = Path(__file__).resolve().parent / "models" / "yolo11n.pt"
+# yolo11m em vez de yolo11n/s: o nano/small perdiam carro pequeno/distante e à
+# noite, e o piso de confiança do índice de trânsito às vezes despencava. O `m`
+# recupera parte da contagem noturna nas câmeras ruins e nunca dá confiança
+# sintética abaixo de ~0.5. Custa ~2x o `s`, irrelevante com yolo_max_fps=3 em
+# GPU. `GX_YOLO_MODEL` troca por outro peso.
+_DEFAULT_MODEL = Path(__file__).resolve().parent / "models" / "yolo11m.pt"
 
 # Modelo dedicado a alagamento — pesos próprios (não vêm do COCO), carregado
 # separado do modelo padrão para não perder a detecção de veículos usada pela
-# contagem de trânsito ao trocar de peso. O peso ainda reconhece árvore caída
-# internamente (foi treinado com as duas classes), mas essa classe não tem
-# entrada em CLASSES_URBANAS — decisão do grupo de tirar esse tipo de escopo —
-# então `_normalizar_classe` descarta qualquer detecção dela antes de virar
-# Deteccao/evento.
+# contagem de trânsito ao trocar de peso. O treino atual é de classe única
+# (`alagamento`, ver ml/train_incident_model.py); pesos antigos treinados
+# também com árvore caída ainda funcionam — essa classe não tem entrada em
+# CLASSES_URBANAS, então `_normalizar_classe` descarta qualquer detecção dela
+# antes de virar Deteccao/evento.
 
 _incident_model: Any | None = None
 _incident_model_error: str | None = None
@@ -72,6 +78,17 @@ class Deteccao:
 def _model_path() -> str:
     """Resolve o peso padrão sem depender do diretório de execução da API."""
     return os.getenv("GX_YOLO_MODEL", str(_DEFAULT_MODEL))
+
+
+def _imgsz() -> int:
+    """Resolução de inferência. 1280 (não o padrão 640 do Ultralytics) porque
+    as câmeras da CET acumulam fila de carro pequeno ao fundo — em 640 o YOLO
+    subconta ~35%. Custo em GPU é de dezenas de ms, irrelevante no poll de 5s.
+    ``GX_YOLO_IMGSZ`` ajusta (múltiplo de 32)."""
+    try:
+        return max(320, int(os.getenv("GX_YOLO_IMGSZ", "1280")))
+    except ValueError:
+        return 1280
 
 
 def class_mapping() -> dict[str, str]:
@@ -169,7 +186,7 @@ def status_incident_detector() -> dict[str, Any]:
     }
 
 
-def detectar_incidentes_imagem(caminho_imagem: str, confianca_minima: float = 0.45) -> list[Deteccao]:
+def detectar_incidentes_imagem(caminho_imagem: str, confianca_minima: float = 0.6) -> list[Deteccao]:
     """Roda o modelo dedicado a alagamento — confirmação direta, não sinal indireto."""
     model = _load_incident_model()
     if model is None:
@@ -211,7 +228,7 @@ def detectar_imagem_real(caminho_imagem: str, confianca_minima: float = 0.45) ->
         raise RuntimeError(_model_error or "Detector YOLO indisponível")
 
     resultados: list[Deteccao] = []
-    for resultado in model.predict(source=caminho_imagem, conf=confianca_minima, verbose=False):
+    for resultado in model.predict(source=caminho_imagem, conf=confianca_minima, imgsz=_imgsz(), verbose=False):
         nomes = resultado.names
         for box in resultado.boxes:
             classe_modelo = int(box.cls.item())

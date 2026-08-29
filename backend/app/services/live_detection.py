@@ -68,8 +68,17 @@ _TRANSITO_ID, _TRANSITO_META = next(
 
 
 def _detectar_congestionamento(veiculos: list[Deteccao], limite: int) -> Deteccao:
-    """Reduz N detecções de veículos a uma única detecção sintética de trânsito."""
-    confianca = round(sum(d.confianca for d in veiculos) / len(veiculos), 3)
+    """Reduz N detecções de veículos a uma única detecção sintética de trânsito.
+
+    A confiança do evento sintético é a média das ``limite`` detecções de maior
+    confiança, não de todas: num frame de câmera de trânsito os veículos ao
+    fundo aparecem pequenos e com score naturalmente baixo, e a média de todos
+    derrubava a dimensão de IA da fusão mesmo com congestionamento óbvio no
+    primeiro plano. O que importa aqui é "há N veículos bem detectados juntos",
+    não a qualidade média de cada lata distante.
+    """
+    melhores = sorted((d.confianca for d in veiculos), reverse=True)[:limite]
+    confianca = round(sum(melhores) / len(melhores), 3)
     xs1 = [d.bbox[0] for d in veiculos]
     ys1 = [d.bbox[1] for d in veiculos]
     xs2 = [d.bbox[2] for d in veiculos]
