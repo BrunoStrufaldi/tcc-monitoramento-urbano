@@ -20,10 +20,10 @@ export function calculateVisualContribution(score: number, weight: number): numb
 }
 
 export function fusionComponentLabel(name: string, eventoTipo?: string): string {
-  if (name === "clima" && eventoTipo === "transito") return "Congestionamento";
+  if (name === "clima" && eventoTipo === "transito") return "Fonte contextual";
   const labels: Record<string, string> = {
     ia: "IA / visão computacional",
-    clima: "Clima",
+    clima: "Dado contextual",
     fonte_oficial: "Fonte oficial",
   };
   return labels[name] || name;

@@ -18,10 +18,12 @@ def _sessao_de_teste(session: Session):
 
 @pytest.fixture(autouse=True)
 def _sem_clima_por_padrao(monkeypatch):
-    """A maioria dos testes aqui não é sobre chuva/aviso oficial — evita rede
-    real (Open-Meteo, INMET)."""
+    """A maioria dos testes aqui não é sobre chuva/aviso oficial/histórico —
+    evita rede real (Open-Meteo, INMET) e fixa o prior histórico em 0.0 para os
+    testes que não são sobre ele."""
     monkeypatch.setattr(flood_detection, "obter_condicoes_atuais", lambda _lat, _lon: {"disponivel": False})
     monkeypatch.setattr(flood_detection, "obter_aviso_ativo", lambda: {"disponivel": False})
+    monkeypatch.setattr(flood_detection, "indice_historico", lambda _lat, _lon: (0.0, "sem histórico (fixture de teste)"))
 
 
 def _deteccao_alagamento(confianca: float = 0.8) -> list[Deteccao]:
@@ -55,7 +57,12 @@ def test_processar_frame_sinaliza_alagamento_com_tipo_corrigido(db_session: Sess
     # CLASSES_URBANAS guarda "clima" como categoria de alagamento — o evento
     # tem que virar o tipo específico, senão data_fusion.scores não reconhece.
     assert eventos[0].tipo == "alagamento"
-    assert float(eventos[0].confianca) == 0.81
+    # A confiança persistida é a da fusão, não a bruta do YOLO (0.81): sem chuva,
+    # sem aviso INMET e fora de qualquer ponto com histórico de alagamento
+    # (fixture fixa o prior em 0.0), a dimensão de clima cai para 0.25 e derruba
+    # o score — falso positivo provável fica em análise.
+    assert float(eventos[0].confianca) == 0.57
+    assert eventos[0].status == "em_analise"
     assert "câmera teste" in eventos[0].fonte.nome
     assert "alagamento" in cooldown
 
@@ -77,10 +84,12 @@ def test_processar_frame_com_chuva_disponivel_registra_contexto_climatico(db_ses
     from app.models.evento import Evento
 
     evento = db_session.query(Evento).first()
-    contexto = db_session.query(DadoContextual).filter(DadoContextual.evento_id == evento.id).all()
+    contexto = db_session.query(DadoContextual).filter(
+        DadoContextual.evento_id == evento.id,
+        DadoContextual.chave == "precipitacao_mm_h",
+    ).all()
     assert len(contexto) == 1
     assert contexto[0].categoria == "clima"
-    assert contexto[0].chave == "precipitacao_mm_h"
     assert float(contexto[0].valor_numerico) == 18.5
 
 
@@ -103,7 +112,10 @@ def test_processar_frame_sem_chuva_disponivel_nao_registra_contexto(db_session: 
     from app.models.evento import Evento
 
     evento = db_session.query(Evento).first()
-    assert db_session.query(DadoContextual).filter(DadoContextual.evento_id == evento.id).count() == 0
+    assert db_session.query(DadoContextual).filter(
+        DadoContextual.evento_id == evento.id,
+        DadoContextual.chave == "precipitacao_mm_h",
+    ).count() == 0
 
 
 def test_processar_frame_com_aviso_inmet_de_alagamento_registra_contexto(db_session: Session, tmp_path, monkeypatch):
@@ -123,9 +135,11 @@ def test_processar_frame_com_aviso_inmet_de_alagamento_registra_contexto(db_sess
     from app.models.evento import Evento
 
     evento = db_session.query(Evento).first()
-    contexto = db_session.query(DadoContextual).filter(DadoContextual.evento_id == evento.id).all()
+    contexto = db_session.query(DadoContextual).filter(
+        DadoContextual.evento_id == evento.id,
+        DadoContextual.chave == "alerta_inmet_severidade",
+    ).all()
     assert len(contexto) == 1
-    assert contexto[0].chave == "alerta_inmet_severidade"
     assert float(contexto[0].valor_numerico) == 7.0
 
 
@@ -148,7 +162,10 @@ def test_processar_frame_com_aviso_inmet_sem_mencao_a_alagamento_nao_registra(db
     from app.models.evento import Evento
 
     evento = db_session.query(Evento).first()
-    assert db_session.query(DadoContextual).filter(DadoContextual.evento_id == evento.id).count() == 0
+    assert db_session.query(DadoContextual).filter(
+        DadoContextual.evento_id == evento.id,
+        DadoContextual.chave == "alerta_inmet_severidade",
+    ).count() == 0
 
 
 def test_processar_frame_combina_chuva_e_aviso_inmet(db_session: Session, tmp_path, monkeypatch):
@@ -170,8 +187,35 @@ def test_processar_frame_combina_chuva_e_aviso_inmet(db_session: Session, tmp_pa
 
     evento = db_session.query(Evento).first()
     contexto = db_session.query(DadoContextual).filter(DadoContextual.evento_id == evento.id).all()
-    chaves = {item.chave: float(item.valor_numerico) for item in contexto}
+    chaves = {
+        item.chave: float(item.valor_numerico)
+        for item in contexto
+        if item.chave != "historico_alagamento_indice"
+    }
     assert chaves == {"precipitacao_mm_h": 22.0, "alerta_inmet_severidade": 9.5}
+
+
+def test_processar_frame_registra_indice_historico_de_alagamento(db_session: Session, tmp_path, monkeypatch):
+    monkeypatch.setattr(flood_detection, "SessionLocal", lambda: _sessao_de_teste(db_session))
+    monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
+    monkeypatch.setattr(detection_events, "annotate_evidence", lambda content, _detections: (content, 10, 10))
+    monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: _deteccao_alagamento())
+    # Sobrepõe o stub da fixture: aqui a coordenada cai sobre um ponto crônico.
+    monkeypatch.setattr(flood_detection, "indice_historico", lambda _lat, _lon: (8.5, "Av. Exemplo (~80 m, recorrência cronico)"))
+
+    flood_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {}, "câmera teste")
+
+    from app.models.dado_contextual import DadoContextual
+    from app.models.evento import Evento
+
+    evento = db_session.query(Evento).first()
+    row = db_session.query(DadoContextual).filter(
+        DadoContextual.evento_id == evento.id,
+        DadoContextual.chave == "historico_alagamento_indice",
+    ).one()
+    assert row.categoria == "clima"
+    assert float(row.valor_numerico) == 8.5
+    assert row.unidade == "indice_0_10"
 
 
 def test_processar_frame_respeita_cooldown(db_session: Session, monkeypatch):

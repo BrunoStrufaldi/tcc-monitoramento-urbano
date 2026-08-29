@@ -49,29 +49,62 @@ def _pontuar_aviso_inmet(indice: float) -> tuple[float, str]:
     return 0.40, "sem aviso oficial relevante no momento"
 
 
+def _alagamento_sem_sinal_ao_vivo(historico: float | None) -> tuple[float, str]:
+    """Alagamento sem chuva medida nem aviso INMET ativo. Sem o prior histórico
+    (evento não-autônomo, ex.: registro manual) mantém o genérico; com ele, uma
+    via reconhecidamente crítica segura a pontuação e a ausência de histórico a
+    derruba — o caso clássico de falso positivo do modelo de incidentes."""
+    if historico is None:
+        return 0.45, "Dados climáticos sem precipitação nem aviso oficial registrados"
+    if historico >= 4:
+        return 0.45, f"Via com histórico de alagamento ({historico:.1f}/10), mas sem chuva nem aviso oficial agora"
+    return 0.25, "Via sem histórico de alagamento e sem chuva/aviso oficial — provável falso positivo visual"
+
+
+def _ajustar_por_historico(pontuacao: float, historico: float) -> tuple[float, str]:
+    """Modifica a pontuação de clima já corroborada por sinal ao vivo conforme o
+    histórico de alagamento da via (prior espacial, nunca dimensão isolada)."""
+    if historico >= 7:
+        return pontuacao * 1.12, f"reforçado por ponto de alagamento crônico (histórico {historico:.1f}/10)"
+    if historico >= 4:
+        return pontuacao * 1.06, f"via com histórico recorrente de alagamento ({historico:.1f}/10)"
+    if historico > 0:
+        return pontuacao, f"histórico de alagamento baixo na via ({historico:.1f}/10)"
+    return pontuacao * 0.90, "via sem histórico de alagamento — leve cautela"
+
+
 def _pontuar_clima_por_tipo(tipo: str, dados: list[DadoClima]) -> tuple[float, str]:
     tipo_norm = tipo.lower().strip()
     valores = {d.chave.lower(): d.valor_numerico for d in dados if d.valor_numerico is not None}
 
     if tipo_norm == "alagamento":
-        # Duas fontes independentes, mesmo padrão do trânsito (índice de
+        # Dois sinais independentes ao vivo, mesmo padrão do trânsito (índice de
         # veículos + TomTom): chuva medida agora (Open-Meteo, sensor bruto) e
-        # aviso oficial ativo do INMET (julgamento institucional) — quando as
-        # duas existem, a pontuação é a média; sem nenhuma, cai pro genérico.
+        # aviso oficial ativo do INMET (julgamento institucional) — quando os
+        # dois existem, a pontuação é a média. Mais um prior espacial estático: o
+        # histórico de alagamento da via (data_fusion.historico_alagamento), que
+        # nunca confirma sozinho — só reforça quando já há sinal ao vivo, e cuja
+        # ausência num ponto sem chuva/aviso derruba a pontuação.
         chuva = valores.get("precipitacao_mm_h") or valores.get("precipitacao")
         aviso_inmet = valores.get("alerta_inmet_severidade")
+        historico = valores.get("historico_alagamento_indice")
 
         partes = [_pontuar_chuva(chuva)] if chuva is not None else []
         if aviso_inmet is not None:
             partes.append(_pontuar_aviso_inmet(aviso_inmet))
 
         if not partes:
-            return 0.45, "Dados climáticos sem precipitação nem aviso oficial registrados"
+            return _alagamento_sem_sinal_ao_vivo(historico)
 
         pontuacao = sum(p for p, _ in partes) / len(partes)
         detalhe = " + ".join(texto for _, texto in partes)
         origem = f" (combina {len(partes)} fontes)" if len(partes) > 1 else ""
-        return pontuacao, f"Corroboração de alagamento: {detalhe}{origem}"
+
+        if historico is not None:
+            pontuacao, nota_historico = _ajustar_por_historico(pontuacao, historico)
+            detalhe += f" · {nota_historico}"
+
+        return _clamp(pontuacao), f"Corroboração de alagamento: {detalhe}{origem}"
 
     if tipo_norm == "transito":
         indices = [

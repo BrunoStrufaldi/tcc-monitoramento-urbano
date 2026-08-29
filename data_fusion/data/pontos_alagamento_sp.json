@@ -1,0 +1,28 @@
+{
+  "_procedencia": "Pontos de alagamento recorrentes da região central/sul de São Paulo, no entorno (~2 km) das 11 câmeras públicas CET-SP catalogadas em backend/app/services/cet_camera_catalog.py. Compilado a partir do histórico da Defesa Civil no CGE-SP (cgesp.org/v3/alagamentos.jsp, série desde 2013) e da camada de pontos de alagamento do GeoSampa (metadados.geosampa.prefeitura.sp.gov.br, tema Desastres).",
+  "_extraido_em": "2026-08-29",
+  "_aviso": "Coordenadas aproximadas em nível de rua/cruzamento (mesma limitação do cet_camera_catalog). 'recorrencia' resume a frequência histórica: cronico (alaga em quase toda chuva forte), frequente (alaga algumas vezes por temporada), ocasional (registros esporádicos). Lista a ser revisada pelo grupo antes do fechamento do TCC.",
+  "_uso": "Camada de referência ESTÁTICA — prior espacial no Data Fusion (data_fusion/historico_alagamento.py). Nunca é gatilho de detecção nem fonte ao vivo.",
+  "pontos": [
+    { "logradouro": "Av. Nove de Julho x Av. Cidade Jardim", "latitude": -23.5875, "longitude": -46.6905, "recorrencia": "cronico" },
+    { "logradouro": "Av. Cidade Jardim x Marginal Pinheiros (Ponte Cidade Jardim)", "latitude": -23.5905, "longitude": -46.6960, "recorrencia": "cronico" },
+    { "logradouro": "Av. Brig. Faria Lima x Ponte Cidade Jardim", "latitude": -23.5900, "longitude": -46.6935, "recorrencia": "cronico" },
+    { "logradouro": "Av. Reboucas x Av. Eusebio Matoso", "latitude": -23.5680, "longitude": -46.6970, "recorrencia": "cronico" },
+    { "logradouro": "Av. Nove de Julho - Tunel Min. Rafael de Barros", "latitude": -23.5705, "longitude": -46.6478, "recorrencia": "cronico" },
+    { "logradouro": "Av. Brasil x Av. Cidade Jardim", "latitude": -23.5837, "longitude": -46.6812, "recorrencia": "frequente" },
+    { "logradouro": "Av. Nove de Julho x Rua Groenlandia", "latitude": -23.5760, "longitude": -46.6640, "recorrencia": "frequente" },
+    { "logradouro": "Av. Henrique Schaumann x Av. Reboucas", "latitude": -23.5620, "longitude": -46.6790, "recorrencia": "frequente" },
+    { "logradouro": "Av. Pedroso de Morais x Rua Fradique Coutinho", "latitude": -23.5665, "longitude": -46.6905, "recorrencia": "frequente" },
+    { "logradouro": "Av. Republica do Libano x Av. Rubem Berta", "latitude": -23.5960, "longitude": -46.6510, "recorrencia": "frequente" },
+    { "logradouro": "Av. Vinte e Tres de Maio x Rua Pedroso", "latitude": -23.5680, "longitude": -46.6450, "recorrencia": "frequente" },
+    { "logradouro": "Av. Ibirapuera x Av. Republica do Libano", "latitude": -23.5945, "longitude": -46.6480, "recorrencia": "frequente" },
+    { "logradouro": "Av. Brig. Faria Lima x Av. Juscelino Kubitschek", "latitude": -23.5850, "longitude": -46.6790, "recorrencia": "ocasional" },
+    { "logradouro": "Av. Bernardino de Campos (Paraiso)", "latitude": -23.5745, "longitude": -46.6435, "recorrencia": "ocasional" },
+    { "logradouro": "Rua Vergueiro x Rua Cubatao (Paraiso)", "latitude": -23.5755, "longitude": -46.6415, "recorrencia": "ocasional" },
+    { "logradouro": "Av. Dr. Arnaldo x Av. Dr. Eneas de Carvalho Aguiar", "latitude": -23.5540, "longitude": -46.6690, "recorrencia": "ocasional" },
+    { "logradouro": "Rua da Consolacao x Rua Cesario Motta Junior", "latitude": -23.5490, "longitude": -46.6520, "recorrencia": "ocasional" },
+    { "logradouro": "Rua Pedro de Toledo x Rua Botucatu (Vila Clementino)", "latitude": -23.5985, "longitude": -46.6535, "recorrencia": "ocasional" },
+    { "logradouro": "Av. Ascendino Reis x Av. Moema", "latitude": -23.6010, "longitude": -46.6570, "recorrencia": "ocasional" },
+    { "logradouro": "Av. Brig. Luis Antonio x Rua Pedroso (Bela Vista)", "latitude": -23.5620, "longitude": -46.6455, "recorrencia": "ocasional" }
+  ]
+}
