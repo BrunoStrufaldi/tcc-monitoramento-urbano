@@ -92,6 +92,36 @@ def _iter_imagens(pasta: Path):
             yield caminho
 
 
+def _linha_para_bbox(coords: list[str], indice_alvo: int) -> str | None:
+    """Normaliza uma linha de rótulo YOLO para detecção (`classe cx cy w h`).
+
+    Datasets do Roboflow marcados como segmentação exportam polígono
+    (`classe x1 y1 x2 y2 ...`); um arquivo com linha de bbox e linha de
+    polígono junto faz o Ultralytics descartar a imagem inteira como
+    "corrupt: labels mix segment and detection rows". Aqui todo polígono
+    vira sua caixa envolvente.
+    """
+    try:
+        valores = [float(v) for v in coords]
+    except ValueError:
+        return None
+    if len(valores) == 4:
+        cx, cy, w, h = valores
+    elif len(valores) >= 6 and len(valores) % 2 == 0:
+        xs = valores[0::2]
+        ys = valores[1::2]
+        x1, x2 = min(xs), max(xs)
+        y1, y2 = min(ys), max(ys)
+        cx, cy, w, h = (x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1
+    else:
+        return None
+    cx, cy = min(max(cx, 0.0), 1.0), min(max(cy, 0.0), 1.0)
+    w, h = min(w, 1.0), min(h, 1.0)
+    if w <= 0 or h <= 0:
+        return None
+    return f"{indice_alvo} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}"
+
+
 def _fundir_split(
     origem: Path,
     destino: Path,
@@ -132,7 +162,9 @@ def _fundir_split(
                 nome_classe = names[classe_id].strip() if classe_id < len(names) else None
                 if classes_incluidas is not None and nome_classe not in classes_incluidas:
                     continue
-                linhas_novas.append(" ".join([str(indice_alvo), *partes[1:]]))
+                bbox = _linha_para_bbox(partes[1:], indice_alvo)
+                if bbox is not None:
+                    linhas_novas.append(bbox)
 
         (labels_dst / f"{prefixo}_{imagem.stem}.txt").write_text("\n".join(linhas_novas), encoding="utf-8")
         total += 1
