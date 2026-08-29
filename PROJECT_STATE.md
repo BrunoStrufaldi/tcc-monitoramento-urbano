@@ -198,6 +198,7 @@ WebSocket (ws) ──falha──► SSE (/events/stream) ──falha──► Po
 - `backend/app/routers/websocket.py` — Endpoint /ws
 - `backend/app/schemas/evento.py` — Schemas com Literal validation
 - `data_fusion/fusion.py` — Motor de confiabilidade
+- `data_fusion/historico_alagamento.py` — Prior espacial estático de alagamento por via (CGE-SP/GeoSampa), consumido pela dimensão de clima da fusão
 - `ml/detector.py` — Integração YOLO11n local para inferência de imagens
 - `database/schema.sql` — DDL 8 tabelas
 - `backend/tests/` — 132 testes

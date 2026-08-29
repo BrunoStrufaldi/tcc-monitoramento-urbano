@@ -18,5 +18,5 @@ test("calcula a contribuição visual de pontuação e peso", () => {
 test("monta a equação com a contribuição fornecida pela API", () => {
   assert.equal(formatFusionEquation({
     nome: "clima", pontuacao: 0.95, peso: 0.3, contribuicao: 0.285, detalhe: "",
-  }), "Clima 95,0% × peso 30,0% = 28,5%");
+  }), "Dado contextual 95,0% × peso 30,0% = 28,5%");
 });

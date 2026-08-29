@@ -24,7 +24,7 @@ Operador / fontes públicas / câmera autorizada
 | Atualização em tempo real | `backend/app/routers/websocket.py`, `tempo_real.py`, `broadcast.py` | WebSocket com SSE e polling como fallback. |
 | Dados públicos | `backend/app/services/weather_source.py`, `routers/fontes.py` | Clima e AQI/PM2.5 do Open-Meteo. |
 | Visão computacional | `ml/detector.py`, `routers/deteccao.py` | YOLO11n local para veículos; câmera captura quadro sob autorização. |
-| Confiabilidade | `data_fusion/`, `routers/fusion.py` | Score de fontes e evidências por evento. |
+| Confiabilidade | `data_fusion/` (inclui `historico_alagamento.py` — prior espacial estático de alagamento por via), `routers/fusion.py` | Score de fontes e evidências por evento. |
 
 ## Tecnologias e referências
 

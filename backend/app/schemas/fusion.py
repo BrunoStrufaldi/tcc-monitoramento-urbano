@@ -21,3 +21,7 @@ class ConfiabilidadeResponse(BaseModel):
     )
     persistido: bool = False
     calculado_em: datetime = Field(..., description="Horário UTC em que a fusão foi calculada")
+    limiar_ativo: float = Field(
+        ..., ge=0, le=1,
+        description="Confiabilidade a partir da qual um evento em análise é promovido para ativo",
+    )

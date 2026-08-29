@@ -30,6 +30,12 @@ INMET pra São Paulo (``inmet_alert_source`` — julgamento institucional, só
 gravado quando o aviso menciona risco de alagamento). Mesmo padrão do
 trânsito (índice de veículos + TomTom): quando as duas existem,
 ``data_fusion.scores`` faz a média em vez de confiar só numa.
+
+Grava ainda um terceiro insumo, agora estático: o histórico de alagamento da
+via (``data_fusion.historico_alagamento``, lookup local sem rede). É prior
+espacial, não gatilho nem fonte ao vivo — reforça a confiabilidade quando já
+há chuva/aviso e a derruba quando não há sinal algum numa via que nunca
+alagou (falso positivo provável do modelo de incidentes).
 """
 
 from __future__ import annotations
@@ -50,6 +56,7 @@ from app.services.data_fusion_service import aplicar_fusao_evento
 from app.services.detection_events import publicar_evento, refrescar_evento_no_ponto, registrar_deteccao
 from app.services.inmet_alert_source import obter_aviso_ativo
 from app.services.weather_source import obter_condicoes_atuais
+from data_fusion.historico_alagamento import indice_historico
 from ml.detector import detectar_incidentes_imagem
 
 logger = logging.getLogger(__name__)
@@ -127,10 +134,25 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
                     unidade="indice_0_10",
                 ))
 
+            # Prior espacial estático (lookup local, sem rede): histórico de
+            # alagamento da via. Gravado sempre — inclusive 0.0 — para o Data
+            # Fusion distinguir "via sem histórico" de "sem informação".
+            indice_hist, descricao_hist = indice_historico(latitude, longitude)
+            db.add(DadoContextual(
+                evento_id=evento.id,
+                categoria="clima",
+                chave="historico_alagamento_indice",
+                valor_numerico=indice_hist,
+                unidade="indice_0_10",
+            ))
+
             db.commit()
             aplicar_fusao_evento(db, evento.id, persistir=True)
             publicar_evento(db, evento.id)
-            logger.info("Alagamento sinalizado em %s (confiança %.0f%%)", nome_camera, alagamento.confianca * 100)
+            logger.info(
+                "Alagamento sinalizado em %s (confiança %.0f%%) — histórico da via: %s",
+                nome_camera, alagamento.confianca * 100, descricao_hist,
+            )
         except Exception:
             logger.exception("Falha ao registrar evento de alagamento")
 

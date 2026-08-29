@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models.evento import Evento
 from app.schemas.fusion import ComponenteConfiabilidadeResponse, ConfiabilidadeResponse
@@ -37,6 +38,7 @@ def _resultado_para_response(
         confianca_registrada=confianca_db,
         persistido=persistido,
         calculado_em=datetime.now(timezone.utc),
+        limiar_ativo=settings.gx_fusion_auto_ativo_min,
     )
 
 

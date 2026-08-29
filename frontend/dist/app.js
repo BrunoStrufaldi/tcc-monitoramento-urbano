@@ -1546,6 +1546,11 @@ function renderSelectedEvent(event) {
         openDetail.hidden = true;
         setFusionSummary(null);
         breakdowns.forEach((b) => { b.innerHTML = ""; });
+        {
+            const explain = document.getElementById("fusion-explain");
+            if (explain)
+                explain.hidden = true;
+        }
         return;
     }
     const style = severityStyle(event.severidade);
@@ -1844,6 +1849,83 @@ function setFusionLoadingState() {
     document.querySelectorAll(".data-fusion-confidence").forEach((element) => { element.textContent = "--"; });
     document.querySelectorAll(".data-fusion-calculated-at").forEach((element) => { element.textContent = "Calculando pela API..."; });
     document.querySelectorAll("[data-action='recalculate-fusion']").forEach((button) => { button.disabled = true; });
+    const explain = document.getElementById("fusion-explain");
+    if (explain)
+        explain.hidden = true;
+}
+// Pesos-base das dimensões da fusão — espelham data_fusion/fusion.py (PESOS).
+const PESO_BASE_FUSAO = { ia: 0.4, clima: 0.3, fonte_oficial: 0.3 };
+/** Painel no mapa: a conta completa da fusão, o veredito e o dado decisivo. */
+function renderFusionExplain(result, eventoTipo) {
+    const panel = document.getElementById("fusion-explain");
+    const levelBadge = document.getElementById("fusion-explain-level");
+    const body = document.getElementById("fusion-explain-body");
+    if (!panel || !levelBadge || !body)
+        return;
+    const usados = result.componentes.filter((component) => component.peso > 0);
+    const foraDeUso = result.componentes.filter((component) => component.peso <= 0);
+    if (!usados.length) {
+        panel.hidden = true;
+        return;
+    }
+    panel.hidden = false;
+    const p0 = (valor) => formatFusionPercent(valor, 0);
+    const rotulo = (c) => c.nome === "ia" ? "IA" : fusionComponentLabel(c.nome, eventoTipo);
+    const pesoBase = (c) => PESO_BASE_FUSAO[c.nome] ?? c.peso;
+    const finalPct = p0(result.confiabilidade);
+    levelBadge.textContent = formatFusionLevel(result.nivel) + " · " + finalPct;
+    levelBadge.className = "fusion-explain-level nivel-" + result.nivel;
+    // --- A conta ---
+    const redistribuido = foraDeUso.length > 0
+        && usados.some((c) => Math.abs(c.peso - pesoBase(c)) > 0.005);
+    let pesos;
+    if (redistribuido) {
+        const somaFora = foraDeUso.reduce((soma, c) => soma + pesoBase(c), 0);
+        const nomesFora = foraDeUso.map(rotulo).join(" e ");
+        pesos = '<p class="fx-weights">Base: ' +
+            result.componentes.map((c) => escapeHtml(rotulo(c)) + " " + p0(pesoBase(c))).join(", ") + '. ' +
+            escapeHtml(nomesFora) + (foraDeUso.length > 1 ? " não pontuaram" : " não pontuou") +
+            ', então ' + p0(somaFora) + ' de peso ' + (foraDeUso.length > 1 ? "delas foram rateados" : "dela foi rateado") +
+            ' entre as demais &rarr; ' +
+            usados.map((c) => escapeHtml(rotulo(c)) + " " + p0(pesoBase(c)) + "&rarr;" + p0(c.peso)).join(", ") + '.</p>';
+    }
+    else {
+        pesos = '<p class="fx-weights">Pesos: ' +
+            usados.map((c) => escapeHtml(rotulo(c)) + " " + p0(c.peso)).join(", ") + '.</p>';
+    }
+    const linhas = usados.map((c) => '<div class="fx-calc">' +
+        '<span class="fx-calc-nome">' + escapeHtml(rotulo(c)) + '</span>' +
+        '<b>' + p0(c.contribuicao) + '</b>' +
+        '<span class="fx-calc-op">nota ' + p0(c.pontuacao) + ' × peso ' + p0(c.peso) + '</span>' +
+        '</div>').join("");
+    const total = '<div class="fx-calc fx-calc-total">' +
+        '<span class="fx-calc-nome">Confiabilidade</span>' +
+        '<b>' + finalPct + '</b>' +
+        '<span class="fx-calc-op">' + usados.map((c) => p0(c.contribuicao)).join(" + ") + '</span>' +
+        '</div>';
+    const conta = '<div class="fx-block">' +
+        '<span class="fx-label">A conta</span>' + pesos +
+        '<div class="fx-calcs">' + linhas + total + '</div>' +
+        '</div>';
+    // --- Decisão ---
+    const limiar = typeof result.limiar_ativo === "number" ? result.limiar_ativo : 0.75;
+    const limiarPct = p0(limiar);
+    const veredito = result.confiabilidade >= limiar
+        ? 'Passou de ' + limiarPct + ' &rarr; promovido automaticamente para <strong>Ativo</strong>.'
+        : 'Abaixo de ' + limiarPct + ' &rarr; fica <strong>Em análise</strong> até nova corroboração elevar o score.';
+    const decisao = '<div class="fx-block">' +
+        '<span class="fx-label">Decisão</span>' +
+        '<p class="fx-lead">' + veredito + '</p>' +
+        '</div>';
+    // --- O que mais pesou ---
+    const dominante = usados.reduce((maior, atual) => (atual.contribuicao > maior.contribuicao ? atual : maior));
+    const decisivo = '<div class="fx-block">' +
+        '<span class="fx-label">O que mais pesou</span>' +
+        '<p class="fx-lead"><strong>' + escapeHtml(rotulo(dominante)) + '</strong> — ' +
+        p0(dominante.contribuicao) + ' dos ' + finalPct + ' vieram daqui.</p>' +
+        (dominante.detalhe ? '<p class="fx-just">' + escapeHtml(dominante.detalhe) + '</p>' : '') +
+        '</div>';
+    body.innerHTML = conta + decisao + decisivo;
 }
 function setFusionSummary(result) {
     const confidence = result ? formatFusionPercent(result.confiabilidade) : "--";
@@ -1876,6 +1958,7 @@ function renderFusionResult(result, eventoTipo) {
     document.querySelectorAll(".fusion-final-track i").forEach((bar) => {
         bar.style.width = Math.max(0, Math.min(100, Math.round(result.confiabilidade * 100))) + "%";
     });
+    renderFusionExplain(result, eventoTipo);
 }
 async function loadFusionBreakdown(eventId) {
     const containers = document.querySelectorAll("#fusion-breakdown, #fusion-breakdown-panel");
@@ -1887,6 +1970,9 @@ async function loadFusionBreakdown(eventId) {
     catch {
         setFusionSummary(null);
         containers.forEach((container) => { container.innerHTML = '<p class="fusion-empty">Não foi possível carregar o cálculo da API.</p>'; });
+        const explain = document.getElementById("fusion-explain");
+        if (explain)
+            explain.hidden = true;
     }
 }
 function formatFusionLevel(level) {
@@ -1905,6 +1991,9 @@ async function recalculateFusion(eventId) {
     catch {
         setFusionSummary(null);
         document.querySelectorAll("#fusion-breakdown, #fusion-breakdown-panel").forEach((container) => { container.innerHTML = '<p class="fusion-empty">Não foi possível recalcular pela API.</p>'; });
+        const explain = document.getElementById("fusion-explain");
+        if (explain)
+            explain.hidden = true;
     }
 }
 function initFusionControls() {
@@ -1963,7 +2052,7 @@ function closeRailPanel() {
 }
 function toggleRightPanel() {
     const panel = byId("right-panel");
-    const btn = byId("btn-toggle-right");
+    const btn = document.getElementById("btn-toggle-right");
     rightPanelOpen = !rightPanelOpen;
     if (rightPanelOpen && leftPanelOpen) {
         leftPanelOpen = false;
@@ -1971,7 +2060,7 @@ function toggleRightPanel() {
         byId("btn-toggle-left").classList.remove("on");
     }
     panel.classList.toggle("open", rightPanelOpen);
-    btn.classList.toggle("on", rightPanelOpen);
+    btn?.classList.toggle("on", rightPanelOpen);
 }
 function toggleLeftPanel() {
     const panel = byId("sidebar-shell");
@@ -1980,7 +2069,7 @@ function toggleLeftPanel() {
     if (leftPanelOpen && rightPanelOpen) {
         rightPanelOpen = false;
         byId("right-panel").classList.remove("open");
-        byId("btn-toggle-right").classList.remove("on");
+        document.getElementById("btn-toggle-right")?.classList.remove("on");
     }
     panel.classList.toggle("open", leftPanelOpen);
     btn.classList.toggle("on", leftPanelOpen);
