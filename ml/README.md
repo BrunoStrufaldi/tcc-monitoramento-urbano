@@ -6,8 +6,10 @@ Prova de conceito de detecção de eventos urbanos via visão computacional.
 
 ```
 ml/
-├── detector.py     # Detector YOLO real + rota de demonstração separada
-├── models/         # Pesos locais (yolo11n.pt ou pesos urbanos GX)
+├── detector.py              # Detector YOLO real + rota de demonstração separada
+├── train_incident_model.py  # Treina o detector de alagamento (1 classe)
+├── collect_negatives.py     # Coleta frames das câmeras CET-SP como negativos de treino
+├── models/                  # Pesos locais (yolo11m.pt trânsito / yolo11s.pt base-treino / gx-incident.pt alagamento)
 └── README.md
 ```
 
@@ -51,8 +53,9 @@ curl -X POST http://localhost:8000/deteccao/imagem -F "file=@foto.jpg"
 ## Integração com YOLO real
 
 O GX já usa inferência YOLO real em `POST /deteccao/imagem`. O peso padrão é
-`ml/models/yolo11n.pt` (YOLO11 COCO), que reconhece veículos e os normaliza
-como o evento urbano `transito`.
+`ml/models/yolo11m.pt` (YOLO11 COCO), que reconhece veículos e os normaliza
+como o evento urbano `transito`. (Era `yolo11n`; `m` detecta carro
+pequeno/distante/noturno bem melhor — ver comentário em `detector.py`.)
 
 Para reconhecer as oito classes urbanas específicas, substitua o peso padrão:
 
@@ -96,30 +99,48 @@ configurado, o loop sobe mas cada frame é descartado silenciosamente.
 GeoSampa em `context_monitor.py` — removido junto com o GeoSampa, por
 decisão do grupo de manter só dado em tempo real.)
 
-O peso atual foi treinado com duas classes (alagamento e árvore caída — passo
-a passo abaixo, mantido por precisão histórica), mas o app não usa mais a
-classe de árvore caída desde que o grupo decidiu tirar esse tipo do escopo do
-TCC: ela não tem entrada em `CLASSES_URBANAS` (`ml/detector.py`), então
-qualquer detecção dela é descartada antes de virar evento.
+O peso é treinado com **uma classe só: `alagamento`**. A classe `arvore_caida`
+saiu do escopo do TCC — o app já descartava (não tem entrada em
+`CLASSES_URBANAS`, `ml/detector.py`) e no treino ela só desbalanceava o dataset
+(~5% das instâncias) e confundia o classificador.
 
-Para treinar esse peso, use `ml/train_incident_model.py` (requer
-`pip install -r backend/requirements-yolo.txt` e uma API key gratuita do
-Roboflow em `ROBOFLOW_API_KEY`):
+### Por que o retreino: falsos positivos
+
+O peso anterior alucinava caixa de `alagamento` em cena seca / rua molhada à
+noite / no nada. Causa raiz medida em `ml/runs/incident/`: o dataset de treino
+tinha **6 imagens negativas em 2470** — o modelo nunca viu uma via sem
+alagamento e aprendeu que "toda imagem tem alagamento em algum canto" (matriz
+de confusão: 98% dos falsos positivos caíam em `alagamento`). O
+`train_incident_model.py` agora ingere negativos explícitos via `--negatives`
+e avisa se ficarem abaixo de 20% do treino.
+
+### Treinar (requer `pip install -r backend/requirements-yolo.txt`; `ROBOFLOW_API_KEY` só para inspect/download)
 
 ```bash
-# 1. Ver as versões disponíveis de um dataset público do Roboflow Universe
+# 1. Ver versões de um dataset público do Roboflow Universe
 python ml/train_incident_model.py inspect --workspace testingforyolo --project floods-by-agroudy
 
-# 2. Baixar os dois datasets (alagamento e árvore caída) em formato YOLOv8
-python ml/train_incident_model.py download --workspace testingforyolo --project floods-by-agroudy --version 1 --out ml/datasets/flood
-python ml/train_incident_model.py download --workspace fallen-tree-on-roads --project fallen-trees-on-road --version 2 --out ml/datasets/tree
+# 2. Baixar um ou mais datasets de alagamento em formato YOLOv8
+python ml/train_incident_model.py download --workspace testingforyolo --project floods-by-agroudy --version 2 --out ml/datasets/flood
 
-# 3. Fundir num único conjunto de 2 classes (nomes de classe reais confirmados no passo 2)
-python ml/train_incident_model.py merge --flood ml/datasets/flood --flood-classes "flood" --tree ml/datasets/tree --tree-classes "fallen tree" --out ml/datasets/incidentes
+# 3. Coletar negativos: frames das câmeras CET-SP em tempo seco/noite/chuva-sem-alagar.
+#    Rode em horários variados ao longo de alguns dias e revise a pasta depois,
+#    apagando qualquer frame com água acumulada de verdade.
+python ml/collect_negatives.py --hours 12          # ou sem --hours: roda até Ctrl+C
+python ml/collect_negatives.py --cameras 22,23,180 --interval 30
 
-# 4. Treinar (usa GPU CUDA por padrão; ~80 épocas em yolo11n)
-python ml/train_incident_model.py train --data ml/datasets/incidentes/data.yaml --epochs 80
+# 4. Fundir tudo num dataset de 1 classe (--flood repetível; '*' = todas as classes da fonte viram alagamento)
+python ml/train_incident_model.py merge \
+  --flood ml/datasets/flood --flood-classes "*" \
+  --negatives ml/datasets/negativos_cet \
+  --out ml/datasets/incidentes --limpar
+
+# 5. Treinar (GPU CUDA por padrão; base yolo11s, early stopping em 30 épocas)
+python ml/train_incident_model.py train --data ml/datasets/incidentes/data.yaml --epochs 120
 ```
 
-O resultado é copiado para `ml/models/gx-incident.pt`. Ative apontando
-`GX_YOLO_INCIDENT_MODEL` pra esse caminho (já é o padrão) e reinicie o backend.
+O `best.pt` é copiado para `ml/models/gx-incident.pt` (o peso anterior vira
+`gx-incident-anterior.pt`). Ative apontando `GX_YOLO_INCIDENT_MODEL` pra esse
+caminho (já é o padrão) e reinicie o backend. Antes de confiar, rode o detector
+num punhado de frames CET reais e confira se a caixa fantasma sumiu; se ainda
+houver, suba `yolo_threshold` (0.45 → ~0.6).

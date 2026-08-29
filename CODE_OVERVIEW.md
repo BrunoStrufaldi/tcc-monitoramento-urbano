@@ -45,7 +45,7 @@ Operador / fontes públicas / câmera autorizada
 
 - Frontend local: `http://127.0.0.1:5500/` responde com HTTP 200.
 - Backend local: `GET /health` retorna `{"status":"ok"}`.
-- YOLO: dependências Ultralytics/Pillow e o peso local `ml/models/yolo11n.pt` estão instalados; o painel apresenta o motor como disponível.
+- YOLO: dependências Ultralytics/Pillow e o peso local `ml/models/yolo11m.pt` estão instalados; o painel apresenta o motor como disponível.
 - Inferência real: detecções COCO de veículos são registradas como `observacao_visual`, sem promover automaticamente a detecção a congestionamento ou incidente.
 - Qualidade: `132 passed` na suíte `backend/tests` e `7 passed` na suíte do frontend.
 

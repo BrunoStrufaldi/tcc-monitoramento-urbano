@@ -183,7 +183,7 @@ def iniciar() -> None:
                 camera.latitude,
                 camera.longitude,
                 settings.gx_live_detection_interval_seconds,
-                settings.yolo_threshold,
+                settings.gx_yolo_incident_conf,
                 camera.nome,
             ),
             daemon=True,

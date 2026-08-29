@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     auth_bootstrap_admin_username: str | None = None
     auth_bootstrap_admin_password: str | None = None
     yolo_threshold: float = 0.45
+    # Confiança mínima só para o modelo de incidentes (alagamento). Mais alta que
+    # a de veículos de propósito: enquanto o peso de alagamento não é retreinado
+    # com negativos, ele dispara caixa em cena seca com score baixo — 0.6 corta a
+    # maior parte desses falsos positivos sem endurecer a contagem de trânsito.
+    gx_yolo_incident_conf: float = 0.6
     yolo_max_fps: int = 3
     yolo_max_frame_bytes: int = 1_500_000
     yolo_max_frame_width: int = 1280
@@ -24,7 +29,13 @@ class Settings(BaseSettings):
     gx_camera_longitude: float | None = None
     gx_live_detection_interval_seconds: float = 5.0
     gx_monitoramento_ativo: bool = False
-    gx_transito_min_veiculos: int = 20
+    # Nº de veículos num mesmo frame para sinalizar congestionamento. Medido nas
+    # 11 câmeras CET (frame pega trecho curto de via): rush da tarde dá 16-24,
+    # noite 15-18 — com 20 o evento quase nunca disparava à noite. 12 porque o
+    # YOLO ainda subconta fila acumulada ao fundo (carro pequeno/distante); o
+    # índice e a TomTom entram separados na fusão, então baixar não gera falso
+    # congestionamento sozinho.
+    gx_transito_min_veiculos: int = 12
     gx_alerta_cooldown_seconds: float = 1800.0
     gx_transito_monitorar_catalogo: bool = False
     gx_alagamento_monitorar_catalogo: bool = False
