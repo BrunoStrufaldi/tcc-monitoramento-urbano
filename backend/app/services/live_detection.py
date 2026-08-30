@@ -141,7 +141,7 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
                 conteudo,
                 latitude,
                 longitude,
-                fonte_nome=f"GX YOLO Contínuo - {nome_camera}",
+                fonte_nome=f"MotSP YOLO Contínuo - {nome_camera}",
                 fonte_descricao=f"Contagem de veículos pela câmera pública CET-SP '{nome_camera}', sem confirmação humana.",
                 modelo_ia="YOLO11 (contagem de veículos)",
                 origem="camera_continua_contagem",

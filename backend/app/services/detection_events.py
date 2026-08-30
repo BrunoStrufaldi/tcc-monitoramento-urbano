@@ -87,7 +87,7 @@ def registrar_deteccao(
     latitude: float,
     longitude: float,
     *,
-    fonte_nome: str = "GX YOLO",
+    fonte_nome: str = "MotSP YOLO",
     fonte_descricao: str = "Evidências visuais geradas por validação computacional.",
     modelo_ia: str = "YOLO11 (inferência repetida no servidor)",
     origem: str = "camera_ou_upload",

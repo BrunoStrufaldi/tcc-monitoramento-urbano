@@ -17,7 +17,7 @@ REGIOES = (
 
 FONTES = (
     ("Painel manual", "manual", "Ocorrências registradas por operador", True),
-    ("GX YOLO", "yolo", "Observações visuais revalidadas pelo modelo no servidor", True),
+    ("MotSP YOLO", "yolo", "Observações visuais revalidadas pelo modelo no servidor", True),
     ("Open-Meteo", "api", "Clima e qualidade do ar consultados em tempo real", True),
 )
 

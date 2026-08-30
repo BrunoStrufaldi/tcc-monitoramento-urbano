@@ -26,7 +26,7 @@ def test_alagamento_combina_chuva_e_aviso_inmet():
             DadoClima(chave="precipitacao_mm_h", valor_numerico=32.0, unidade="mm/h"),  # pontuação 0.95
             DadoClima(chave="alerta_inmet_severidade", valor_numerico=4.0, unidade="indice_0_10"),  # "perigo potencial" -> 0.60
         ],
-        fonte=FonteInfo(tipo="yolo", nome="GX YOLO Contínuo (alagamento)"),
+        fonte=FonteInfo(tipo="yolo", nome="MotSP YOLO Contínuo (alagamento)"),
     )
     r = calcular_confiabilidade(entrada)
     componente_clima = next(c for c in r.componentes if c.nome == "clima")
@@ -40,7 +40,7 @@ def _entrada_alagamento(dados_clima):
         tipo="alagamento",
         evidencias_ia=[],
         dados_clima=dados_clima,
-        fonte=FonteInfo(tipo="yolo", nome="GX YOLO Contínuo (alagamento)"),
+        fonte=FonteInfo(tipo="yolo", nome="MotSP YOLO Contínuo (alagamento)"),
     )
 
 
@@ -82,7 +82,7 @@ def test_transito_combina_indice_de_veiculos_e_tomtom():
             DadoClima(chave="indice_congestionamento", valor_numerico=3.0, unidade="indice_0_10"),
             DadoClima(chave="indice_congestionamento_tomtom", valor_numerico=8.0, unidade="indice_0_10"),
         ],
-        fonte=FonteInfo(tipo="yolo", nome="GX YOLO Contínuo"),
+        fonte=FonteInfo(tipo="yolo", nome="MotSP YOLO Contínuo"),
     )
     r = calcular_confiabilidade(entrada)
     # média dos dois índices = 5.5/10 -> faixa "moderado"
@@ -97,7 +97,7 @@ def test_dimensoes_ausentes_nao_inventam_contribuicao():
         tipo="observacao_visual",
         evidencias_ia=[EvidenciaIA(confianca=0.735, modelo_ia="YOLO11n", classe_detectada="veiculo")],
         dados_clima=[],
-        fonte=FonteInfo(tipo="yolo", nome="GX YOLO"),
+        fonte=FonteInfo(tipo="yolo", nome="MotSP YOLO"),
     )
     resultado = calcular_confiabilidade(entrada)
     assert resultado.confiabilidade == 0.735

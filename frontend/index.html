@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GX Operations Center | Urban Intelligence</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230D0D0D'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='15' font-weight='900' fill='%23FF8A00' text-anchor='middle'%3EGX%3C/text%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="css/style.css?v=20260828-fix-evidencia-1" />
+  <title>MotSP | Monitoramento Urbano de São Paulo</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230D0D0D'/%3E%3Ctext x='16' y='21' font-family='Arial,sans-serif' font-size='12' font-weight='900' fill='%23FF8A00' text-anchor='middle'%3EMSP%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="css/style.css?v=20260830-motsp-1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -18,19 +18,18 @@
     <!-- TOPBAR — 56px -->
     <header class="topbar">
       <div class="brand-block">
-        <svg class="gx-wordmark" viewBox="0 0 92 40" role="img" aria-label="GX" focusable="false">
+        <svg class="gx-wordmark" viewBox="0 0 92 40" role="img" aria-label="MotSP" focusable="false">
           <defs>
-            <linearGradient id="gx-wordmark-gradient" x1="8" y1="5" x2="82" y2="35" gradientUnits="userSpaceOnUse">
+            <linearGradient id="gx-wordmark-gradient" x1="4" y1="6" x2="88" y2="34" gradientUnits="userSpaceOnUse">
               <stop stop-color="#ff9a19" />
               <stop offset=".52" stop-color="#ff6700" />
               <stop offset="1" stop-color="#e44a00" />
             </linearGradient>
           </defs>
-          <path fill="url(#gx-wordmark-gradient)" d="M7 5h34l-4 7H17l-5 16h18l2-6H21l4-7h17l-6 20H5z" />
-          <path fill="url(#gx-wordmark-gradient)" d="M48 5h12l5 8 11-8h12L71 19l10 16H68l-6-10-12 10H38l18-16z" />
+          <text x="46" y="30" text-anchor="middle" font-family="'Inter', -apple-system, 'Segoe UI', sans-serif" font-size="26" font-weight="800" letter-spacing="-1" fill="url(#gx-wordmark-gradient)">MotSP</text>
         </svg>
         <div class="brand-text">
-          <h1>GX Urban Intelligence</h1>
+          <h1>Monitoramento Urbano</h1>
           <span class="brand-eyebrow">Operação em tempo real</span>
         </div>
       </div>
@@ -462,7 +461,7 @@
       <button type="button" role="tab" data-detail-tab="historico">Histórico e logs</button>
     </div>
     <section class="event-detail-actions" aria-labelledby="event-detail-actions-title">
-      <div class="detail-actions-heading"><h3 id="event-detail-actions-title">Ações operacionais</h3><p>As alterações são enviadas para a API do GX.</p></div>
+      <div class="detail-actions-heading"><h3 id="event-detail-actions-title">Ações operacionais</h3><p>As alterações são enviadas para a API do MotSP.</p></div>
       <div class="detail-action-status">
         <label for="detail-event-status">Status</label>
         <select id="detail-event-status" aria-label="Status do evento">

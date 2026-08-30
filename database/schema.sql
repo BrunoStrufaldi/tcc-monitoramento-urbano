@@ -177,7 +177,7 @@ INSERT INTO regioes (nome, codigo, descricao) VALUES
 
 INSERT INTO fontes_dados (nome, tipo, descricao, ativo) VALUES
   ('Painel manual', 'manual', 'Cadastro manual via API', 1),
-  ('GX YOLO', 'yolo', 'Observações visuais revalidadas no servidor', 1),
+  ('MotSP YOLO', 'yolo', 'Observações visuais revalidadas no servidor', 1),
   ('Open-Meteo', 'api', 'Clima e qualidade do ar em tempo real', 1);
 
 -- O schema não popula eventos, evidências, contexto ou notificações. Esses
