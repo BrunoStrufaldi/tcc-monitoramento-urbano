@@ -109,7 +109,7 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
                 conteudo,
                 latitude,
                 longitude,
-                fonte_nome=f"GX YOLO Contínuo (alagamento) - {nome_camera}",
+                fonte_nome=f"MotSP YOLO Contínuo (alagamento) - {nome_camera}",
                 fonte_descricao=f"Modelo dedicado de incidentes rodando direto na câmera pública CET-SP '{nome_camera}', sem confirmação humana.",
                 modelo_ia="YOLO11 (modelo de incidentes GX)",
                 origem="camera_continua_alagamento",

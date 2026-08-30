@@ -1,6 +1,6 @@
 """Retenção de eventos em tempo real.
 
-O painel do GX é um quadro operacional "ao vivo": um evento só faz sentido
+O painel do MotSP é um quadro operacional "ao vivo": um evento só faz sentido
 enquanto a detecção que o originou é recente. Este módulo apaga em definitivo
 tudo que passou da janela (``GX_EVENTO_JANELA_MINUTOS``) — evento, evidências,
 dados contextuais, notificações e a localização 1:1 criada para ele.

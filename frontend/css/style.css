@@ -1,5 +1,5 @@
 /* ============================================================
-   GX OPERATIONS CENTER — Premium Dark Theme
+   MotSP — MONITORAMENTO URBANO — Premium Dark Theme
    Grid: 64px rail | 310px left | flex map | 330px right
    Topbar: 56px | Feed: 132px
    ============================================================ */
@@ -997,7 +997,7 @@ input, select, textarea { font-family: inherit; }
 #mapa { width: 100%; height: 100%; }
 .map-overlay {
   position: absolute;
-  /* Leaflet usa painéis até z-index 700; os comandos GX devem ficar acima. */
+  /* Leaflet usa painéis até z-index 700; os comandos do MotSP devem ficar acima. */
   z-index: 1000;
   pointer-events: none;
 }
@@ -1037,7 +1037,7 @@ input, select, textarea { font-family: inherit; }
 }
 .map-command-card .live-air-status { color: #72c7ff; }
 
-/* Mapa aberto: controles e pop-ups integrados ao visual GX. */
+/* Mapa aberto: controles e pop-ups integrados ao visual do MotSP. */
 #mapa .leaflet-container { background: #071019; font-family: var(--font, Inter, sans-serif); }
 #mapa .leaflet-control-zoom { border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; box-shadow: var(--sh-sm); }
 #mapa .leaflet-control-zoom a { width: 28px; height: 28px; line-height: 27px; background: #10161d; color: var(--text-primary); border-color: var(--border-strong); }
@@ -2641,7 +2641,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (min-width:721px) { .btn-new-event { height:22px; padding:0 7px; font-size:8px; } .operator-level{padding:7px}.operator-level-head,.operator-level-meta{font-size:8px}.operator-objectives{font-size:7px}.operator-xp-track{margin:5px 0 4px;height:4px} }
 
 /* ============================================================
-   GX URBAN INTELLIGENCE — identidade corporativa e hierarquia
+   MotSP — identidade visual e hierarquia da marca
    A camada abaixo consolida o visual do centro de operações sem
    interferir nos contratos de dados, mapa ou drawers existentes.
    ============================================================ */

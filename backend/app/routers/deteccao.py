@@ -99,10 +99,13 @@ def _agendar_atualizacao(evento_id: int, db: Session) -> None:
 
 
 def _fonte_yolo(db: Session) -> FonteDados:
-    source = db.query(FonteDados).filter(FonteDados.tipo == "yolo", FonteDados.nome == "GX YOLO").first()
+    source = db.query(FonteDados).filter(
+        FonteDados.tipo == "yolo", FonteDados.nome.in_(("MotSP YOLO", "GX YOLO"))
+    ).first()
     if source:
+        source.nome = "MotSP YOLO"
         return source
-    source = FonteDados(nome="GX YOLO", tipo="yolo", descricao="Evidências visuais geradas por validação computacional.")
+    source = FonteDados(nome="MotSP YOLO", tipo="yolo", descricao="Evidências visuais geradas por validação computacional.")
     db.add(source)
     db.flush()
     return source
