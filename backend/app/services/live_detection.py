@@ -18,11 +18,15 @@ O YOLO/COCO padrão só reconhece objetos (veículo, ônibus, caminhão, moto), 
 "trânsito" como classe. Por isso não criamos mais um evento por veículo
 avulso: contamos quantos veículos aparecem juntos no mesmo frame e, acima de
 um limite, sinalizamos congestionamento — aí sim um evento único de
-"trânsito". O índice de congestionamento da contagem de veículos é corroborado
-com a TomTom Traffic API (``tomtom_traffic_source``, dado ao vivo por trecho de
-via — ver o módulo pra entender por que Waze for Cities e o CGE não davam pra
-usar aqui); quando as duas fontes concordam, ``data_fusion`` combina as duas
-na mesma dimensão de clima em vez de confiar só numa.
+"trânsito". A contagem sozinha soma os dois sentidos da via + a fila da
+transversal, então numa avenida larga fluindo ela passa do limite à toa: na
+faixa entre ``gx_transito_min_veiculos`` e ``gx_transito_min_veiculos_confirmado``
+a TomTom Traffic API (``tomtom_traffic_source``, velocidade atual x livre do
+trecho, dado ao vivo — ver o módulo pra entender por que Waze for Cities e o CGE
+não davam pra usar aqui) **decide se o evento é criado** (``_avaliar_gatilho_transito``);
+acima de ``_confirmado`` a contagem cria sozinha. Sem ``TOMTOM_API_KEY`` a faixa
+volta a ser decidida só por contagem. Criado o evento, os dois índices entram na
+mesma dimensão de clima do ``data_fusion``.
 
 Duas fontes de câmera, cada uma opt-in:
 - ``GX_CAMERA_SNAPSHOT_URL`` (+ latitude/longitude): uma câmera avulsa
@@ -96,6 +100,29 @@ def _detectar_congestionamento(veiculos: list[Deteccao], limite: int) -> Detecca
     )
 
 
+def _avaliar_gatilho_transito(n_veiculos: int, fluxo_tomtom: dict) -> tuple[bool, str]:
+    """Decide se a contagem de veículos deve virar um evento de trânsito.
+
+    A contagem sozinha soma os dois sentidos da via + a fila da transversal +
+    carro parado; numa avenida larga isso passa de ``gx_transito_min_veiculos``
+    mesmo com tudo fluindo. A TomTom mede a velocidade real do trecho e arbitra
+    a faixa entre ``gx_transito_min_veiculos`` e ``gx_transito_min_veiculos_confirmado``.
+    Retorna ``(criar, motivo)``. Sem TomTom, a decisão volta a ser só por contagem.
+    """
+    if n_veiculos >= settings.gx_transito_min_veiculos_confirmado:
+        return True, f"contagem alta ({n_veiculos} veículos)"
+    if fluxo_tomtom.get("via_fechada"):
+        return True, "TomTom reporta via fechada"
+    if not fluxo_tomtom.get("disponivel"):
+        return True, "sem TomTom — decisão só por contagem"
+    indice = fluxo_tomtom.get("indice_congestionamento")
+    if indice is None:
+        return True, "TomTom sem índice — decisão só por contagem"
+    if indice >= settings.gx_transito_tomtom_indice_minimo:
+        return True, f"TomTom confirma lentidão (índice {indice:.1f}/10)"
+    return False, f"TomTom indica trecho fluindo (índice {indice:.1f}/10)"
+
+
 def _processar_frame(conteudo: bytes, latitude: float, longitude: float, threshold: float, cooldown: dict[str, float], nome_camera: str = "câmera personalizada") -> None:
     caminho = ""
     try:
@@ -127,13 +154,24 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
     with SessionLocal() as db:
         # Congestionamento ainda ativo no mesmo ponto → renova a marcação
         # existente em vez de criar outra (o cooldown em memória se perde a
-        # cada restart; a checagem no banco não).
+        # cada restart; a checagem no banco não). Evento já vivo não gasta
+        # chamada da TomTom nem passa pela decisão de gatilho de novo.
         if refrescar_evento_no_ponto(
             db, tipo="transito", latitude=latitude, longitude=longitude,
             dentro_de_segundos=settings.gx_alerta_cooldown_seconds,
         ):
             logger.info("Trânsito em %s renovado (evento ainda vivo no ponto)", nome_camera)
             return
+
+        # A TomTom entra ANTES da criação: na faixa gx_transito_min_veiculos ..
+        # gx_transito_min_veiculos_confirmado ela pode vetar um "congestionamento"
+        # que é só contagem dos dois sentidos numa avenida larga fluindo.
+        fluxo_tomtom = obter_fluxo_transito(latitude, longitude)
+        criar, motivo = _avaliar_gatilho_transito(len(veiculos), fluxo_tomtom)
+        if not criar:
+            logger.info("Trânsito descartado em %s: %s (%s veículos no quadro)", nome_camera, motivo, len(veiculos))
+            return
+
         try:
             evento = registrar_deteccao(
                 db,
@@ -154,7 +192,6 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
                 valor_numerico=indice,
                 unidade="indice_0_10",
             ))
-            fluxo_tomtom = obter_fluxo_transito(latitude, longitude)
             if fluxo_tomtom.get("disponivel"):
                 db.add(DadoContextual(
                     evento_id=evento.id,
@@ -166,7 +203,10 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
             db.commit()
             aplicar_fusao_evento(db, evento.id, persistir=True)
             publicar_evento(db, evento.id)
-            logger.info("Trânsito sinalizado em %s: %s veículos no quadro (índice %.1f)", nome_camera, len(veiculos), indice)
+            logger.info(
+                "Trânsito sinalizado em %s: %s veículos no quadro (índice %.1f) — %s",
+                nome_camera, len(veiculos), indice, motivo,
+            )
         except Exception:
             logger.exception("Falha ao registrar evento de trânsito")
 

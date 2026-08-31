@@ -834,6 +834,32 @@ function initComputerVision(): void {
 }
 
 /* ============================================================
+   LAYOUT VERTICAL — no retrato, a "Evidência visual" (bloco do
+   painel direito) desce para o painel esquerdo, ocupando o
+   espaço da antiga Criticidade. Em paisagem volta ao seu lugar.
+   ============================================================ */
+function initEvidencePanelDock(): void {
+  const dock = document.getElementById("left-evidence-dock");
+  const evidence = document.querySelector<HTMLElement>(".section-evidence");
+  if (!dock || !evidence) return;
+  const homeParent = evidence.parentElement;
+  const portrait = window.matchMedia("(orientation: portrait)");
+  const apply = (): void => {
+    if (portrait.matches) {
+      if (evidence.parentElement !== dock) dock.appendChild(evidence);
+      dock.hidden = false;
+    } else {
+      if (homeParent && evidence.parentElement !== homeParent) {
+        homeParent.appendChild(evidence);
+      }
+      dock.hidden = true;
+    }
+  };
+  apply();
+  portrait.addEventListener("change", apply);
+}
+
+/* ============================================================
    TESTADOR YOLO — barra esquerda: sobe uma imagem e vê o que
    os dois modelos (alagamento + objetos COCO) reconhecem.
    ============================================================ */
@@ -928,10 +954,12 @@ function ytDrawBoxes(deteccoes: YoloDeteccao[]): void {
   });
 }
 
-async function ytChamarModelo(rota: string, threshold: number): Promise<YoloDeteccao[]> {
+async function ytChamarModelo(rota: string): Promise<YoloDeteccao[]> {
   const form = new FormData();
   form.append("file", ytFile as File);
-  const response = await apiFetch(rota + "?confianca_minima=" + threshold, { method: "POST", body: form });
+  // Sem parâmetro de confiança: o servidor aplica o limiar padrão de cada modelo
+  // e devolve o que reconheceu, com a confiança de cada caixa.
+  const response = await apiFetch(rota, { method: "POST", body: form });
   if (response.status === 503) return []; // modelo indisponível — tratado no resumo
   if (!response.ok) throw new Error("O modelo retornou " + response.status);
   return response.json() as Promise<YoloDeteccao[]>;
@@ -943,11 +971,10 @@ async function ytAnalisar(): Promise<void> {
   const botao = byId<HTMLButtonElement>("yt-analyze");
   botao.disabled = true;
   ytSetFeedback("Rodando inferência YOLO nos dois modelos…");
-  const threshold = Number(byId<HTMLInputElement>("yt-threshold").value) / 100;
   try {
     const [incidentes, objetos] = await Promise.all([
-      ytChamarModelo("/deteccao/incidente", threshold),
-      ytChamarModelo("/deteccao/imagem", threshold),
+      ytChamarModelo("/deteccao/incidente"),
+      ytChamarModelo("/deteccao/imagem"),
     ]);
     const alagamentos = incidentes.filter((d) => d.nome === "alagamento");
     const veiculos = objetos.filter((d) => YT_CLASSES_VEICULO.includes(d.nome));
@@ -976,7 +1003,7 @@ async function ytAnalisar(): Promise<void> {
 
     const lista = byId("yt-detections");
     if (!todas.length) {
-      lista.innerHTML = '<p class="yt-empty">O YOLO não retornou nenhuma caixa nesta imagem com confiança ≥ ' + Math.round(threshold * 100) + '%.</p>';
+      lista.innerHTML = '<p class="yt-empty">O YOLO não retornou nenhuma caixa acima do limiar padrão dos modelos nesta imagem.</p>';
     } else {
       lista.innerHTML = '<div class="yt-list-head">Detecções do modelo (' + todas.length + ')</div>' +
         todas.map((d) => {
@@ -1033,8 +1060,6 @@ function initYoloTester(): void {
     if (file) ytSetImage(file);
   });
   byId("yt-clear").addEventListener("click", ytClearImage);
-  const threshold = byId<HTMLInputElement>("yt-threshold");
-  threshold.addEventListener("input", () => { byId("yt-th-out").textContent = threshold.value + "%"; });
   byId<HTMLButtonElement>("yt-analyze").addEventListener("click", () => { void ytAnalisar(); });
   void ytCarregarStatus();
 }
@@ -1752,7 +1777,7 @@ function initIncidentComposer(): void {
   const form = byId<HTMLFormElement>("incident-form");
   const feedback = byId("incident-feedback");
   const close = (): void => { modal.hidden = true; feedback.textContent = ""; feedback.className = "incident-feedback"; };
-  byId("btn-novo-evento").addEventListener("click", () => { modal.hidden = false; (form.elements.namedItem("titulo") as HTMLInputElement | null)?.focus(); });
+  document.getElementById("btn-novo-evento")?.addEventListener("click", () => { modal.hidden = false; (form.elements.namedItem("titulo") as HTMLInputElement | null)?.focus(); });
   byId("incident-close").addEventListener("click", close);
   modal.addEventListener("click", (event) => { if (event.target === modal) close(); });
   form.addEventListener("submit", async (event) => {
@@ -2581,6 +2606,7 @@ function initMapa(): void {
     toggleLeftBtn.hidden = false;
     toggleLeftBtn.addEventListener("click", toggleLeftPanel);
   }
+  initEvidencePanelDock();
   if (!window.L) {
     const mapaDiv = byId("mapa");
     mapaDiv.innerHTML = '<div class="map-fallback">' +

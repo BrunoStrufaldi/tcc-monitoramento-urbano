@@ -29,13 +29,22 @@ class Settings(BaseSettings):
     gx_camera_longitude: float | None = None
     gx_live_detection_interval_seconds: float = 5.0
     gx_monitoramento_ativo: bool = False
-    # Nº de veículos num mesmo frame para sinalizar congestionamento. Medido nas
-    # 11 câmeras CET (frame pega trecho curto de via): rush da tarde dá 16-24,
-    # noite 15-18 — com 20 o evento quase nunca disparava à noite. 12 porque o
-    # YOLO ainda subconta fila acumulada ao fundo (carro pequeno/distante); o
-    # índice e a TomTom entram separados na fusão, então baixar não gera falso
-    # congestionamento sozinho.
+    # Nº de veículos num mesmo frame para o sistema AVALIAR congestionamento —
+    # abaixo disso nem consulta a TomTom. Medido nas 11 câmeras CET (frame pega
+    # trecho curto de via): rush da tarde dá 16-24, noite 15-18. 12 porque o YOLO
+    # subconta fila acumulada ao fundo (carro pequeno/distante) e a contagem pega
+    # os dois sentidos + fila da transversal; na faixa 12..confirmado a TomTom
+    # arbitra se vira evento (ver _avaliar_gatilho_transito em live_detection).
     gx_transito_min_veiculos: int = 12
+    # Contagem a partir da qual o evento é criado mesmo sem a TomTom confirmar —
+    # frame muito cheio é sinal forte por si só.
+    gx_transito_min_veiculos_confirmado: int = 16
+    # Na faixa gx_transito_min_veiculos .. gx_transito_min_veiculos_confirmado, a
+    # TomTom precisa reportar índice de congestionamento >= isto para o evento
+    # ser criado. Abaixo (trecho a >= ~70% da velocidade livre) ela está dizendo
+    # "via fluindo" e o evento é descartado. Sem TOMTOM_API_KEY, a faixa cai no
+    # comportamento antigo (decisão só por contagem).
+    gx_transito_tomtom_indice_minimo: float = 3.0
     gx_alerta_cooldown_seconds: float = 1800.0
     gx_transito_monitorar_catalogo: bool = False
     gx_alagamento_monitorar_catalogo: bool = False
