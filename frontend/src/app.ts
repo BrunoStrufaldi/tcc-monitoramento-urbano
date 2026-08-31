@@ -448,8 +448,7 @@ function handleRealtimeMessage(tipo: string, dados: Record<string, unknown>): vo
       if (selectedEventId === id) {
         selectedEventId = null;
         clearEventEvidence();
-        byId<HTMLElement>("selected-title").textContent = "Selecione um evento";
-        byId<HTMLElement>("selected-description").textContent = "Selecione um evento para visualizar os detalhes operacionais.";
+        renderSelectedEvent(null);
       }
       break;
     }
@@ -463,6 +462,12 @@ function handleRealtimeMessage(tipo: string, dados: Record<string, unknown>): vo
 }
 
 function updateMarker(evento: UrbanEvent): void {
+  // Evento que não passa no filtro atual (status/severidade/busca) não pode
+  // ganhar marcador só por ter chegado via WebSocket — remove se já existir.
+  if (!isEventVisible(evento)) {
+    removeMarker(evento.id);
+    return;
+  }
   if (map && loadedEvents.filter(isEventVisible).length > MARKER_CLUSTER_THRESHOLD && map.getZoom() < 15) {
     scheduleMarkerRefresh();
     return;
@@ -497,6 +502,25 @@ function normalizeSeverity(value: string | null | undefined): SeverityKey {
 
 function severityStyle(value: string): SeverityStyle {
   return SEVERITIES[normalizeSeverity(value)];
+}
+
+/** Cor do marcador no mapa segundo o status operacional do evento. */
+function statusColor(status: string | null | undefined): string {
+  switch (String(status || "").toLowerCase()) {
+    case "ativo": return "#2EAA5A";      // verde
+    case "em_analise": return "#E6A817"; // amarelo
+    case "resolvido": return "#7A8794";  // cinza
+    default: return "#E6A817";
+  }
+}
+
+/** Ícone de carro (Material "directions_car") usado em eventos de trânsito. */
+const GLYPH_CARRO =
+  '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/></svg>';
+
+function isEventoTransito(event: UrbanEvent): boolean {
+  const value = (event.tipo + " " + event.titulo).toLowerCase();
+  return event.tipo === "transito" || value.includes("trâns") || value.includes("trans") || value.includes("via");
 }
 
 function setApiStatus(ok: boolean, message: string): void {
@@ -1127,6 +1151,8 @@ function formatClock(value: Date): string {
 
 function isEventVisible(event: UrbanEvent): boolean {
   if (!activeSeverities.has(normalizeSeverity(event.severidade))) return false;
+  const statusFiltro = byId<HTMLSelectElement>("filtro-status")?.value;
+  if (statusFiltro && event.status !== statusFiltro) return false;
   if (!searchTerm) return true;
   const haystack = [
     event.titulo,
@@ -1154,8 +1180,8 @@ function clearMarkers(): void {
 function markerGlyph(event: UrbanEvent): string {
   const value = (event.tipo + " " + event.titulo).toLowerCase();
   if (event.tipo === "observacao_visual") return "◎";
+  if (isEventoTransito(event)) return GLYPH_CARRO;
   if (value.includes("alag") || value.includes("chuva")) return "≋";
-  if (value.includes("trâns") || value.includes("trans") || value.includes("via")) return "▲";
   if (value.includes("câmera") || value.includes("camera")) return "◉";
   if (value.includes("bloque")) return "▰";
   return "!";
@@ -1163,10 +1189,15 @@ function markerGlyph(event: UrbanEvent): string {
 
 function markerIcon(event: UrbanEvent, style: SeverityStyle, selected = false): any {
   const critical = style.label === "Crítica";
-  const markerColor = selected ? "#ff7900" : style.color;
+  // O marcador passa a comunicar o STATUS (ativo = verde, em análise = amarelo),
+  // não mais a criticidade.
+  // Selecionado usa a MESMA cor do status (só maior e com brilho), não laranja.
+  const markerColor = statusColor(event.status);
+  const hue = markerColor;
+  const transito = isEventoTransito(event);
   return window.L.divIcon({
     className: "gx-marker-shell" + (selected ? " is-selected" : ""),
-    html: '<span class="gx-map-marker' + (critical ? " is-critical" : "") + '" style="--marker-color:' + markerColor + ';--severity-color:' + style.color + '"><i>' + markerGlyph(event) + '</i></span>',
+    html: '<span class="gx-map-marker' + (critical ? " is-critical" : "") + (transito ? " has-svg-glyph" : "") + '" style="--marker-color:' + markerColor + ';--severity-color:' + hue + '"><i>' + markerGlyph(event) + '</i></span>',
     iconSize: selected ? [58, 58] : [32, 32],
     iconAnchor: selected ? [29, 29] : [16, 16],
     popupAnchor: [0, selected ? -28 : -18],
@@ -1202,36 +1233,20 @@ function formatDetectadoEm(value?: string | null): string {
 }
 
 function infoWindowContent(event: UrbanEvent): string {
-  const style = severityStyle(event.severidade);
-  const address = event.localizacao?.endereco || event.localizacao?.bairro || "";
   const confidence = formatConfidence(event.confianca);
   const source = event.fonte?.nome || "";
-  const location = [address, event.regiao?.nome].filter(Boolean).join(" · ") || "Localização não informada";
   const detectedAt = event.detectado_em ? formatDate(event.detectado_em) : "Horário não informado";
   const popupId = "gx-popup-" + event.id;
+  const hue = statusColor(event.status);
   return '<article class="gx-event-popup" role="dialog" aria-modal="false" aria-labelledby="' + popupId + '-title">' +
-    '<div class="gx-event-popup-head"><span class="info-criticidade" style="background:' + style.color + '">' + escapeHtml(style.label) + '</span>' +
-    (confidence ? '<span class="gx-event-popup-confidence">' + confidence + ' confiança</span>' : '') + '</div>' +
+    (confidence ? '<div class="gx-event-popup-head"><span class="gx-event-popup-confidence" style="color:' + hue + '">' + confidence + ' confiança</span></div>' : '') +
     '<h3 id="' + popupId + '-title">' + escapeHtml(event.titulo) + '</h3>' +
     (event.descricao ? '<p class="gx-event-popup-description">' + escapeHtml(event.descricao) + '</p>' : '') +
     '<dl class="gx-event-popup-meta">' +
-    '<div><dt>Localização</dt><dd>' + escapeHtml(location) + '</dd></div>' +
     '<div><dt>Fonte</dt><dd>' + escapeHtml(source || "Não informada") + '</dd></div>' +
     '<div><dt>Horário</dt><dd>' + escapeHtml(detectedAt) + '</dd></div>' +
     '</dl>' +
-    '<button type="button" class="gx-event-popup-action" data-event-id="' + event.id + '">Ver detalhes</button>' +
     '</article>';
-}
-
-function focusSelectedEventDetails(eventId: number): void {
-  popupReturnFocusToMarker = false;
-  selectEvent(eventId, false);
-  if (map) map.closePopup();
-  openEventDetail(eventId);
-  window.requestAnimationFrame(() => {
-    const title = byId<HTMLElement>("selected-title");
-    title.focus();
-  });
 }
 
 function createMarker(event: UrbanEvent): void {
@@ -1545,9 +1560,6 @@ async function loadDetailSection(): Promise<void> {
 
 function initEventDetailDrawer(): void {
   const drawer = byId<HTMLElement>("event-detail-drawer");
-  byId<HTMLButtonElement>("selected-open-detail").addEventListener("click", () => {
-    if (selectedEventId != null) openEventDetail(selectedEventId);
-  });
   byId<HTMLButtonElement>("event-detail-close").addEventListener("click", closeEventDetail);
   drawer.addEventListener("click", (event) => { if (event.target === drawer) closeEventDetail(); });
   document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !drawer.hidden) closeEventDetail(); });
@@ -1620,52 +1632,40 @@ function initEventDetailDrawer(): void {
 
 function renderSelectedEvent(event: UrbanEvent | null): void {
   const selectedContainer = byId("evento-selecionado");
-  const severity = byId("selected-severity");
   const title = byId("selected-title");
-  const description = byId("selected-description");
   const statusPill = byId("selected-status-pill");
   const meta = byId("selected-event-meta");
-  const region = byId("selected-region");
   const time = byId("selected-time");
   const source = byId("selected-source");
   const confidenceWrap = byId("confidence-circle-wrap");
   const confidenceValue = byId("confidence-circle-value");
   const confidenceRing = byId("confidence-fill-ring") as unknown as SVGCircleElement;
-  const openDetail = byId<HTMLButtonElement>("selected-open-detail");
   const breakdowns = document.querySelectorAll<HTMLElement>("#fusion-breakdown, #fusion-breakdown-panel");
 
   deselectCurrentMarker();
 
   if (!event) {
     delete selectedContainer.dataset.type;
-    severity.textContent = "--";
-    severity.style.background = "var(--text-muted)";
     title.textContent = "Selecione um evento";
-    description.textContent = "Selecione um evento para visualizar os detalhes operacionais.";
     statusPill.textContent = "--";
     statusPill.className = "status-pill";
     meta.hidden = true;
     confidenceWrap.hidden = true;
-    openDetail.hidden = true;
     setFusionSummary(null);
     breakdowns.forEach((b) => { b.innerHTML = ""; });
     { const explain = document.getElementById("fusion-explain"); if (explain) explain.hidden = true; }
     return;
   }
 
-  const style = severityStyle(event.severidade);
   selectedContainer.dataset.type = event.tipo;
-  severity.textContent = style.label;
-  severity.style.background = style.color;
   title.textContent = event.titulo;
-  description.textContent = event.descricao || "Sem descrição operacional registrada.";
 
-  const isActive = event.status === "ativo";
+  const status = String(event.status || "").toLowerCase();
   statusPill.textContent = formatStatus(event.status);
-  statusPill.className = "status-pill" + (isActive ? " status-ativo" : "");
+  statusPill.className = "status-pill" +
+    (status === "ativo" ? " status-ativo" : status === "em_analise" ? " status-analise" : "");
 
   meta.hidden = false;
-  region.textContent = event.regiao?.nome || event.localizacao?.bairro || "Sem região";
   time.textContent = formatDetectadoEm(event.detectado_em);
   source.textContent = event.fonte?.nome || event.fonte?.tipo || "Não identificada";
 
@@ -1685,7 +1685,6 @@ function renderSelectedEvent(event: UrbanEvent | null): void {
     confidenceWrap.hidden = true;
   }
 
-  openDetail.hidden = false;
   setFusionLoadingState();
   breakdowns.forEach((b) => { b.innerHTML = ""; });
   loadFusionBreakdown(event.id);
@@ -2353,8 +2352,8 @@ async function loadEventEvidence(eventId: number): Promise<void> {
         (hasImage ? '<button type="button" class="rp-evidence-img rp-evidence-expand" data-evidence-image="' + escapeHtml(imageSrc) + '" data-evidence-alt="Evidência ' + escapeHtml(ev.tipo) + '" aria-label="Ampliar evidência visual"><img src="' + escapeHtml(imageSrc) + '" alt="Evidência visual" loading="lazy" onerror="this.parentElement.innerHTML=\'<span class=rp-img-fallback>Imagem indisponível</span>\'"></button>' : '<div class="rp-evidence-img"><span class="rp-img-fallback">Sem imagem disponível</span></div>') +
         '<div class="rp-evidence-toolbar"><button type="button" class="rp-evidence-open" data-evidence-image="' + escapeHtml(imageSrc) + '" data-evidence-alt="Evidência ' + escapeHtml(ev.tipo) + '">Ampliar</button><button type="button" class="rp-evidence-details">Ver detalhes</button></div>' +
         '<div class="rp-evidence-info">' +
-          '<div class="rp-evidence-row"><span class="rp-evidence-label">Tipo</span><span class="rp-evidence-val">' + escapeHtml(formatStatus(ev.tipo)) + '</span></div>' +
-          (ev.modelo_ia ? '<div class="rp-evidence-row"><span class="rp-evidence-label">Modelo</span><span class="rp-evidence-val">' + escapeHtml(ev.modelo_ia) + '</span></div>' : '') +
+          '<div class="rp-evidence-row rp-evidence-row--tipo"><span class="rp-evidence-label">Tipo</span><span class="rp-evidence-val">' + escapeHtml(formatStatus(ev.tipo)) + '</span></div>' +
+          (ev.modelo_ia ? '<div class="rp-evidence-row rp-evidence-row--modelo"><span class="rp-evidence-label">Modelo</span><span class="rp-evidence-val">' + escapeHtml(ev.modelo_ia) + '</span></div>' : '') +
           (ev.classe_detectada ? '<div class="rp-evidence-row"><span class="rp-evidence-label">Classe</span><span class="rp-evidence-val rp-evidence-class">' + escapeHtml(formatStatus(ev.classe_detectada)) + '</span></div>' : '') +
           (confPct != null ? '<div class="rp-evidence-row"><span class="rp-evidence-label">Confiança</span><span class="rp-evidence-val">' + confPct + '%</span></div>' : '') +
           (time ? '<div class="rp-evidence-row"><span class="rp-evidence-label">Capturado</span><span class="rp-evidence-val">' + time + '</span></div>' : '') +
@@ -2598,6 +2597,10 @@ function mapStyles(): any[] {
 function initMapa(): void {
   if (appInitialized) return;
   appInitialized = true;
+  // Ao iniciar o sistema o mapa mostra apenas eventos "ativos"; o navegador
+  // pode restaurar a seleção anterior do <select>, então forçamos o padrão.
+  const filtroStatusInicial = byId<HTMLSelectElement>("filtro-status");
+  if (filtroStatusInicial) filtroStatusInicial.value = "ativo";
   byId<HTMLButtonElement>("topbar-map-search")?.addEventListener("click", () => {
     byId<HTMLInputElement>("map-search")?.focus();
   });
@@ -2660,14 +2663,6 @@ function initMapa(): void {
   map.on("zoomend", scheduleMarkerRefresh);
   map.on("popupopen", (popupEvent: any) => {
     openInfoWindow = popupEvent.popup;
-    const popupElement = popupEvent.popup?.getElement?.();
-    if (!popupElement) return;
-    const action = popupElement.querySelector(".gx-event-popup-action") as HTMLButtonElement | null;
-    action?.addEventListener("click", () => {
-      const eventId = Number(action.dataset.eventId);
-      if (Number.isInteger(eventId)) focusSelectedEventDetails(eventId);
-    }, { once: true });
-    window.requestAnimationFrame(() => action?.focus());
   });
   map.on("popupclose", (popupEvent: any) => {
     const shouldReturnFocus = popupReturnFocusToMarker;

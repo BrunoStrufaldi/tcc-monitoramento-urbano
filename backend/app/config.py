@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     gx_evento_janela_minutos: int = 45
     # Confiabilidade (Data Fusion) a partir da qual um evento "em_analise" é
     # promovido automaticamente para "ativo".
-    gx_fusion_auto_ativo_min: float = 0.75
+    gx_fusion_auto_ativo_min: float = 0.80
 
     @field_validator("database_url")
     @classmethod
