@@ -89,25 +89,41 @@ def aplicar_fusao_evento(
 
     if persistir:
         evento.confianca = Decimal(str(resultado.confiabilidade))
+        limiar = settings.gx_fusion_auto_ativo_min
+        automatico = bool(evento.fonte and evento.fonte.tipo == "yolo")
         promovido = False
+        rebaixado = False
         if (
             evento.status == "em_analise"
-            and resultado.confiabilidade >= settings.gx_fusion_auto_ativo_min
+            and resultado.confiabilidade >= limiar
         ):
             evento.status = "ativo"
             promovido = True
+        elif (
+            evento.status == "ativo"
+            and automatico
+            and resultado.confiabilidade < limiar
+        ):
+            # Evento YOLO só chega a "ativo" por promoção automática (a
+            # confirmação humana cria "em_analise"). Se a confiabilidade não
+            # bate mais o limiar, volta para análise em vez de ficar preso.
+            evento.status = "em_analise"
+            rebaixado = True
+        mudou_status = promovido or rebaixado
         log = LogSistema(
             nivel="INFO",
             modulo="data_fusion",
             mensagem=(
                 f"Confiabilidade recalculada: {resultado.confiabilidade:.2%} ({resultado.nivel})"
                 + (" — evento promovido para ativo" if promovido else "")
+                + (" — evento rebaixado para em análise" if rebaixado else "")
             ),
             evento_id=evento.id,
             contexto={
                 "confiabilidade": resultado.confiabilidade,
                 "nivel": resultado.nivel,
                 "promovido_para_ativo": promovido,
+                "rebaixado_para_analise": rebaixado,
                 "componentes": [
                     {
                         "nome": c.nome,
@@ -121,7 +137,7 @@ def aplicar_fusao_evento(
         db.add(log)
         db.commit()
         db.refresh(evento)
-        if promovido:
+        if mudou_status:
             _publicar_evento_atualizado(db, evento.id)
 
     return resultado, evento
@@ -138,16 +154,21 @@ def _publicar_evento_atualizado(db: Session, evento_id: int) -> None:
 
 
 def promover_eventos_por_confiabilidade(db: Session) -> int:
-    """Recalcula os eventos ainda em análise e promove os que já batem o
-    limiar de confiabilidade. Rede de segurança para eventos que só passariam
-    a "ativo" num recálculo posterior (ex.: dado de clima que chegou depois)."""
-    ids = [row[0] for row in db.query(Evento.id).filter(Evento.status == "em_analise").all()]
-    promovidos = 0
+    """Recalcula os eventos automáticos abertos (em análise ou ativos) e ajusta
+    o status ao limiar de confiabilidade: promove os que já batem e rebaixa os
+    que deixaram de bater (ex.: limiar elevado, dado de clima que chegou depois).
+    Rede de segurança para o que só mudaria num recálculo posterior."""
+    ids = [
+        row[0]
+        for row in db.query(Evento.id).filter(Evento.status.in_(("em_analise", "ativo"))).all()
+    ]
+    ajustados = 0
     for evento_id in ids:
         try:
+            antes = db.query(Evento.status).filter(Evento.id == evento_id).scalar()
             _, evento = aplicar_fusao_evento(db, evento_id, persistir=True)
-            if evento.status == "ativo":
-                promovidos += 1
+            if evento.status != antes:
+                ajustados += 1
         except ValueError:
             continue
-    return promovidos
+    return ajustados
