@@ -1188,8 +1188,6 @@ input, select, textarea { font-family: inherit; }
 .yt-canvas-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .yt-clear { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border: 0; border-radius: 6px; background: rgba(0,0,0,.65); color: #fff; font-size: 15px; line-height: 1; cursor: pointer; }
 .yt-clear:hover { background: var(--danger); }
-.yt-threshold { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; font-size: 11px; font-weight: 650; color: var(--text-secondary); }
-.yt-threshold input { grid-column: 1 / -1; width: 100%; accent-color: var(--gx-light); }
 #view-yolo-teste .btn-primary { width: 100%; }
 .yt-feedback { margin: 0; font-size: 11px; color: var(--text-muted); min-height: 15px; }
 .yt-feedback.error { color: var(--danger); }
@@ -4029,6 +4027,24 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .fx-label { font-size: 9px; }
   /* Tela baixa: as linhas nota × peso já mostram a conta; corta a prosa. */
   .fx-weights, .fx-just { display: none; }
+}
+
+/* ============================================================
+   LAYOUT — a secao "Criticidade" foi removida da interface.
+   No modo retrato, a "Evidencia visual" (normalmente no painel
+   direito) desce para o painel esquerdo, no lugar dela, e o
+   acesso ao painel direito some. O app.ts alterna o atributo
+   [hidden] de #left-evidence-dock e move a .section-evidence
+   entre os dois paineis.
+   ============================================================ */
+#criticidade-section { display: none !important; }
+
+#left-evidence-dock:not([hidden]) { display: block; }
+#left-evidence-dock .section-evidence { padding: 0; border: 0; }
+#left-evidence-dock .rp-evidence-img { aspect-ratio: 16 / 10; }
+
+@media (orientation: portrait) {
+  #btn-toggle-right, .right-toggle { display: none !important; }
 }
 
 /* Evita o fundo claro imposto pelo preenchimento automatico do navegador. */

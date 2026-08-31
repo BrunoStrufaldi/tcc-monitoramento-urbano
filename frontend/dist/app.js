@@ -760,6 +760,34 @@ function initComputerVision() {
     });
     void cvLoadStatus();
 }
+/* ============================================================
+   LAYOUT VERTICAL — no retrato, a "Evidência visual" (bloco do
+   painel direito) desce para o painel esquerdo, ocupando o
+   espaço da antiga Criticidade. Em paisagem volta ao seu lugar.
+   ============================================================ */
+function initEvidencePanelDock() {
+    const dock = document.getElementById("left-evidence-dock");
+    const evidence = document.querySelector(".section-evidence");
+    if (!dock || !evidence)
+        return;
+    const homeParent = evidence.parentElement;
+    const portrait = window.matchMedia("(orientation: portrait)");
+    const apply = () => {
+        if (portrait.matches) {
+            if (evidence.parentElement !== dock)
+                dock.appendChild(evidence);
+            dock.hidden = false;
+        }
+        else {
+            if (homeParent && evidence.parentElement !== homeParent) {
+                homeParent.appendChild(evidence);
+            }
+            dock.hidden = true;
+        }
+    };
+    apply();
+    portrait.addEventListener("change", apply);
+}
 let ytFile = null;
 let ytObjectUrl = null;
 let ytAnalyzing = false;
@@ -841,10 +869,12 @@ function ytDrawBoxes(deteccoes) {
         ctx.fillText(d.nome + " " + Math.round(d.confianca * 100) + "%", x1 + 3, Math.max(14, y1 - 4));
     });
 }
-async function ytChamarModelo(rota, threshold) {
+async function ytChamarModelo(rota) {
     const form = new FormData();
     form.append("file", ytFile);
-    const response = await apiFetch(rota + "?confianca_minima=" + threshold, { method: "POST", body: form });
+    // Sem parâmetro de confiança: o servidor aplica o limiar padrão de cada modelo
+    // e devolve o que reconheceu, com a confiança de cada caixa.
+    const response = await apiFetch(rota, { method: "POST", body: form });
     if (response.status === 503)
         return []; // modelo indisponível — tratado no resumo
     if (!response.ok)
@@ -858,11 +888,10 @@ async function ytAnalisar() {
     const botao = byId("yt-analyze");
     botao.disabled = true;
     ytSetFeedback("Rodando inferência YOLO nos dois modelos…");
-    const threshold = Number(byId("yt-threshold").value) / 100;
     try {
         const [incidentes, objetos] = await Promise.all([
-            ytChamarModelo("/deteccao/incidente", threshold),
-            ytChamarModelo("/deteccao/imagem", threshold),
+            ytChamarModelo("/deteccao/incidente"),
+            ytChamarModelo("/deteccao/imagem"),
         ]);
         const alagamentos = incidentes.filter((d) => d.nome === "alagamento");
         const veiculos = objetos.filter((d) => YT_CLASSES_VEICULO.includes(d.nome));
@@ -889,7 +918,7 @@ async function ytAnalisar() {
         verdict.innerHTML = '<strong>' + titulo + '</strong><span>' + escapeHtml(detalhe) + '</span>';
         const lista = byId("yt-detections");
         if (!todas.length) {
-            lista.innerHTML = '<p class="yt-empty">O YOLO não retornou nenhuma caixa nesta imagem com confiança ≥ ' + Math.round(threshold * 100) + '%.</p>';
+            lista.innerHTML = '<p class="yt-empty">O YOLO não retornou nenhuma caixa acima do limiar padrão dos modelos nesta imagem.</p>';
         }
         else {
             lista.innerHTML = '<div class="yt-list-head">Detecções do modelo (' + todas.length + ')</div>' +
@@ -948,8 +977,6 @@ function initYoloTester() {
             ytSetImage(file);
     });
     byId("yt-clear").addEventListener("click", ytClearImage);
-    const threshold = byId("yt-threshold");
-    threshold.addEventListener("input", () => { byId("yt-th-out").textContent = threshold.value + "%"; });
     byId("yt-analyze").addEventListener("click", () => { void ytAnalisar(); });
     void ytCarregarStatus();
 }
@@ -1669,7 +1696,7 @@ function initIncidentComposer() {
     const form = byId("incident-form");
     const feedback = byId("incident-feedback");
     const close = () => { modal.hidden = true; feedback.textContent = ""; feedback.className = "incident-feedback"; };
-    byId("btn-novo-evento").addEventListener("click", () => { modal.hidden = false; form.elements.namedItem("titulo")?.focus(); });
+    document.getElementById("btn-novo-evento")?.addEventListener("click", () => { modal.hidden = false; form.elements.namedItem("titulo")?.focus(); });
     byId("incident-close").addEventListener("click", close);
     modal.addEventListener("click", (event) => { if (event.target === modal)
         close(); });
@@ -2496,6 +2523,7 @@ function initMapa() {
         toggleLeftBtn.hidden = false;
         toggleLeftBtn.addEventListener("click", toggleLeftPanel);
     }
+    initEvidencePanelDock();
     if (!window.L) {
         const mapaDiv = byId("mapa");
         mapaDiv.innerHTML = '<div class="map-fallback">' +

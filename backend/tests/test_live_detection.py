@@ -88,6 +88,86 @@ def test_processar_frame_com_tomtom_disponivel_registra_duas_fontes(db_session: 
     assert chaves == {"indice_congestionamento": 3.0, "indice_congestionamento_tomtom": 8.0}
 
 
+def test_avaliar_gatilho_contagem_alta_cria_sem_tomtom():
+    criar, motivo = live_detection._avaliar_gatilho_transito(16, {"disponivel": False})
+    assert criar is True
+    assert "contagem alta" in motivo
+
+
+def test_avaliar_gatilho_via_fechada_cria():
+    criar, motivo = live_detection._avaliar_gatilho_transito(
+        13, {"disponivel": True, "via_fechada": True, "indice_congestionamento": 0.0}
+    )
+    assert criar is True
+    assert "fechada" in motivo
+
+
+def test_avaliar_gatilho_sem_tomtom_cai_na_contagem():
+    criar, motivo = live_detection._avaliar_gatilho_transito(13, {"disponivel": False})
+    assert criar is True
+    assert "sem TomTom" in motivo
+
+
+def test_avaliar_gatilho_tomtom_confirma_lentidao():
+    criar, motivo = live_detection._avaliar_gatilho_transito(
+        13, {"disponivel": True, "indice_congestionamento": 5.0}
+    )
+    assert criar is True
+    assert "confirma lentidão" in motivo
+
+
+def test_avaliar_gatilho_tomtom_veta_trecho_fluindo():
+    criar, motivo = live_detection._avaliar_gatilho_transito(
+        13, {"disponivel": True, "indice_congestionamento": 1.5}
+    )
+    assert criar is False
+    assert "fluindo" in motivo
+
+
+def _monta_camera_transito(db_session, tmp_path, monkeypatch, veiculos: int, fluxo_tomtom: dict):
+    monkeypatch.setattr(live_detection, "SessionLocal", lambda: _sessao_de_teste(db_session))
+    monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
+    monkeypatch.setattr(detection_events, "annotate_evidence", lambda content, _detections: (content, 10, 10))
+    monkeypatch.setattr(live_detection, "detectar_imagem_real", lambda _path, _threshold: _veiculos(veiculos))
+    monkeypatch.setattr(live_detection, "obter_fluxo_transito", lambda _lat, _lon: fluxo_tomtom)
+
+
+def test_processar_frame_veta_transito_quando_tomtom_indica_fluxo(db_session: Session, tmp_path, monkeypatch):
+    # 13 veículos (faixa intermediária) mas a TomTom diz que o trecho flui —
+    # provável contagem dos dois sentidos numa avenida larga. Não vira evento.
+    _monta_camera_transito(db_session, tmp_path, monkeypatch, 13, {"disponivel": True, "indice_congestionamento": 1.0})
+
+    from app.models.evento import Evento
+
+    live_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {})
+    assert db_session.query(Evento).count() == 0
+
+
+def test_processar_frame_cria_transito_quando_tomtom_confirma(db_session: Session, tmp_path, monkeypatch):
+    _monta_camera_transito(db_session, tmp_path, monkeypatch, 13, {"disponivel": True, "indice_congestionamento": 6.0})
+
+    from app.models.dado_contextual import DadoContextual
+    from app.models.evento import Evento
+
+    live_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {})
+
+    evento = db_session.query(Evento).one()
+    assert evento.tipo == "transito"
+    chaves = {c.chave for c in db_session.query(DadoContextual).filter(DadoContextual.evento_id == evento.id)}
+    assert chaves == {"indice_congestionamento", "indice_congestionamento_tomtom"}
+
+
+def test_processar_frame_contagem_alta_cria_mesmo_com_tomtom_baixo(db_session: Session, tmp_path, monkeypatch):
+    # 18 >= gx_transito_min_veiculos_confirmado (16): frame muito cheio dispensa
+    # a corroboração da TomTom.
+    _monta_camera_transito(db_session, tmp_path, monkeypatch, 18, {"disponivel": True, "indice_congestionamento": 1.0})
+
+    from app.models.evento import Evento
+
+    live_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {})
+    assert db_session.query(Evento).count() == 1
+
+
 def test_processar_frame_respeita_cooldown_de_transito(db_session: Session, tmp_path, monkeypatch):
     monkeypatch.setattr(live_detection, "SessionLocal", lambda: _sessao_de_teste(db_session))
     monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
