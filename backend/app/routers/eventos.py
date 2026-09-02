@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models.evento import Evento
 from app.models.localizacao import Localizacao
 from app.routers.tempo_real import _broadcast
-from app.ws_manager import WSMessage, manager as ws_manager
+from app.ws_manager import manager as ws_manager
 from app.schemas.evento import EventoCreate, EventoResponse, EventoUpdate
 from app.schemas.localizacao import LocalizacaoCreate
 from app.models.usuario import Usuario

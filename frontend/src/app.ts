@@ -99,65 +99,10 @@ type SessionActivity = {
 
 type ViewKey = "dashboard" | "eventos" | "alertas" | "regioes" | "fontes" | "fusao" | "cv" | "config";
 
-type RailItem = { view: ViewKey; label: string; svg: string };
-type RailSection = { key: string; title: string; items: RailItem[] };
-
-const RAIL_ICONS: Record<string, string> = {
-  eventos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
-  alertas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>',
-  regioes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>',
-  fontes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v14c0 1.66 3.13 3 7 3s7-1.34 7-3V5M5 12c0 1.66 3.13 3 7 3s7-1.34 7-3"/></svg>',
-  fusao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a10 10 0 110 20 10 10 0 010-20zm0 4v4l3 3"/></svg>',
-  cv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>',
-  config: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h.01a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h.01a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.01a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>',
-  dashboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
-};
-
-const RAIL_SECTIONS: RailSection[] = [
-  { key: "painel", title: "Visão Geral", items: [{ view: "dashboard", label: "Painel", svg: RAIL_ICONS.dashboard }] },
-  {
-    key: "operacoes", title: "Operações",
-    items: [
-      { view: "eventos", label: "Eventos", svg: RAIL_ICONS.eventos },
-      { view: "alertas", label: "Alertas", svg: RAIL_ICONS.alertas },
-      { view: "regioes", label: "Regiões", svg: RAIL_ICONS.regioes },
-      { view: "fontes", label: "Fontes", svg: RAIL_ICONS.fontes },
-    ],
-  },
-  {
-    key: "inteligencia", title: "Inteligência",
-    items: [
-      { view: "fusao", label: "Fusão de Dados", svg: RAIL_ICONS.fusao },
-      { view: "cv", label: "Visão Computacional", svg: RAIL_ICONS.cv },
-    ],
-  },
-  { key: "sistema", title: "Sistema", items: [{ view: "config", label: "Configurações", svg: RAIL_ICONS.config }] },
-  {
-    key: "relatorios", title: "Relatórios",
-    items: [
-      { view: "eventos", label: "Eventos monitorados", svg: RAIL_ICONS.eventos },
-      { view: "fusao", label: "Auditoria Data Fusion", svg: RAIL_ICONS.fusao },
-    ],
-  },
-];
-
-const VIEW_TO_RAIL: Record<ViewKey, string> = {
-  dashboard: "painel",
-  eventos: "operacoes",
-  alertas: "operacoes",
-  regioes: "operacoes",
-  fontes: "operacoes",
-  fusao: "inteligencia",
-  cv: "inteligencia",
-  config: "sistema",
-};
 
 declare global {
   interface Window {
     CONFIG: AppConfig;
-    GOOGLE_MAPS_API_KEY?: string;
-    initMapa: () => void;
-    google: any;
     L: any;
   }
 }
@@ -188,7 +133,6 @@ let markerRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 const markersById = new Map<number, any>();
 const transientMarkerLayers = new Set<any>();
 const activeSeverities = new Set<SeverityKey>(Object.keys(SEVERITIES) as SeverityKey[]);
-let railPanelOpen = false;
 let activeView: ViewKey = "dashboard";
 let rightPanelOpen = false;
 let leftPanelOpen = false;
@@ -207,7 +151,12 @@ let reconnectAttempt = 0;
 const WS_MAX_RECONNECT = 8;
 const WS_BASE_DELAY_MS = 1000;
 const POLLING_INTERVAL_MS = 15000;
+// Rede de segurança: mesmo com WS/SSE vivos, reconcilia a lista com a API de
+// tempos em tempos. Qualquer mensagem perdida (socket caído entre o create e o
+// remove, remoção feita fora do broadcast) deixaria evento fantasma na tela.
+const RESYNC_INTERVAL_MS = 120000;
 let pingTimer: ReturnType<typeof setInterval> | null = null;
+let resyncTimer: ReturnType<typeof setInterval> | null = null;
 let cvSelectedFile: File | null = null;
 let cvPreviewUrl: string | null = null;
 let cvCameraStream: MediaStream | null = null;
@@ -285,6 +234,7 @@ function clearAllConnections(): void {
   if (sseConnection) { sseConnection.close(); sseConnection = null; }
   if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
   if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+  if (resyncTimer) { clearInterval(resyncTimer); resyncTimer = null; }
 }
 
 function connectWebSocket(): void {
@@ -310,6 +260,10 @@ function connectWebSocket(): void {
     updateConnectionStatus();
     logSessionActivity("sincronizacao", "Canal WebSocket autenticado");
     if (loadedEvents.length) void loadRightPanelAlerts();
+    // Reconecta ≠ continua de onde parou: enquanto o canal esteve fora, eventos
+    // podem ter sido criados e removidos sem a tela saber.
+    void resyncEvents();
+    startResyncTimer();
     if (pingTimer) clearInterval(pingTimer);
     pingTimer = setInterval(() => {
       if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
@@ -376,6 +330,8 @@ function fallbackToSSE(): void {
     connectionMode = "sse";
     reconnectAttempt = 0;
     updateConnectionStatus();
+    void resyncEvents();
+    startResyncTimer();
   };
 
   sseConnection.onerror = () => {
@@ -395,6 +351,36 @@ function fallbackToPolling(): void {
   pollingTimer = setInterval(() => {
     void loadEvents();
   }, POLLING_INTERVAL_MS);
+}
+
+function startResyncTimer(): void {
+  if (resyncTimer) clearInterval(resyncTimer);
+  resyncTimer = setInterval(() => { void resyncEvents(); }, RESYNC_INTERVAL_MS);
+}
+
+/** Reconciliação silenciosa com a API: deixa a lista exatamente igual à do
+ * backend, sem o "flash" de carregamento do loadEvents e sem trocar o evento
+ * selecionado por conta própria. */
+async function resyncEvents(): Promise<void> {
+  try {
+    const remotos = await fetchEvents();
+    const idsRemotos = new Set(remotos.map((event) => event.id));
+    const sumiram = loadedEvents.filter((event) => !idsRemotos.has(event.id)).length;
+    if (!sumiram && remotos.length === loadedEvents.length) return;
+    loadedEvents = remotos;
+    updateMetrics(loadedEvents);
+    applyMarkers(false);
+    renderEventList(loadedEvents);
+    if (selectedEventId != null && !idsRemotos.has(selectedEventId)) {
+      selectedEventId = null;
+      clearEventEvidence();
+      renderSelectedEvent(null);
+    }
+    updateLastUpdate();
+  } catch {
+    // Silencioso de propósito: o canal de tempo real e o polling já sinalizam
+    // API indisponível; um resync que falha não deve limpar a tela.
+  }
 }
 
 function fallbackReconnect(): void {
@@ -528,10 +514,6 @@ function setApiStatus(ok: boolean, message: string): void {
   element.textContent = message;
   element.classList.toggle("ok", ok);
   element.classList.toggle("erro", !ok);
-}
-
-function loadGoogleMaps(): void {
-  initMapa();
 }
 
 type CvDetection = { nome: string; confianca: number; severidade: string; tipo: string; bbox: [number, number, number, number]; classe_modelo?: string | null; duplicada?: boolean };
@@ -2122,48 +2104,6 @@ function updateLastUpdate(): void {
   element.textContent = "Sinc. " + now;
 }
 
-function renderRailPanel(key: string): void {
-  const section = RAIL_SECTIONS.find((s) => s.key === key);
-  if (!section) return;
-  byId("rail-panel-title").textContent = section.title;
-  byId("rail-panel-items").innerHTML = section.items.map((item) =>
-    '<button class="rail-item' + (activeView === item.view ? " active" : "") + '" data-view="' + item.view + '">' +
-      '<span class="rail-item-icon">' + item.svg + '</span>' +
-      '<span class="rail-item-label">' + item.label + '</span>' +
-    '</button>'
-  ).join("");
-  document.querySelectorAll<HTMLButtonElement>("#rail-panel-items .rail-item").forEach((el) => {
-    el.addEventListener("click", () => {
-      switchView(el.dataset.view as ViewKey);
-      closeRailPanel();
-    });
-  });
-}
-
-function openRailPanel(key: string): void {
-  const panel = byId("rail-panel");
-  if (railPanelOpen && panel.dataset.section === key) return;
-  railPanelOpen = true;
-  renderRailPanel(key);
-  panel.hidden = false;
-  panel.dataset.section = key;
-  panel.classList.remove("rail-panel-leave");
-  panel.classList.add("rail-panel-open");
-  setRailButtonActive(key);
-}
-
-function closeRailPanel(): void {
-  if (!railPanelOpen) return;
-  railPanelOpen = false;
-  const panel = byId("rail-panel");
-  panel.classList.remove("rail-panel-open");
-  panel.classList.add("rail-panel-leave");
-  window.setTimeout(() => {
-    if (!railPanelOpen) panel.hidden = true;
-  }, 180);
-  setRailButtonActive(activeView);
-}
-
 function toggleRightPanel(): void {
   const panel = byId("right-panel");
   const btn = document.getElementById("btn-toggle-right");
@@ -2350,7 +2290,7 @@ async function loadEventEvidence(eventId: number): Promise<void> {
       return '<div class="rp-evidence-card">' +
         (cameraLabel || verified ? '<div class="rp-camera-head"><span>' + escapeHtml(cameraLabel || "Evidência visual") + '</span>' + (verified ? '<strong>VERIFICADO</strong>' : '') + '</div>' : '') +
         (hasImage ? '<button type="button" class="rp-evidence-img rp-evidence-expand" data-evidence-image="' + escapeHtml(imageSrc) + '" data-evidence-alt="Evidência ' + escapeHtml(ev.tipo) + '" aria-label="Ampliar evidência visual"><img src="' + escapeHtml(imageSrc) + '" alt="Evidência visual" loading="lazy" onerror="this.parentElement.innerHTML=\'<span class=rp-img-fallback>Imagem indisponível</span>\'"></button>' : '<div class="rp-evidence-img"><span class="rp-img-fallback">Sem imagem disponível</span></div>') +
-        '<div class="rp-evidence-toolbar"><button type="button" class="rp-evidence-open" data-evidence-image="' + escapeHtml(imageSrc) + '" data-evidence-alt="Evidência ' + escapeHtml(ev.tipo) + '">Ampliar</button><button type="button" class="rp-evidence-details">Ver detalhes</button></div>' +
+        '<div class="rp-evidence-toolbar"><button type="button" class="rp-evidence-open" data-evidence-image="' + escapeHtml(imageSrc) + '" data-evidence-alt="Evidência ' + escapeHtml(ev.tipo) + '">Ampliar</button></div>' +
         '<div class="rp-evidence-info">' +
           '<div class="rp-evidence-row rp-evidence-row--tipo"><span class="rp-evidence-label">Tipo</span><span class="rp-evidence-val">' + escapeHtml(formatStatus(ev.tipo)) + '</span></div>' +
           (ev.modelo_ia ? '<div class="rp-evidence-row rp-evidence-row--modelo"><span class="rp-evidence-label">Modelo</span><span class="rp-evidence-val">' + escapeHtml(ev.modelo_ia) + '</span></div>' : '') +
@@ -2369,9 +2309,6 @@ async function loadEventEvidence(eventId: number): Promise<void> {
     });
     container.querySelectorAll<HTMLButtonElement>(".rp-evidence-open").forEach((button) => {
       button.addEventListener("click", () => openEvidenceViewer(button.dataset.evidenceImage || "", button.dataset.evidenceAlt || "Evidência visual"));
-    });
-    container.querySelectorAll<HTMLButtonElement>(".rp-evidence-details").forEach((button) => {
-      button.addEventListener("click", () => openEventDetail(eventId));
     });
   } catch {
     container.innerHTML = '<div class="right-panel-empty rp-error">' +
@@ -2442,12 +2379,6 @@ function renderRightPanelActivity(): void {
   }).join("");
 }
 
-function setRailButtonActive(key: string): void {
-  document.querySelectorAll<HTMLButtonElement>(".rail-btn").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.rail === key);
-  });
-}
-
 function initRail(): void {
   // A barra de ícones foi esvaziada; a navegação será reconstruída.
   // Mantém apenas o atalho "Ver todos" do painel de alertas à direita.
@@ -2460,9 +2391,6 @@ function switchView(key: ViewKey): void {
     view.hidden = view.id !== "view-" + key;
     view.classList.toggle("view-active", view.id === "view-" + key);
   });
-  const railKey = VIEW_TO_RAIL[key];
-  setRailButtonActive(railKey);
-  if (railPanelOpen) renderRailPanel(railKey);
   if (key === "regioes") void loadRegions();
   if (key === "fontes") void loadSources();
   if (key === "alertas") void loadNotifications();
@@ -2580,18 +2508,6 @@ function refreshFeeds(): void {
   void loadRegions();
   void loadSources();
   void loadNotifications();
-}
-
-function mapStyles(): any[] {
-  return [
-    { featureType: "poi", stylers: [{ visibility: "off" }] },
-    { featureType: "transit", stylers: [{ visibility: "off" }] },
-    { elementType: "geometry", stylers: [{ color: "#1a1f25" }] },
-    { featureType: "road", elementType: "geometry", stylers: [{ color: "#252b33" }] },
-    { featureType: "water", elementType: "geometry", stylers: [{ color: "#0d1117" }] },
-    { elementType: "labels.text.fill", stylers: [{ color: "#8a9098" }] },
-    { elementType: "labels.text.stroke", stylers: [{ color: "#0d1117" }] },
-  ];
 }
 
 function initMapa(): void {
@@ -2764,7 +2680,6 @@ function initMapa(): void {
   connectWebSocket();
 }
 
-window.initMapa = initMapa;
-loadGoogleMaps();
+initMapa();
 
 export {};

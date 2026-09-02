@@ -4,6 +4,10 @@ O painel do MotSP é um quadro operacional "ao vivo": um evento só faz sentido
 enquanto a detecção que o originou é recente. Este módulo apaga em definitivo
 tudo que passou da janela (``GX_EVENTO_JANELA_MINUTOS``) — evento, evidências,
 dados contextuais, notificações e a localização 1:1 criada para ele.
+
+Toda remoção é propagada como ``evento_removido`` em WS/SSE: o painel só tira um
+evento da lista quando recebe essa mensagem, então apagar em silêncio deixava
+cópias fantasma acumulando na tela (contador acima do que existe no banco).
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.broadcast import schedule_coroutine
 from app.config import settings
 from app.models.dado_contextual import DadoContextual
 from app.models.evento import Evento
@@ -20,11 +25,20 @@ from app.models.evidencia_visual import EvidenciaVisual
 from app.models.localizacao import Localizacao
 from app.models.log_sistema import LogSistema
 from app.models.notificacao import Notificacao
+from app.routers.tempo_real import _broadcast
+from app.ws_manager import manager as ws_manager
 
 
 def limite_da_janela(janela_minutos: int | None = None) -> datetime:
     minutos = settings.gx_evento_janela_minutos if janela_minutos is None else janela_minutos
     return datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=minutos)
+
+
+def _publicar_remocoes(ids: list[int]) -> None:
+    for evento_id in ids:
+        payload = {"id": evento_id}
+        schedule_coroutine(_broadcast("evento_removido", payload))
+        schedule_coroutine(ws_manager.broadcast_evento("evento_removido", payload))
 
 
 def _apagar_eventos(db: Session, ids: list[int]) -> None:
@@ -44,6 +58,7 @@ def _apagar_eventos(db: Session, ids: list[int]) -> None:
         if orfas:
             db.query(Localizacao).filter(Localizacao.id.in_(orfas)).delete(synchronize_session=False)
     db.commit()
+    _publicar_remocoes(ids)
 
 
 def colapsar_eventos_duplicados(db: Session) -> int:
