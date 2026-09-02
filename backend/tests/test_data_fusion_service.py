@@ -7,7 +7,6 @@ manuais (fonte não-YOLO) nunca são rebaixados."""
 
 from decimal import Decimal
 
-import pytest
 from sqlalchemy.orm import Session
 
 from app.config import settings
