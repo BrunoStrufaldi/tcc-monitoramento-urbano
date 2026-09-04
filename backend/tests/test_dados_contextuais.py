@@ -3,12 +3,6 @@
 from fastapi.testclient import TestClient
 
 
-def _criar_evento(client: TestClient) -> int:
-    r = client.post(
-        "/eventos",
-        json={"titulo": "Evento teste", "tipo": "alagamento", "latitude": -23.55, "longitude": -46.63},
-    )
-    return r.json()["id"]
 
 
 def test_listar_dados_contextuais_vazio(client: TestClient):
@@ -17,8 +11,8 @@ def test_listar_dados_contextuais_vazio(client: TestClient):
     assert response.json() == []
 
 
-def test_criar_dado_contextual(client: TestClient):
-    evento_id = _criar_evento(client)
+def test_criar_dado_contextual(client: TestClient, criar_evento):
+    evento_id = criar_evento().id
     payload = {
         "evento_id": evento_id,
         "categoria": "clima",
@@ -52,8 +46,8 @@ def test_criar_dado_contextual_campos_obrigatorios(client: TestClient):
     assert response.status_code == 422
 
 
-def test_obter_dado_contextual_por_id(client: TestClient):
-    evento_id = _criar_evento(client)
+def test_obter_dado_contextual_por_id(client: TestClient, criar_evento):
+    evento_id = criar_evento().id
     criar = client.post(
         "/dados-contextuais",
         json={"evento_id": evento_id, "categoria": "transito", "chave": "velocidade", "valor_numerico": 20},
@@ -90,8 +84,8 @@ def test_delete_dado_contextual_inexistente(client: TestClient):
     assert response.status_code == 404
 
 
-def test_filtrar_por_evento(client: TestClient):
-    evento_id = _criar_evento(client)
+def test_filtrar_por_evento(client: TestClient, criar_evento):
+    evento_id = criar_evento().id
     client.post(
         "/dados-contextuais",
         json={"evento_id": evento_id, "categoria": "clima", "chave": "temp", "valor_numerico": 25},

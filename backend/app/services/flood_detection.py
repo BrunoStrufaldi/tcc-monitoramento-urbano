@@ -7,7 +7,7 @@ Civil — que podia ter semanas ou meses de defasagem entre o ocorrido e a
 publicação. Decisão do grupo foi manter só dado em tempo real; sem GeoSampa,
 a única forma de continuar detectando alagamento de forma autônoma é rodar o
 modelo dedicado de incidentes direto nas câmeras, do mesmo jeito que
-``live_detection.py`` já faz pra trânsito (mesmo catálogo de 11 câmeras,
+``live_detection.py`` já faz pra trânsito (mesmo catálogo de 10 câmeras,
 mesma checagem de frescor de frame via
 ``cet_camera_catalog.frame_esta_desatualizado`` — sem ela um evento "ao
 vivo" podia sair de uma foto de meses atrás, foi exatamente o bug achado na

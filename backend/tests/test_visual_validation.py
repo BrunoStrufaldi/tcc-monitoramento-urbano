@@ -52,13 +52,11 @@ def test_frame_persistido_cria_evidencia_e_recalcula_fusao(client, db_session, m
     assert db_session.query(EvidenciaVisual).filter(EvidenciaVisual.evento_id == event.id).count() == 1
 
 
-def test_frame_websocket_autenticado(client, monkeypatch):
+def test_frame_websocket(client, monkeypatch):
     monkeypatch.setattr(visual_validation_service, "_detector", _detector)
     visual_validation_service._recent.clear()
-    token = client.headers["Authorization"].split(" ", 1)[1]
     import base64
     with client.websocket_connect("/ws/cv") as socket:
-        socket.send_json({"tipo": "auth", "token": token})
-        assert socket.receive_json()["tipo"] == "auth_ok"
+        assert socket.receive_json()["tipo"] == "pronto"
         socket.send_json({"tipo": "frame", "frame_id": "ws-1", "mime": "image/jpeg", "conteudo": base64.b64encode(b"bytes").decode(), "threshold": 0.5})
         assert socket.receive_json()["tipo"] == "frame_resultado"

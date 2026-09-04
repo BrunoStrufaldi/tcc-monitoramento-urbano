@@ -124,6 +124,41 @@ def test_avaliar_gatilho_tomtom_veta_trecho_fluindo():
     assert "fluindo" in motivo
 
 
+def test_avaliar_gatilho_tomtom_sustenta_contagem_baixa():
+    """Faixa corroborada: 6 veículos é pouco para criar sozinho (mínimo 12),
+    mas a TomTom mede o trecho parado — caso do rush noturno, em que o JPEG
+    escuro da câmera derruba a contagem do YOLO."""
+    criar, motivo = live_detection._avaliar_gatilho_transito(
+        6, {"disponivel": True, "indice_congestionamento": 5.5}
+    )
+    assert criar is True
+    assert "sustenta a contagem baixa" in motivo
+
+
+def test_avaliar_gatilho_contagem_baixa_sem_tomtom_nao_cria():
+    """Sem a fonte que corrobora, a faixa baixa não pode cair na contagem —
+    seria criar evento de trânsito com 6 carros e nada confirmando."""
+    criar, motivo = live_detection._avaliar_gatilho_transito(6, {"disponivel": False})
+    assert criar is False
+    assert "nada a corroborar" in motivo
+
+
+def test_avaliar_gatilho_contagem_baixa_com_tomtom_sem_indice_nao_cria():
+    criar, motivo = live_detection._avaliar_gatilho_transito(
+        6, {"disponivel": True, "indice_congestionamento": None}
+    )
+    assert criar is False
+    assert "nada a corroborar" in motivo
+
+
+def test_avaliar_gatilho_contagem_baixa_com_trecho_fluindo_nao_cria():
+    criar, motivo = live_detection._avaliar_gatilho_transito(
+        6, {"disponivel": True, "indice_congestionamento": 1.0}
+    )
+    assert criar is False
+    assert "fluindo" in motivo
+
+
 def _monta_camera_transito(db_session, tmp_path, monkeypatch, veiculos: int, fluxo_tomtom: dict):
     monkeypatch.setattr(live_detection, "SessionLocal", lambda: _sessao_de_teste(db_session))
     monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
@@ -155,6 +190,55 @@ def test_processar_frame_cria_transito_quando_tomtom_confirma(db_session: Sessio
     assert evento.tipo == "transito"
     chaves = {c.chave for c in db_session.query(DadoContextual).filter(DadoContextual.evento_id == evento.id)}
     assert chaves == {"indice_congestionamento", "indice_congestionamento_tomtom"}
+
+
+def test_processar_frame_cria_na_faixa_corroborada_pela_tomtom(db_session: Session, tmp_path, monkeypatch):
+    """6 veículos (abaixo do mínimo de 12) numa via que a TomTom mede parada:
+    antes o portão de contagem barrava o frame antes de consultá-la."""
+    _monta_camera_transito(db_session, tmp_path, monkeypatch, 6, {"disponivel": True, "indice_congestionamento": 5.5})
+
+    from app.models.evento import Evento
+
+    cooldown: dict[str, float] = {}
+    live_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, cooldown)
+
+    assert db_session.query(Evento).count() == 1
+    assert "transito" in cooldown
+
+
+def test_processar_frame_ignora_contagem_abaixo_do_piso(db_session: Session, tmp_path, monkeypatch):
+    """3 veículos: abaixo do piso nem a TomTom é consultada, por mais parado
+    que ela diga que o trecho está — não há evidência visual que sustente."""
+    consultas: list[int] = []
+
+    def _tomtom(_lat, _lon):
+        consultas.append(1)
+        return {"disponivel": True, "indice_congestionamento": 9.0}
+
+    _monta_camera_transito(db_session, tmp_path, monkeypatch, 3, {})
+    monkeypatch.setattr(live_detection, "obter_fluxo_transito", _tomtom)
+
+    from app.models.evento import Evento
+
+    live_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {})
+
+    assert db_session.query(Evento).count() == 0
+    assert consultas == []
+
+
+def test_processar_frame_veto_da_tomtom_nao_queima_cooldown_longo(db_session: Session, tmp_path, monkeypatch):
+    """Veto da TomTom só aplica o cooldown curto: a via pode travar dez minutos
+    depois e a câmera precisa poder falar de novo antes da meia hora."""
+    _monta_camera_transito(db_session, tmp_path, monkeypatch, 6, {"disponivel": True, "indice_congestionamento": 1.0})
+
+    from app.models.evento import Evento
+
+    cooldown: dict[str, float] = {}
+    live_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, cooldown)
+
+    assert db_session.query(Evento).count() == 0
+    assert "transito" not in cooldown
+    assert "transito_veto" in cooldown
 
 
 def test_processar_frame_contagem_alta_cria_mesmo_com_tomtom_baixo(db_session: Session, tmp_path, monkeypatch):

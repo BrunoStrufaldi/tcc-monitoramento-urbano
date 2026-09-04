@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from app.models.fonte_dados import FonteDados
     from app.models.localizacao import Localizacao
     from app.models.log_sistema import LogSistema
-    from app.models.notificacao import Notificacao
     from app.models.regiao import Regiao
 
 
@@ -42,7 +41,6 @@ class Evento(Base):
     fonte: Mapped["FonteDados | None"] = relationship(back_populates="eventos")
     evidencias: Mapped[list["EvidenciaVisual"]] = relationship(back_populates="evento")
     dados_contextuais: Mapped[list["DadoContextual"]] = relationship(back_populates="evento")
-    notificacoes: Mapped[list["Notificacao"]] = relationship(back_populates="evento")
     logs: Mapped[list["LogSistema"]] = relationship(back_populates="evento")
 
     @property

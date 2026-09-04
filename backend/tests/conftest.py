@@ -1,7 +1,7 @@
 """Fixtures compartilhadas para testes — usa SQLite em memória."""
 
 from collections.abc import Generator
-import secrets
+from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,16 +13,15 @@ import app.models  # noqa: F401 — garante que todos os models registram no Bas
 from app.config import settings
 from app.database import Base, get_db
 from app.main import app as fastapi_app
-from app.models.usuario import Usuario
-from app.security import create_access_token, hash_password
+from app.models.evento import Evento
+from app.models.evidencia_visual import EvidenciaVisual
+from app.models.localizacao import Localizacao
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
-settings.auth_secret_key = secrets.token_urlsafe(32)
 # Nunca deixa o .env local ligar as threads de monitoramento contínuo durante
 # os testes — elas fariam chamadas de rede reais (câmera CET) a cada
 # TestClient criado.
 settings.gx_monitoramento_ativo = False
-TEST_PASSWORD_HASH = hash_password("senha-de-teste-segura")
 
 engine = create_engine(
     TEST_DATABASE_URL,
@@ -63,12 +62,56 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
         finally:
             pass
 
-    admin = Usuario(nome_usuario="admin-test", senha_hash=TEST_PASSWORD_HASH, perfil="administrador")
-    db_session.add(admin)
-    db_session.commit()
-    token, _ = create_access_token(admin)
     fastapi_app.dependency_overrides[get_db] = _override_get_db
     with TestClient(fastapi_app) as c:
-        c.headers.update({"Authorization": "Bearer " + token})
         yield c
     fastapi_app.dependency_overrides.clear()
+
+
+# --- Fábricas -----------------------------------------------------------
+# O painel é somente leitura: não existem rotas de criação. Os testes montam
+# os dados direto no banco, que é como o sistema real os produz (a detecção
+# em ``services/detection_events.py`` grava pelo mesmo caminho).
+
+
+@pytest.fixture
+def criar_evento(db_session: Session):
+    """Cria um evento (e a localização exigida pela FK) e devolve o objeto."""
+
+    def _criar(**campos) -> Evento:
+        localizacao = Localizacao(
+            latitude=float(campos.pop("latitude", -23.5505)),
+            longitude=float(campos.pop("longitude", -46.6333)),
+            endereco=campos.pop("endereco", "Endereço de teste"),
+        )
+        db_session.add(localizacao)
+        db_session.flush()
+
+        campos.setdefault("titulo", "Evento de teste")
+        campos.setdefault("tipo", "alagamento")
+        if "confianca" in campos and campos["confianca"] is not None:
+            campos["confianca"] = Decimal(str(campos["confianca"]))
+        evento = Evento(localizacao_id=localizacao.id, **campos)
+        db_session.add(evento)
+        db_session.commit()
+        db_session.refresh(evento)
+        return evento
+
+    return _criar
+
+
+@pytest.fixture
+def criar_evidencia(db_session: Session):
+    """Cria uma evidência visual como a detecção grava."""
+
+    def _criar(evento_id: int, **campos) -> EvidenciaVisual:
+        campos.setdefault("tipo", "imagem")
+        if "confianca" in campos and campos["confianca"] is not None:
+            campos["confianca"] = Decimal(str(campos["confianca"]))
+        evidencia = EvidenciaVisual(evento_id=evento_id, **campos)
+        db_session.add(evidencia)
+        db_session.commit()
+        db_session.refresh(evidencia)
+        return evidencia
+
+    return _criar

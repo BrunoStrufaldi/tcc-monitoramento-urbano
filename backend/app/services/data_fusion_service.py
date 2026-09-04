@@ -1,5 +1,5 @@
 import sys
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from sqlalchemy.orm import Session, joinedload
@@ -20,6 +20,25 @@ from data_fusion.models import (  # noqa: E402
     FonteInfo,
     ResultadoFusao,
 )
+
+_CENTESIMO = Decimal("0.01")
+
+
+def atinge_limiar_ativo(confiabilidade: float) -> bool:
+    """Decide pela confiabilidade **exibida**, não pelo float cru.
+
+    A interface mostra a confiabilidade como percentual inteiro, então um
+    evento de 0.7977 aparece como "80%" — e a regra "80% na tela vira ativo"
+    mentia, porque 0.7977 < 0.80. Arredondar antes de comparar alinha a
+    decisão ao número que o operador vê. ROUND_HALF_UP sobre a representação
+    decimal do float reproduz o critério do Intl.NumberFormat usado no front
+    (ver ``atingeLimiarAtivo`` em frontend/src/fusion-format.ts); o limiar
+    entra cru, para que um valor configurado entre centésimos continue valendo
+    exatamente o que foi configurado.
+    """
+    exibida = Decimal(str(confiabilidade)).quantize(_CENTESIMO, rounding=ROUND_HALF_UP)
+    return exibida >= Decimal(str(settings.gx_fusion_auto_ativo_min))
+
 
 _FUSION_LOAD = (
     joinedload(Evento.fonte),
@@ -89,20 +108,17 @@ def aplicar_fusao_evento(
 
     if persistir:
         evento.confianca = Decimal(str(resultado.confiabilidade))
-        limiar = settings.gx_fusion_auto_ativo_min
+        atinge = atinge_limiar_ativo(resultado.confiabilidade)
         automatico = bool(evento.fonte and evento.fonte.tipo == "yolo")
         promovido = False
         rebaixado = False
-        if (
-            evento.status == "em_analise"
-            and resultado.confiabilidade >= limiar
-        ):
+        if evento.status == "em_analise" and atinge:
             evento.status = "ativo"
             promovido = True
         elif (
             evento.status == "ativo"
             and automatico
-            and resultado.confiabilidade < limiar
+            and not atinge
         ):
             # Evento YOLO só chega a "ativo" por promoção automática (a
             # confirmação humana cria "em_analise"). Se a confiabilidade não

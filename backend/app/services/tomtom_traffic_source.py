@@ -9,16 +9,17 @@ institucional, ao contrário do Waze for Cities). Requer ``TOMTOM_API_KEY``.
 """
 
 import json
-import os
 from urllib.parse import urlencode
 from urllib.request import urlopen
+
+from app.config import settings
 
 _URL = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
 
 
 def obter_fluxo_transito(latitude: float, longitude: float) -> dict:
     """Consulta a velocidade atual x livre no trecho mais próximo do ponto."""
-    api_key = os.getenv("TOMTOM_API_KEY")
+    api_key = settings.tomtom_api_key
     if not api_key:
         return {"disponivel": False, "fonte": "TomTom Traffic", "erro": "TOMTOM_API_KEY não configurada"}
 

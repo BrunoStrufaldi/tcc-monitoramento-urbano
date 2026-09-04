@@ -19,7 +19,6 @@ class LogSistema(Base):
     mensagem: Mapped[str] = mapped_column(Text, nullable=False)
     evento_id: Mapped[int | None] = mapped_column(ForeignKey("eventos.id", ondelete="SET NULL"))
     contexto: Mapped[dict[str, Any] | None] = mapped_column(JSON)
-    ip_origem: Mapped[str | None] = mapped_column(String(45))
     criado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     evento: Mapped["Evento | None"] = relationship(back_populates="logs")

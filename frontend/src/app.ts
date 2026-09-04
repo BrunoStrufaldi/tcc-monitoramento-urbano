@@ -1,4 +1,4 @@
-import { formatFusionEquation, formatFusionPercent, fusionComponentLabel, type FusionDisplayComponent } from "./fusion-format.js";
+import { atingeLimiarAtivo, formatFusionEquation, formatFusionPercent, fusionComponentLabel, type FusionDisplayComponent } from "./fusion-format.js";
 import { detailEmptyMessage, detailValue } from "./event-detail-format.js";
 import { buildRouteUrl, isResolvedStatus } from "./event-actions-format.js";
 
@@ -55,19 +55,6 @@ type DataSource = {
   ativo: boolean;
 };
 
-type UrbanNotification = {
-  id: number;
-  evento_id: number;
-  canal: string;
-  destinatario?: string | null;
-  titulo: string;
-  mensagem: string;
-  status: string;
-  tentativas: number;
-  erro_detalhe?: string | null;
-  criado_em?: string | null;
-};
-
 type FusionResult = { evento_id: number; confiabilidade: number; nivel: string; componentes: FusionDisplayComponent[]; calculado_em: string; limiar_ativo?: number };
 type ContextData = { categoria: string; chave: string; valor_texto?: string | null; valor_numerico?: number | null; unidade?: string | null; coletado_em: string };
 type SystemLog = { nivel: string; modulo: string; mensagem: string; contexto?: Record<string, unknown> | null; criado_em: string };
@@ -90,14 +77,14 @@ type EvidenciaVisual = {
 };
 
 type SessionActivity = {
-  kind: "evento_criado" | "evento_atualizado" | "notificacao" | "sincronizacao";
+  kind: "evento_criado" | "evento_atualizado" | "sincronizacao";
   message: string;
   timestamp: number;
   eventId?: number;
   severity?: string;
 };
 
-type ViewKey = "dashboard" | "eventos" | "alertas" | "regioes" | "fontes" | "fusao" | "cv" | "config";
+type ViewKey = "dashboard" | "eventos" | "regioes" | "fontes" | "fusao" | "cv" | "config";
 
 
 declare global {
@@ -121,7 +108,6 @@ let loadedEvents: UrbanEvent[] = [];
 let trainingRegions: UrbanRegion[] = [];
 let selectedMarkerId: number | null = null;
 let dataSources: DataSource[] = [];
-let notifications: UrbanNotification[] = [];
 let searchTerm = "";
 let selectedEventId: number | null = null;
 let detailEventId: number | null = null;
@@ -172,28 +158,16 @@ const evidenceObjectUrls = new Set<string>();
 
 const byId = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
-function accessToken(): string | null {
-  try { return sessionStorage.getItem("gx_access_token"); } catch { return null; }
-}
-
 async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const headers = new Headers(init.headers);
-  const token = accessToken();
-  if (token) headers.set("Authorization", "Bearer " + token);
-  const request = { ...init, headers };
-  let response: Response;
+  const request = { ...init, headers: new Headers(init.headers) };
   try {
-    response = await fetch(window.CONFIG.API_BASE_URL + path, request);
+    return await fetch(window.CONFIG.API_BASE_URL + path, request);
   } catch (error) {
     const method = String(init.method || "GET").toUpperCase();
     if (method !== "GET" && method !== "HEAD") throw error;
     await new Promise((resolve) => window.setTimeout(resolve, 250));
-    response = await fetch(window.CONFIG.API_BASE_URL + path, request);
+    return await fetch(window.CONFIG.API_BASE_URL + path, request);
   }
-  if (response.status === 401 && token) {
-    try { sessionStorage.removeItem("gx_access_token"); } catch { /* armazenamento indisponível */ }
-  }
-  return response;
 }
 
 function escapeHtml(value: unknown): string {
@@ -239,7 +213,6 @@ function clearAllConnections(): void {
 
 function connectWebSocket(): void {
   clearAllConnections();
-  const token = accessToken() || "";
   const wsUrl = window.CONFIG.API_BASE_URL.replace(/^http/, "ws") + "/ws";
   try {
     wsConnection = new WebSocket(wsUrl);
@@ -250,15 +223,11 @@ function connectWebSocket(): void {
     return;
   }
 
-  wsConnection.onopen = () => {
-    wsConnection?.send(JSON.stringify({ tipo: "auth", token }));
-  };
-
   const startHeartbeat = () => {
     connectionMode = "ws";
     reconnectAttempt = 0;
     updateConnectionStatus();
-    logSessionActivity("sincronizacao", "Canal WebSocket autenticado");
+    logSessionActivity("sincronizacao", "Canal WebSocket conectado");
     if (loadedEvents.length) void loadRightPanelAlerts();
     // Reconecta ≠ continua de onde parou: enquanto o canal esteve fora, eventos
     // podem ter sido criados e removidos sem a tela saber.
@@ -275,7 +244,7 @@ function connectWebSocket(): void {
   wsConnection.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
-      if (msg.tipo === "auth_ok") { startHeartbeat(); return; }
+      if (msg.tipo === "pronto") { startHeartbeat(); return; }
       if (msg.tipo === "pong") return;
       handleRealtimeMessage(msg.tipo, msg.dados);
     } catch { /* ignore malformed */ }
@@ -318,12 +287,6 @@ function fallbackToSSE(): void {
   sseConnection.addEventListener("evento_removido", (e) => {
     reconnectAttempt = 0;
     handleRealtimeMessage("evento_removido", JSON.parse(e.data));
-  });
-  sseConnection.addEventListener("notificacao_criada", (e) => {
-    handleRealtimeMessage("notificacao_criada", JSON.parse(e.data));
-  });
-  sseConnection.addEventListener("notificacao_atualizada", (e) => {
-    handleRealtimeMessage("notificacao_atualizada", JSON.parse(e.data));
   });
 
   sseConnection.onopen = () => {
@@ -438,12 +401,6 @@ function handleRealtimeMessage(tipo: string, dados: Record<string, unknown>): vo
       }
       break;
     }
-    case "notificacao_criada":
-    case "notificacao_atualizada": {
-      logSessionActivity("notificacao", "Notificação: " + (dados.titulo || "atualizada"), undefined);
-      void loadRightPanelAlerts();
-      break;
-    }
   }
 }
 
@@ -532,21 +489,15 @@ function cvSetMetrics(connection: string, fps = 0, latency: number | null = null
   byId("cv-latency").textContent = latency == null ? "--" : latency + " ms";
 }
 
-function cvAccessToken(): string | null {
-  try { return sessionStorage.getItem("gx_access_token"); } catch { return null; }
-}
-
 function cvConnectFrames(): void {
-  const token = cvAccessToken() || "";
   if (cvFrameSocket?.readyState === WebSocket.OPEN || cvFrameSocket?.readyState === WebSocket.CONNECTING) {
     return;
   }
   const url = window.CONFIG.API_BASE_URL.replace(/^http/, "ws") + "/ws/cv";
   cvFrameSocket = new WebSocket(url);
-  cvFrameSocket.onopen = () => cvFrameSocket?.send(JSON.stringify({ tipo: "auth", token }));
   cvFrameSocket.onmessage = (event) => {
     const message = JSON.parse(event.data);
-    if (message.tipo === "auth_ok") cvSetMetrics("WebSocket", 0, cvLastLatencyMs);
+    if (message.tipo === "pronto") cvSetMetrics("WebSocket", 0, cvLastLatencyMs);
     if (message.tipo === "frame_resultado") {
       const data = message.dados as CvFrameResponse;
       cvLastDetections = data.deteccoes;
@@ -1431,10 +1382,6 @@ async function runDetailMutation(successMessage: string, operation: (eventId: nu
 }
 
 function syncDetailActionFields(event: UrbanEvent | undefined): void {
-  const status = byId<HTMLSelectElement>("detail-event-status");
-  const title = byId<HTMLFormElement>("detail-notification-form").elements.namedItem("titulo") as HTMLInputElement | null;
-  status.value = event?.status || "ativo";
-  if (title) title.value = event ? "Atualização: " + event.titulo : "";
   const route = byId<HTMLAnchorElement>("detail-route-link");
   if (event) {
     route.href = buildRouteUrl(event.latitude, event.longitude);
@@ -1492,14 +1439,12 @@ async function loadDetailSection(): Promise<void> {
           ["Status", formatStatus(event.status)],
         ]) + '</article>';
     } else if (detailActiveTab === "linha-do-tempo") {
-      const [event, notifications, logs] = await Promise.all([
+      const [event, logs] = await Promise.all([
         fetchOperationalData<UrbanEvent>("/eventos/" + eventId),
-        fetchOperationalData<UrbanNotification[]>("/notificacoes?evento_id=" + eventId + "&limite=50"),
         fetchOperationalData<SystemLog[]>("/logs?evento_id=" + eventId + "&limite=50"),
       ]);
       const entries = [
         { at: event.detectado_em || "", title: "Evento detectado", detail: event.titulo },
-        ...notifications.map((item) => ({ at: item.criado_em || "", title: "Notificação " + formatStatus(item.status), detail: item.titulo })),
         ...logs.map((item) => ({ at: item.criado_em, title: item.modulo, detail: item.mensagem })),
       ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
       content.innerHTML = entries.length ? '<ol class="detail-timeline">' + entries.map((entry) => '<li><time>' + escapeHtml(formatDate(entry.at)) + '</time><strong>' + escapeHtml(entry.title) + '</strong><span>' + escapeHtml(entry.detail) + '</span></li>').join("") + '</ol>' : detailEmpty("linha do tempo");
@@ -1527,9 +1472,6 @@ async function loadDetailSection(): Promise<void> {
       content.innerHTML = '<section class="detail-fusion"><div class="detail-fusion-score"><strong>' + formatFusionPercent(fusion.confiabilidade) + '</strong><span>' + escapeHtml(formatFusionLevel(fusion.nivel)) + '</span><small>Calculado em ' + escapeHtml(formatDate(fusion.calculado_em)) + '</small></div>' +
         fusion.componentes.map((component) => '<article><strong>' + escapeHtml(fusionComponentLabel(component.nome, eventoTipo)) + '</strong><p>' + escapeHtml(formatFusionEquation(component, eventoTipo)) + '</p><span>Justificativa: ' + escapeHtml(detailValue(component.detalhe)) + '</span></article>').join("") +
         '<p class="detail-note">YOLO produz evidência; a decisão final vem da Fusão de Dados.</p></section>';
-    } else if (detailActiveTab === "notificacoes") {
-      const notifications = await fetchOperationalData<UrbanNotification[]>("/notificacoes?evento_id=" + eventId + "&limite=100");
-      content.innerHTML = notifications.length ? '<ul class="detail-list">' + notifications.map((item) => '<li><strong>' + escapeHtml(item.titulo) + '</strong><span>' + escapeHtml(formatStatus(item.status)) + " · " + escapeHtml(formatDate(item.criado_em)) + '</span><p>' + escapeHtml(item.mensagem) + '</p></li>').join("") + '</ul>' : detailEmpty("notificações");
     } else {
       const logs = await fetchOperationalData<SystemLog[]>("/logs?evento_id=" + eventId + "&limite=100");
       content.innerHTML = logs.length ? '<ul class="detail-list">' + logs.map((item) => '<li><strong>' + escapeHtml(item.modulo + " · " + item.nivel) + '</strong><span>' + escapeHtml(formatDate(item.criado_em)) + '</span><p>' + escapeHtml(item.mensagem) + '</p></li>').join("") + '</ul>' : detailEmpty("histórico e logs");
@@ -1550,19 +1492,6 @@ function initEventDetailDrawer(): void {
     updateDetailTabs();
     void loadDetailSection();
   }));
-  document.querySelector<HTMLButtonElement>("[data-detail-action='update-status']")?.addEventListener("click", () => {
-    const status = byId<HTMLSelectElement>("detail-event-status").value;
-    void runDetailMutation("Status atualizado na API.", (eventId) => requestOperationalAction<UrbanEvent>("/eventos/" + eventId, "PATCH", { status }));
-  });
-  document.querySelector<HTMLButtonElement>("[data-detail-action='resolve-event']")?.addEventListener("click", () => {
-    const event = loadedEvents.find((item) => item.id === detailEventId);
-    if (!event || isResolvedStatus(event.status)) {
-      setDetailOperationFeedback("Este evento já está resolvido.", "progress");
-      return;
-    }
-    if (!window.confirm("Marcar este evento como resolvido? Esta alteração será enviada à API.")) return;
-    void runDetailMutation("Evento marcado como resolvido.", (eventId) => requestOperationalAction<UrbanEvent>("/eventos/" + eventId, "PATCH", { status: "resolvido" }));
-  });
   document.querySelector<HTMLButtonElement>("[data-detail-action='recalculate']")?.addEventListener("click", () => {
     void runDetailMutation("Confiança recalculada com os componentes retornados pela API.", (eventId) => requestOperationalAction<FusionResult>("/fusion/eventos/" + eventId + "/recalcular", "POST"));
   });
@@ -1583,32 +1512,6 @@ function initEventDetailDrawer(): void {
         setDetailActionPending(false);
       }
     })();
-  });
-  byId<HTMLFormElement>("detail-notification-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget as HTMLFormElement);
-    const value = (name: string) => String(data.get(name) || "").trim();
-    void runDetailMutation("Notificação criada na API.", (eventId) => requestOperationalAction<UrbanNotification>("/notificacoes", "POST", {
-      evento_id: eventId,
-      canal: value("canal"),
-      destinatario: value("destinatario") || null,
-      titulo: value("titulo"),
-      mensagem: value("mensagem"),
-    }));
-  });
-  byId<HTMLFormElement>("detail-evidence-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget as HTMLFormElement);
-    const value = (name: string) => String(data.get(name) || "").trim();
-    const confidenceValue = value("confianca");
-    void runDetailMutation("Evidência registrada na API.", (eventId) => requestOperationalAction<EvidenciaVisual>("/evidencias", "POST", {
-      evento_id: eventId,
-      tipo: value("tipo"),
-      url_externa: value("url_externa") || null,
-      modelo_ia: value("modelo_ia") || null,
-      classe_detectada: value("classe_detectada") || null,
-      confianca: confidenceValue === "" ? null : Number(confidenceValue),
-    }));
   });
 }
 
@@ -1738,54 +1641,6 @@ function updateMetrics(events: UrbanEvent[]): void {
   animateKpi(byId("kpi-status-ativos"), String(events.filter((e) => e.status === "ativo").length));
   animateKpi(byId("kpi-status-analise"), String(events.filter((e) => e.status === "em_analise").length));
   renderSeverityFilters();
-  renderOperatorProgress(events);
-}
-
-function renderOperatorProgress(events: UrbanEvent[]): void {
-  const resolved = events.filter((event) => event.status === "resolvido").length;
-  const xp = events.length * 45 + resolved * 75;
-  const level = Math.floor(xp / 250) + 1;
-  const progress = xp % 250;
-  byId("operator-level").textContent = "NÍVEL " + level;
-  byId("operator-xp").textContent = xp + " XP";
-  byId("operator-goal").textContent = "Próximo nível: " + (250 - progress) + " XP";
-  byId("operator-xp-fill").style.width = Math.max(8, Math.round((progress / 250) * 100)) + "%";
-  byId("operator-streak").textContent = "🔥 Sequência: " + events.filter((event) => event.status === "ativo").length;
-}
-
-function initIncidentComposer(): void {
-  const modal = byId("incident-modal");
-  const form = byId<HTMLFormElement>("incident-form");
-  const feedback = byId("incident-feedback");
-  const close = (): void => { modal.hidden = true; feedback.textContent = ""; feedback.className = "incident-feedback"; };
-  document.getElementById("btn-novo-evento")?.addEventListener("click", () => { modal.hidden = false; (form.elements.namedItem("titulo") as HTMLInputElement | null)?.focus(); });
-  byId("incident-close").addEventListener("click", close);
-  modal.addEventListener("click", (event) => { if (event.target === modal) close(); });
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const data = new FormData(form);
-    const payload = {
-      titulo: String(data.get("titulo") || ""), descricao: String(data.get("descricao") || "") || null,
-      tipo: String(data.get("tipo") || "incidente"), severidade: String(data.get("severidade") || "media"),
-      latitude: Number(data.get("latitude")), longitude: Number(data.get("longitude")), status: "ativo",
-    };
-    feedback.textContent = "Transmitindo ocorrência…";
-    try {
-      const response = await apiFetch("/eventos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const created = await response.json() as UrbanEvent | { detail?: string };
-      if (!response.ok) throw new Error("detail" in created ? created.detail || "Falha ao registrar" : "Falha ao registrar");
-      const urbanEvent = created as UrbanEvent;
-      if (!loadedEvents.some((item) => item.id === urbanEvent.id)) loadedEvents.unshift(urbanEvent);
-      updateMetrics(loadedEvents); applyMarkers(); renderEventList(loadedEvents); selectEvent(urbanEvent.id);
-      logSessionActivity("evento_criado", "Ocorrência transmitida: " + urbanEvent.titulo, urbanEvent.id, urbanEvent.severidade);
-      feedback.textContent = "Ocorrência transmitida em tempo real."; feedback.className = "incident-feedback success";
-      window.setTimeout(close, 700);
-      form.reset();
-    } catch (error) {
-      feedback.textContent = error instanceof Error ? error.message : "Falha ao transmitir ocorrência.";
-      feedback.className = "incident-feedback error";
-    }
-  });
 }
 
 function animateKpi(element: HTMLElement, newValue: string): void {
@@ -2001,7 +1856,7 @@ function renderFusionExplain(result: FusionResult, eventoTipo?: string): void {
   // --- Decisão ---
   const limiar = typeof result.limiar_ativo === "number" ? result.limiar_ativo : 0.75;
   const limiarPct = p0(limiar);
-  const veredito = result.confiabilidade >= limiar
+  const veredito = atingeLimiarAtivo(result.confiabilidade, limiar)
     ? 'Passou de ' + limiarPct + ' &rarr; promovido automaticamente para <strong>Ativo</strong>.'
     : 'Abaixo de ' + limiarPct + ' &rarr; fica <strong>Em análise</strong> até nova corroboração elevar o score.';
   const decisao = '<div class="fx-block">' +
@@ -2178,15 +2033,6 @@ async function loadRightPanelAlerts(): Promise<void> {
   if (!container) return;
   container.innerHTML = '<div class="rp-loading"><div class="skeleton skeleton-block"></div><div class="skeleton skeleton-block"></div></div>';
   try {
-    const all = await fetchOperationalData<UrbanNotification[]>("/notificacoes?limite=50");
-    const relevant = all.filter((n) =>
-      (n.status === "pendente" || n.status === "enviada") &&
-      loadedEvents.some((event) => event.id === n.evento_id)
-    );
-    const alertItems: Array<{ notif: UrbanNotification; event?: UrbanEvent }> = relevant.map((notif) => ({
-      notif, event: loadedEvents.find((event) => event.id === notif.evento_id),
-    }));
-    if (!alertItems.length) {
       const observations = loadedEvents.filter((event) => event.tipo === "observacao_visual" && event.status === "em_analise");
       if (!observations.length) {
         container.innerHTML = '<div class="right-panel-empty"><span>Nenhum alerta confirmado</span><p class="rp-empty-hint">Detecções YOLO aparecem como observações até validação operacional.</p></div>';
@@ -2208,34 +2054,6 @@ async function loadRightPanelAlerts(): Promise<void> {
         '<div class="rp-alert-card rp-system-card" style="--alert-color:#25d77d"><span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h16v10H4zM8 4v4m8-4v4M8 13h.01M12 13h.01M16 13h.01"/></svg></span><span class="rp-alert-body"><span class="rp-alert-kicker rp-system-kicker">VISÃO COMPUTACIONAL</span><span class="rp-alert-head"><span class="rp-alert-title">YOLO pronto para inferência</span></span><span class="rp-alert-location">Modelo validado pelo backend</span><span class="rp-alert-meta"><span class="rp-alert-category">Motor de IA</span><span class="rp-alert-status">Disponível</span></span></span></div>' : '') +
       '<div class="rp-alert-card rp-system-card" style="--alert-color:#2eaa5a"><span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/><path d="M16 16l2 2 3-4"/></svg></span><span class="rp-alert-body"><span class="rp-alert-kicker rp-system-kicker">FONTE OPERACIONAL</span><span class="rp-alert-head"><span class="rp-alert-title">API de eventos operacional</span></span><span class="rp-alert-location">Dados autenticados recebidos</span><span class="rp-alert-meta"><span class="rp-alert-category">Backend MotSP</span><span class="rp-alert-status">Online</span></span></span></div>';
       bindRightPanelEventCards(container);
-      return;
-    }
-    container.innerHTML = alertItems.slice(0, 5).map(({ notif, event }) => {
-      const sevStyle = event ? severityStyle(event.severidade) : null;
-      const sevBadge = sevStyle
-        ? '<span class="rp-alert-sev" style="background:' + sevStyle.color + '">' + escapeHtml(sevStyle.label) + '</span>'
-        : '<span class="rp-alert-sev rp-alert-sev-unknown">Não informada</span>';
-      const time = formatDate(notif.criado_em);
-      const statusClass = notif.status === "lida" ? " rp-read" : (notif.status === "falha" ? " rp-fail" : "");
-      const category = event?.tipo || notif.canal || "Não informada";
-      const location = [event?.localizacao?.endereco || event?.localizacao?.bairro, event?.regiao?.nome].filter(Boolean).join(" · ") || "Localização não informada";
-      const iconSource = (event?.tipo || notif.titulo || "").toLocaleLowerCase("pt-BR");
-      const icon = /alag|enchente|chuva/.test(iconSource)
-        ? '<path d="M4 13c1.3 1.4 3 1.4 4.3 0 1.3-1.4 3-1.4 4.3 0 1.3 1.4 3 1.4 4.3 0M4 18c1.3 1.4 3 1.4 4.3 0 1.3-1.4 3-1.4 4.3 0 1.3 1.4 3 1.4 4.3 0M12 4v5"/>'
-        : /transito|congestion|via|carro/.test(iconSource)
-          ? '<path d="M5 16l1-6h12l1 6M4 16h16v3H4zM7.5 13h.01M16.5 13h.01M7 19v1M17 19v1"/>'
-          : '<path d="M12 4l8 15H4L12 4zM12 10v4m0 2h.01"/>';
-      return '<button type="button" class="rp-alert-card' + statusClass + (notif.evento_id ? '" data-event-id="' + notif.evento_id : "") + '" style="--alert-color:' + (sevStyle?.color || "var(--gx-light)") + '">' +
-        '<span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">' + icon + '</svg></span>' +
-        '<span class="rp-alert-body">' +
-          '<span class="rp-alert-head"><span class="rp-alert-title">' + escapeHtml(notif.titulo) + '</span>' + sevBadge + '</span>' +
-          '<span class="rp-alert-location">' + escapeHtml(location) + '</span>' +
-          '<span class="rp-alert-meta"><span class="rp-alert-category">' + escapeHtml(formatStatus(category)) + '</span>' +
-          (time ? '<span class="rp-alert-time" title="' + escapeHtml(time) + '">' + time + '</span>' : '') +
-          '<span class="rp-alert-status">' + escapeHtml(formatStatus(notif.status)) + '</span></span>' +
-        '</span></button>';
-    }).join("");
-    bindRightPanelEventCards(container);
   } catch {
     container.innerHTML = '<div class="right-panel-empty rp-error">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>' +
@@ -2367,7 +2185,6 @@ function renderRightPanelActivity(): void {
     const icons: Record<string, string> = {
       evento_criado: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 5v14M5 12h14"/></svg>',
       evento_atualizado: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/></svg>',
-      notificacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5"/></svg>',
       sincronizacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/></svg>',
     };
     const icon = icons[entry.kind] || icons.sincronizacao;
@@ -2381,8 +2198,6 @@ function renderRightPanelActivity(): void {
 
 function initRail(): void {
   // A barra de ícones foi esvaziada; a navegação será reconstruída.
-  // Mantém apenas o atalho "Ver todos" do painel de alertas à direita.
-  byId<HTMLButtonElement>("btn-view-alerts")?.addEventListener("click", () => switchView("alertas"));
 }
 
 function switchView(key: ViewKey): void {
@@ -2393,7 +2208,6 @@ function switchView(key: ViewKey): void {
   });
   if (key === "regioes") void loadRegions();
   if (key === "fontes") void loadSources();
-  if (key === "alertas") void loadNotifications();
   if (key === "fusao") {
     const active = loadedEvents.find((e) => e.id === selectedEventId) || loadedEvents[0];
     if (active) void loadFusionBreakdown(active.id);
@@ -2441,30 +2255,6 @@ async function loadSources(): Promise<void> {
   }
 }
 
-async function loadNotifications(): Promise<void> {
-  const list = byId("lista-notificacoes");
-  try {
-    notifications = await fetchJson<UrbanNotification[]>("/notificacoes?status=pendente&limite=200");
-    byId("contagem-notificacoes").textContent = String(notifications.length);
-    if (!notifications.length) {
-      list.innerHTML = '<li class="empty-state">Nenhuma notificação pendente.</li>';
-      return;
-    }
-    list.innerHTML = notifications.map((notification) => {
-      const statusClass = notification.status === "lida" ? "notif-read" : "";
-      return '<li class="info-card notif ' + statusClass + '">' +
-        '<div class="info-card-head"><h3>' + escapeHtml(notification.titulo) + '</h3>' +
-        '<span class="source-type">' + escapeHtml(notification.canal) + '</span></div>' +
-        '<p class="event-description">' + escapeHtml(notification.mensagem) + '</p>' +
-        '<p class="event-meta"><span>' + escapeHtml(notification.status) + '</span>' +
-        (notification.criado_em ? '<span>' + formatDate(notification.criado_em) + '</span>' : '') +
-        '</p></li>';
-    }).join("");
-  } catch {
-    list.innerHTML = '<li class="error-state">Não foi possível carregar as notificações.</li>';
-  }
-}
-
 async function loadEvents(): Promise<void> {
   try {
     setApiStatus(true, "Sincronizando");
@@ -2507,7 +2297,6 @@ async function loadEvents(): Promise<void> {
 function refreshFeeds(): void {
   void loadRegions();
   void loadSources();
-  void loadNotifications();
 }
 
 function initMapa(): void {
@@ -2537,7 +2326,6 @@ function initMapa(): void {
     initRail();
     initComputerVision();
     initYoloTester();
-    initIncidentComposer();
     initEvidenceViewer();
     initFusionControls();
     initEventDetailDrawer();
@@ -2600,7 +2388,6 @@ function initMapa(): void {
   initRail();
   initComputerVision();
   initYoloTester();
-  initIncidentComposer();
   initEvidenceViewer();
   initFusionControls();
   initEventDetailDrawer();
