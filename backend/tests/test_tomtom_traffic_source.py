@@ -1,17 +1,22 @@
-"""Testes da fonte de trânsito ao vivo TomTom (Flow Segment Data)."""
+"""Testes da fonte de trânsito ao vivo TomTom (Flow Segment Data).
 
+A chave vem de ``settings.tomtom_api_key`` (lida do .env pelo pydantic-settings),
+não de ``os.getenv`` — o .env não é exportado para o os.environ do processo.
+"""
+
+from app.config import settings
 from app.services import tomtom_traffic_source
 
 
 def test_sem_chave_configurada_retorna_indisponivel(monkeypatch):
-    monkeypatch.delenv("TOMTOM_API_KEY", raising=False)
+    monkeypatch.setattr(settings, "tomtom_api_key", None)
     resultado = tomtom_traffic_source.obter_fluxo_transito(-23.55, -46.63)
     assert resultado["disponivel"] is False
     assert "TOMTOM_API_KEY" in resultado["erro"]
 
 
 def test_resposta_valida_calcula_indice_de_congestionamento(monkeypatch):
-    monkeypatch.setenv("TOMTOM_API_KEY", "chave-fake")
+    monkeypatch.setattr(settings, "tomtom_api_key", "chave-fake")
 
     class _RespostaFalsa:
         def __enter__(self):
@@ -33,7 +38,7 @@ def test_resposta_valida_calcula_indice_de_congestionamento(monkeypatch):
 
 
 def test_falha_de_rede_nao_propaga(monkeypatch):
-    monkeypatch.setenv("TOMTOM_API_KEY", "chave-fake")
+    monkeypatch.setattr(settings, "tomtom_api_key", "chave-fake")
 
     def _falha(*_a, **_k):
         raise OSError("sem rede")

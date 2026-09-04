@@ -53,20 +53,17 @@ async def test_event_stream_cleanup_removes_client() -> None:
     assert queue not in tempo_real._clients
 
 
-def test_criar_evento_envia_sse(client: TestClient) -> None:
-    payload = {
-        "titulo": "SSE Broadcast",
-        "tipo": "alagamento",
-        "severidade": "alta",
-        "latitude": -23.55,
-        "longitude": -46.63,
-    }
+def test_evento_detectado_envia_sse(client: TestClient, db_session, criar_evento) -> None:
+    """O SSE é alimentado pela detecção (``publicar_evento``), não por rota."""
+    from app.services import detection_events
+
+    evento = criar_evento(titulo="SSE Broadcast", tipo="alagamento", severidade="alta")
+
     tempo_real._clients.clear()
     queue: asyncio.Queue[str] = asyncio.Queue(maxsize=100)
     tempo_real._clients.append(queue)
     try:
-        resp = client.post("/eventos", json=payload)
-        assert resp.status_code == 201
+        detection_events.publicar_evento(db_session, evento.id, tipo_mensagem="evento_criado")
 
         deadline = time.monotonic() + 2.0
         while queue.empty() and time.monotonic() < deadline:

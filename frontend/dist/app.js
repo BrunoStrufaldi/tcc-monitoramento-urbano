@@ -1,6 +1,6 @@
-import { formatFusionEquation, formatFusionPercent, fusionComponentLabel } from "./fusion-format.js";
+import { atingeLimiarAtivo, formatFusionEquation, formatFusionPercent, fusionComponentLabel } from "./fusion-format.js";
 import { detailEmptyMessage, detailValue } from "./event-detail-format.js";
-import { buildRouteUrl, isResolvedStatus } from "./event-actions-format.js";
+import { buildRouteUrl } from "./event-actions-format.js";
 const SEVERITIES = {
     baixa: { label: "Baixa", color: "#22c55e", scale: 10, zIndex: 2 },
     media: { label: "Média", color: "#FFB300", scale: 12, zIndex: 3 },
@@ -14,7 +14,6 @@ let loadedEvents = [];
 let trainingRegions = [];
 let selectedMarkerId = null;
 let dataSources = [];
-let notifications = [];
 let searchTerm = "";
 let selectedEventId = null;
 let detailEventId = null;
@@ -60,38 +59,18 @@ let cvFrameSocket = null;
 let appInitialized = false;
 const evidenceObjectUrls = new Set();
 const byId = (id) => document.getElementById(id);
-function accessToken() {
-    try {
-        return sessionStorage.getItem("gx_access_token");
-    }
-    catch {
-        return null;
-    }
-}
 async function apiFetch(path, init = {}) {
-    const headers = new Headers(init.headers);
-    const token = accessToken();
-    if (token)
-        headers.set("Authorization", "Bearer " + token);
-    const request = { ...init, headers };
-    let response;
+    const request = { ...init, headers: new Headers(init.headers) };
     try {
-        response = await fetch(window.CONFIG.API_BASE_URL + path, request);
+        return await fetch(window.CONFIG.API_BASE_URL + path, request);
     }
     catch (error) {
         const method = String(init.method || "GET").toUpperCase();
         if (method !== "GET" && method !== "HEAD")
             throw error;
         await new Promise((resolve) => window.setTimeout(resolve, 250));
-        response = await fetch(window.CONFIG.API_BASE_URL + path, request);
+        return await fetch(window.CONFIG.API_BASE_URL + path, request);
     }
-    if (response.status === 401 && token) {
-        try {
-            sessionStorage.removeItem("gx_access_token");
-        }
-        catch { /* armazenamento indisponível */ }
-    }
-    return response;
 }
 function escapeHtml(value) {
     if (value == null)
@@ -149,7 +128,6 @@ function clearAllConnections() {
 }
 function connectWebSocket() {
     clearAllConnections();
-    const token = accessToken() || "";
     const wsUrl = window.CONFIG.API_BASE_URL.replace(/^http/, "ws") + "/ws";
     try {
         wsConnection = new WebSocket(wsUrl);
@@ -160,14 +138,11 @@ function connectWebSocket() {
         fallbackToSSE();
         return;
     }
-    wsConnection.onopen = () => {
-        wsConnection?.send(JSON.stringify({ tipo: "auth", token }));
-    };
     const startHeartbeat = () => {
         connectionMode = "ws";
         reconnectAttempt = 0;
         updateConnectionStatus();
-        logSessionActivity("sincronizacao", "Canal WebSocket autenticado");
+        logSessionActivity("sincronizacao", "Canal WebSocket conectado");
         if (loadedEvents.length)
             void loadRightPanelAlerts();
         // Reconecta ≠ continua de onde parou: enquanto o canal esteve fora, eventos
@@ -185,7 +160,7 @@ function connectWebSocket() {
     wsConnection.onmessage = (event) => {
         try {
             const msg = JSON.parse(event.data);
-            if (msg.tipo === "auth_ok") {
+            if (msg.tipo === "pronto") {
                 startHeartbeat();
                 return;
             }
@@ -233,12 +208,6 @@ function fallbackToSSE() {
     sseConnection.addEventListener("evento_removido", (e) => {
         reconnectAttempt = 0;
         handleRealtimeMessage("evento_removido", JSON.parse(e.data));
-    });
-    sseConnection.addEventListener("notificacao_criada", (e) => {
-        handleRealtimeMessage("notificacao_criada", JSON.parse(e.data));
-    });
-    sseConnection.addEventListener("notificacao_atualizada", (e) => {
-        handleRealtimeMessage("notificacao_atualizada", JSON.parse(e.data));
     });
     sseConnection.onopen = () => {
         connectionMode = "sse";
@@ -351,12 +320,6 @@ function handleRealtimeMessage(tipo, dados) {
             }
             break;
         }
-        case "notificacao_criada":
-        case "notificacao_atualizada": {
-            logSessionActivity("notificacao", "Notificação: " + (dados.titulo || "atualizada"), undefined);
-            void loadRightPanelAlerts();
-            break;
-        }
     }
 }
 function updateMarker(evento) {
@@ -430,25 +393,15 @@ function cvSetMetrics(connection, fps = 0, latency = null) {
     byId("cv-fps").textContent = String(fps);
     byId("cv-latency").textContent = latency == null ? "--" : latency + " ms";
 }
-function cvAccessToken() {
-    try {
-        return sessionStorage.getItem("gx_access_token");
-    }
-    catch {
-        return null;
-    }
-}
 function cvConnectFrames() {
-    const token = cvAccessToken() || "";
     if (cvFrameSocket?.readyState === WebSocket.OPEN || cvFrameSocket?.readyState === WebSocket.CONNECTING) {
         return;
     }
     const url = window.CONFIG.API_BASE_URL.replace(/^http/, "ws") + "/ws/cv";
     cvFrameSocket = new WebSocket(url);
-    cvFrameSocket.onopen = () => cvFrameSocket?.send(JSON.stringify({ tipo: "auth", token }));
     cvFrameSocket.onmessage = (event) => {
         const message = JSON.parse(event.data);
-        if (message.tipo === "auth_ok")
+        if (message.tipo === "pronto")
             cvSetMetrics("WebSocket", 0, cvLastLatencyMs);
         if (message.tipo === "frame_resultado") {
             const data = message.dados;
@@ -1355,11 +1308,6 @@ async function runDetailMutation(successMessage, operation) {
     }
 }
 function syncDetailActionFields(event) {
-    const status = byId("detail-event-status");
-    const title = byId("detail-notification-form").elements.namedItem("titulo");
-    status.value = event?.status || "ativo";
-    if (title)
-        title.value = event ? "Atualização: " + event.titulo : "";
     const route = byId("detail-route-link");
     if (event) {
         route.href = buildRouteUrl(event.latitude, event.longitude);
@@ -1416,14 +1364,12 @@ async function loadDetailSection() {
                 ]) + '</article>';
         }
         else if (detailActiveTab === "linha-do-tempo") {
-            const [event, notifications, logs] = await Promise.all([
+            const [event, logs] = await Promise.all([
                 fetchOperationalData("/eventos/" + eventId),
-                fetchOperationalData("/notificacoes?evento_id=" + eventId + "&limite=50"),
                 fetchOperationalData("/logs?evento_id=" + eventId + "&limite=50"),
             ]);
             const entries = [
                 { at: event.detectado_em || "", title: "Evento detectado", detail: event.titulo },
-                ...notifications.map((item) => ({ at: item.criado_em || "", title: "Notificação " + formatStatus(item.status), detail: item.titulo })),
                 ...logs.map((item) => ({ at: item.criado_em, title: item.modulo, detail: item.mensagem })),
             ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
             content.innerHTML = entries.length ? '<ol class="detail-timeline">' + entries.map((entry) => '<li><time>' + escapeHtml(formatDate(entry.at)) + '</time><strong>' + escapeHtml(entry.title) + '</strong><span>' + escapeHtml(entry.detail) + '</span></li>').join("") + '</ol>' : detailEmpty("linha do tempo");
@@ -1455,10 +1401,6 @@ async function loadDetailSection() {
                 fusion.componentes.map((component) => '<article><strong>' + escapeHtml(fusionComponentLabel(component.nome, eventoTipo)) + '</strong><p>' + escapeHtml(formatFusionEquation(component, eventoTipo)) + '</p><span>Justificativa: ' + escapeHtml(detailValue(component.detalhe)) + '</span></article>').join("") +
                 '<p class="detail-note">YOLO produz evidência; a decisão final vem da Fusão de Dados.</p></section>';
         }
-        else if (detailActiveTab === "notificacoes") {
-            const notifications = await fetchOperationalData("/notificacoes?evento_id=" + eventId + "&limite=100");
-            content.innerHTML = notifications.length ? '<ul class="detail-list">' + notifications.map((item) => '<li><strong>' + escapeHtml(item.titulo) + '</strong><span>' + escapeHtml(formatStatus(item.status)) + " · " + escapeHtml(formatDate(item.criado_em)) + '</span><p>' + escapeHtml(item.mensagem) + '</p></li>').join("") + '</ul>' : detailEmpty("notificações");
-        }
         else {
             const logs = await fetchOperationalData("/logs?evento_id=" + eventId + "&limite=100");
             content.innerHTML = logs.length ? '<ul class="detail-list">' + logs.map((item) => '<li><strong>' + escapeHtml(item.modulo + " · " + item.nivel) + '</strong><span>' + escapeHtml(formatDate(item.criado_em)) + '</span><p>' + escapeHtml(item.mensagem) + '</p></li>').join("") + '</ul>' : detailEmpty("histórico e logs");
@@ -1481,20 +1423,6 @@ function initEventDetailDrawer() {
         updateDetailTabs();
         void loadDetailSection();
     }));
-    document.querySelector("[data-detail-action='update-status']")?.addEventListener("click", () => {
-        const status = byId("detail-event-status").value;
-        void runDetailMutation("Status atualizado na API.", (eventId) => requestOperationalAction("/eventos/" + eventId, "PATCH", { status }));
-    });
-    document.querySelector("[data-detail-action='resolve-event']")?.addEventListener("click", () => {
-        const event = loadedEvents.find((item) => item.id === detailEventId);
-        if (!event || isResolvedStatus(event.status)) {
-            setDetailOperationFeedback("Este evento já está resolvido.", "progress");
-            return;
-        }
-        if (!window.confirm("Marcar este evento como resolvido? Esta alteração será enviada à API."))
-            return;
-        void runDetailMutation("Evento marcado como resolvido.", (eventId) => requestOperationalAction("/eventos/" + eventId, "PATCH", { status: "resolvido" }));
-    });
     document.querySelector("[data-detail-action='recalculate']")?.addEventListener("click", () => {
         void runDetailMutation("Confiança recalculada com os componentes retornados pela API.", (eventId) => requestOperationalAction("/fusion/eventos/" + eventId + "/recalcular", "POST"));
     });
@@ -1519,32 +1447,6 @@ function initEventDetailDrawer() {
                 setDetailActionPending(false);
             }
         })();
-    });
-    byId("detail-notification-form").addEventListener("submit", (event) => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        const value = (name) => String(data.get(name) || "").trim();
-        void runDetailMutation("Notificação criada na API.", (eventId) => requestOperationalAction("/notificacoes", "POST", {
-            evento_id: eventId,
-            canal: value("canal"),
-            destinatario: value("destinatario") || null,
-            titulo: value("titulo"),
-            mensagem: value("mensagem"),
-        }));
-    });
-    byId("detail-evidence-form").addEventListener("submit", (event) => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        const value = (name) => String(data.get(name) || "").trim();
-        const confidenceValue = value("confianca");
-        void runDetailMutation("Evidência registrada na API.", (eventId) => requestOperationalAction("/evidencias", "POST", {
-            evento_id: eventId,
-            tipo: value("tipo"),
-            url_externa: value("url_externa") || null,
-            modelo_ia: value("modelo_ia") || null,
-            classe_detectada: value("classe_detectada") || null,
-            confianca: confidenceValue === "" ? null : Number(confidenceValue),
-        }));
     });
 }
 function renderSelectedEvent(event) {
@@ -1668,60 +1570,6 @@ function updateMetrics(events) {
     animateKpi(byId("kpi-status-ativos"), String(events.filter((e) => e.status === "ativo").length));
     animateKpi(byId("kpi-status-analise"), String(events.filter((e) => e.status === "em_analise").length));
     renderSeverityFilters();
-    renderOperatorProgress(events);
-}
-function renderOperatorProgress(events) {
-    const resolved = events.filter((event) => event.status === "resolvido").length;
-    const xp = events.length * 45 + resolved * 75;
-    const level = Math.floor(xp / 250) + 1;
-    const progress = xp % 250;
-    byId("operator-level").textContent = "NÍVEL " + level;
-    byId("operator-xp").textContent = xp + " XP";
-    byId("operator-goal").textContent = "Próximo nível: " + (250 - progress) + " XP";
-    byId("operator-xp-fill").style.width = Math.max(8, Math.round((progress / 250) * 100)) + "%";
-    byId("operator-streak").textContent = "🔥 Sequência: " + events.filter((event) => event.status === "ativo").length;
-}
-function initIncidentComposer() {
-    const modal = byId("incident-modal");
-    const form = byId("incident-form");
-    const feedback = byId("incident-feedback");
-    const close = () => { modal.hidden = true; feedback.textContent = ""; feedback.className = "incident-feedback"; };
-    document.getElementById("btn-novo-evento")?.addEventListener("click", () => { modal.hidden = false; form.elements.namedItem("titulo")?.focus(); });
-    byId("incident-close").addEventListener("click", close);
-    modal.addEventListener("click", (event) => { if (event.target === modal)
-        close(); });
-    form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const data = new FormData(form);
-        const payload = {
-            titulo: String(data.get("titulo") || ""), descricao: String(data.get("descricao") || "") || null,
-            tipo: String(data.get("tipo") || "incidente"), severidade: String(data.get("severidade") || "media"),
-            latitude: Number(data.get("latitude")), longitude: Number(data.get("longitude")), status: "ativo",
-        };
-        feedback.textContent = "Transmitindo ocorrência…";
-        try {
-            const response = await apiFetch("/eventos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-            const created = await response.json();
-            if (!response.ok)
-                throw new Error("detail" in created ? created.detail || "Falha ao registrar" : "Falha ao registrar");
-            const urbanEvent = created;
-            if (!loadedEvents.some((item) => item.id === urbanEvent.id))
-                loadedEvents.unshift(urbanEvent);
-            updateMetrics(loadedEvents);
-            applyMarkers();
-            renderEventList(loadedEvents);
-            selectEvent(urbanEvent.id);
-            logSessionActivity("evento_criado", "Ocorrência transmitida: " + urbanEvent.titulo, urbanEvent.id, urbanEvent.severidade);
-            feedback.textContent = "Ocorrência transmitida em tempo real.";
-            feedback.className = "incident-feedback success";
-            window.setTimeout(close, 700);
-            form.reset();
-        }
-        catch (error) {
-            feedback.textContent = error instanceof Error ? error.message : "Falha ao transmitir ocorrência.";
-            feedback.className = "incident-feedback error";
-        }
-    });
 }
 function animateKpi(element, newValue) {
     if (element.textContent === newValue)
@@ -1927,7 +1775,7 @@ function renderFusionExplain(result, eventoTipo) {
     // --- Decisão ---
     const limiar = typeof result.limiar_ativo === "number" ? result.limiar_ativo : 0.75;
     const limiarPct = p0(limiar);
-    const veredito = result.confiabilidade >= limiar
+    const veredito = atingeLimiarAtivo(result.confiabilidade, limiar)
         ? 'Passou de ' + limiarPct + ' &rarr; promovido automaticamente para <strong>Ativo</strong>.'
         : 'Abaixo de ' + limiarPct + ' &rarr; fica <strong>Em análise</strong> até nova corroboração elevar o score.';
     const decisao = '<div class="fx-block">' +
@@ -2099,61 +1947,26 @@ async function loadRightPanelAlerts() {
         return;
     container.innerHTML = '<div class="rp-loading"><div class="skeleton skeleton-block"></div><div class="skeleton skeleton-block"></div></div>';
     try {
-        const all = await fetchOperationalData("/notificacoes?limite=50");
-        const relevant = all.filter((n) => (n.status === "pendente" || n.status === "enviada") &&
-            loadedEvents.some((event) => event.id === n.evento_id));
-        const alertItems = relevant.map((notif) => ({
-            notif, event: loadedEvents.find((event) => event.id === notif.evento_id),
-        }));
-        if (!alertItems.length) {
-            const observations = loadedEvents.filter((event) => event.tipo === "observacao_visual" && event.status === "em_analise");
-            if (!observations.length) {
-                container.innerHTML = '<div class="right-panel-empty"><span>Nenhum alerta confirmado</span><p class="rp-empty-hint">Detecções YOLO aparecem como observações até validação operacional.</p></div>';
-                return;
-            }
-            container.innerHTML = observations.slice(0, 3).map((event) => {
-                const sevStyle = severityStyle(event.severidade);
-                const location = [event.localizacao?.endereco || event.localizacao?.bairro, event.regiao?.nome].filter(Boolean).join(" · ") || "Localização não informada";
-                return '<button type="button" class="rp-alert-card rp-observation-card" data-event-id="' + event.id + '" style="--alert-color:#f59e0b">' +
-                    '<span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2"/></svg></span>' +
-                    '<span class="rp-alert-body"><span class="rp-alert-kicker">OBSERVAÇÃO YOLO · NÃO É INCIDENTE CONFIRMADO</span>' +
-                    '<span class="rp-alert-head"><span class="rp-alert-title">' + escapeHtml(event.titulo) + '</span><span class="rp-alert-sev" style="background:' + sevStyle.color + '">' + escapeHtml(sevStyle.label) + '</span></span>' +
-                    '<span class="rp-alert-location">' + escapeHtml(location) + '</span>' +
-                    '<span class="rp-alert-meta"><span class="rp-alert-category">Observação visual</span><span class="rp-alert-status rp-status-analysis">Em análise</span></span></span></button>';
-            }).join("") +
-                (connectionMode === "ws" || connectionMode === "sse" ?
-                    '<div class="rp-alert-card rp-system-card" style="--alert-color:#20c8e5"><span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12.5a10 10 0 0114 0M8 15.5a6 6 0 018 0M11 18.5a2 2 0 012 0"/></svg></span><span class="rp-alert-body"><span class="rp-alert-kicker rp-system-kicker">SISTEMA EM TEMPO REAL</span><span class="rp-alert-head"><span class="rp-alert-title">Canal operacional conectado</span></span><span class="rp-alert-location">' + escapeHtml(connectionMode === "ws" ? "WebSocket autenticado" : "SSE conectado") + '</span><span class="rp-alert-meta"><span class="rp-alert-category">Telemetria</span><span class="rp-alert-status">Online</span></span></span></div>' : '') +
-                (cvDetectorAvailable ?
-                    '<div class="rp-alert-card rp-system-card" style="--alert-color:#25d77d"><span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h16v10H4zM8 4v4m8-4v4M8 13h.01M12 13h.01M16 13h.01"/></svg></span><span class="rp-alert-body"><span class="rp-alert-kicker rp-system-kicker">VISÃO COMPUTACIONAL</span><span class="rp-alert-head"><span class="rp-alert-title">YOLO pronto para inferência</span></span><span class="rp-alert-location">Modelo validado pelo backend</span><span class="rp-alert-meta"><span class="rp-alert-category">Motor de IA</span><span class="rp-alert-status">Disponível</span></span></span></div>' : '') +
-                '<div class="rp-alert-card rp-system-card" style="--alert-color:#2eaa5a"><span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/><path d="M16 16l2 2 3-4"/></svg></span><span class="rp-alert-body"><span class="rp-alert-kicker rp-system-kicker">FONTE OPERACIONAL</span><span class="rp-alert-head"><span class="rp-alert-title">API de eventos operacional</span></span><span class="rp-alert-location">Dados autenticados recebidos</span><span class="rp-alert-meta"><span class="rp-alert-category">Backend MotSP</span><span class="rp-alert-status">Online</span></span></span></div>';
-            bindRightPanelEventCards(container);
+        const observations = loadedEvents.filter((event) => event.tipo === "observacao_visual" && event.status === "em_analise");
+        if (!observations.length) {
+            container.innerHTML = '<div class="right-panel-empty"><span>Nenhum alerta confirmado</span><p class="rp-empty-hint">Detecções YOLO aparecem como observações até validação operacional.</p></div>';
             return;
         }
-        container.innerHTML = alertItems.slice(0, 5).map(({ notif, event }) => {
-            const sevStyle = event ? severityStyle(event.severidade) : null;
-            const sevBadge = sevStyle
-                ? '<span class="rp-alert-sev" style="background:' + sevStyle.color + '">' + escapeHtml(sevStyle.label) + '</span>'
-                : '<span class="rp-alert-sev rp-alert-sev-unknown">Não informada</span>';
-            const time = formatDate(notif.criado_em);
-            const statusClass = notif.status === "lida" ? " rp-read" : (notif.status === "falha" ? " rp-fail" : "");
-            const category = event?.tipo || notif.canal || "Não informada";
-            const location = [event?.localizacao?.endereco || event?.localizacao?.bairro, event?.regiao?.nome].filter(Boolean).join(" · ") || "Localização não informada";
-            const iconSource = (event?.tipo || notif.titulo || "").toLocaleLowerCase("pt-BR");
-            const icon = /alag|enchente|chuva/.test(iconSource)
-                ? '<path d="M4 13c1.3 1.4 3 1.4 4.3 0 1.3-1.4 3-1.4 4.3 0 1.3 1.4 3 1.4 4.3 0M4 18c1.3 1.4 3 1.4 4.3 0 1.3-1.4 3-1.4 4.3 0 1.3 1.4 3 1.4 4.3 0M12 4v5"/>'
-                : /transito|congestion|via|carro/.test(iconSource)
-                    ? '<path d="M5 16l1-6h12l1 6M4 16h16v3H4zM7.5 13h.01M16.5 13h.01M7 19v1M17 19v1"/>'
-                    : '<path d="M12 4l8 15H4L12 4zM12 10v4m0 2h.01"/>';
-            return '<button type="button" class="rp-alert-card' + statusClass + (notif.evento_id ? '" data-event-id="' + notif.evento_id : "") + '" style="--alert-color:' + (sevStyle?.color || "var(--gx-light)") + '">' +
-                '<span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">' + icon + '</svg></span>' +
-                '<span class="rp-alert-body">' +
-                '<span class="rp-alert-head"><span class="rp-alert-title">' + escapeHtml(notif.titulo) + '</span>' + sevBadge + '</span>' +
+        container.innerHTML = observations.slice(0, 3).map((event) => {
+            const sevStyle = severityStyle(event.severidade);
+            const location = [event.localizacao?.endereco || event.localizacao?.bairro, event.regiao?.nome].filter(Boolean).join(" · ") || "Localização não informada";
+            return '<button type="button" class="rp-alert-card rp-observation-card" data-event-id="' + event.id + '" style="--alert-color:#f59e0b">' +
+                '<span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2"/></svg></span>' +
+                '<span class="rp-alert-body"><span class="rp-alert-kicker">OBSERVAÇÃO YOLO · NÃO É INCIDENTE CONFIRMADO</span>' +
+                '<span class="rp-alert-head"><span class="rp-alert-title">' + escapeHtml(event.titulo) + '</span><span class="rp-alert-sev" style="background:' + sevStyle.color + '">' + escapeHtml(sevStyle.label) + '</span></span>' +
                 '<span class="rp-alert-location">' + escapeHtml(location) + '</span>' +
-                '<span class="rp-alert-meta"><span class="rp-alert-category">' + escapeHtml(formatStatus(category)) + '</span>' +
-                (time ? '<span class="rp-alert-time" title="' + escapeHtml(time) + '">' + time + '</span>' : '') +
-                '<span class="rp-alert-status">' + escapeHtml(formatStatus(notif.status)) + '</span></span>' +
-                '</span></button>';
-        }).join("");
+                '<span class="rp-alert-meta"><span class="rp-alert-category">Observação visual</span><span class="rp-alert-status rp-status-analysis">Em análise</span></span></span></button>';
+        }).join("") +
+            (connectionMode === "ws" || connectionMode === "sse" ?
+                '<div class="rp-alert-card rp-system-card" style="--alert-color:#20c8e5"><span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12.5a10 10 0 0114 0M8 15.5a6 6 0 018 0M11 18.5a2 2 0 012 0"/></svg></span><span class="rp-alert-body"><span class="rp-alert-kicker rp-system-kicker">SISTEMA EM TEMPO REAL</span><span class="rp-alert-head"><span class="rp-alert-title">Canal operacional conectado</span></span><span class="rp-alert-location">' + escapeHtml(connectionMode === "ws" ? "WebSocket autenticado" : "SSE conectado") + '</span><span class="rp-alert-meta"><span class="rp-alert-category">Telemetria</span><span class="rp-alert-status">Online</span></span></span></div>' : '') +
+            (cvDetectorAvailable ?
+                '<div class="rp-alert-card rp-system-card" style="--alert-color:#25d77d"><span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h16v10H4zM8 4v4m8-4v4M8 13h.01M12 13h.01M16 13h.01"/></svg></span><span class="rp-alert-body"><span class="rp-alert-kicker rp-system-kicker">VISÃO COMPUTACIONAL</span><span class="rp-alert-head"><span class="rp-alert-title">YOLO pronto para inferência</span></span><span class="rp-alert-location">Modelo validado pelo backend</span><span class="rp-alert-meta"><span class="rp-alert-category">Motor de IA</span><span class="rp-alert-status">Disponível</span></span></span></div>' : '') +
+            '<div class="rp-alert-card rp-system-card" style="--alert-color:#2eaa5a"><span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/><path d="M16 16l2 2 3-4"/></svg></span><span class="rp-alert-body"><span class="rp-alert-kicker rp-system-kicker">FONTE OPERACIONAL</span><span class="rp-alert-head"><span class="rp-alert-title">API de eventos operacional</span></span><span class="rp-alert-location">Dados autenticados recebidos</span><span class="rp-alert-meta"><span class="rp-alert-category">Backend MotSP</span><span class="rp-alert-status">Online</span></span></span></div>';
         bindRightPanelEventCards(container);
     }
     catch {
@@ -2295,7 +2108,6 @@ function renderRightPanelActivity() {
         const icons = {
             evento_criado: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 5v14M5 12h14"/></svg>',
             evento_atualizado: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/></svg>',
-            notificacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5"/></svg>',
             sincronizacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/></svg>',
         };
         const icon = icons[entry.kind] || icons.sincronizacao;
@@ -2308,8 +2120,6 @@ function renderRightPanelActivity() {
 }
 function initRail() {
     // A barra de ícones foi esvaziada; a navegação será reconstruída.
-    // Mantém apenas o atalho "Ver todos" do painel de alertas à direita.
-    byId("btn-view-alerts")?.addEventListener("click", () => switchView("alertas"));
 }
 function switchView(key) {
     activeView = key;
@@ -2321,8 +2131,6 @@ function switchView(key) {
         void loadRegions();
     if (key === "fontes")
         void loadSources();
-    if (key === "alertas")
-        void loadNotifications();
     if (key === "fusao") {
         const active = loadedEvents.find((e) => e.id === selectedEventId) || loadedEvents[0];
         if (active)
@@ -2364,30 +2172,6 @@ async function loadSources() {
     }
     catch {
         list.innerHTML = '<li class="error-state">Não foi possível carregar as fontes.</li>';
-    }
-}
-async function loadNotifications() {
-    const list = byId("lista-notificacoes");
-    try {
-        notifications = await fetchJson("/notificacoes?status=pendente&limite=200");
-        byId("contagem-notificacoes").textContent = String(notifications.length);
-        if (!notifications.length) {
-            list.innerHTML = '<li class="empty-state">Nenhuma notificação pendente.</li>';
-            return;
-        }
-        list.innerHTML = notifications.map((notification) => {
-            const statusClass = notification.status === "lida" ? "notif-read" : "";
-            return '<li class="info-card notif ' + statusClass + '">' +
-                '<div class="info-card-head"><h3>' + escapeHtml(notification.titulo) + '</h3>' +
-                '<span class="source-type">' + escapeHtml(notification.canal) + '</span></div>' +
-                '<p class="event-description">' + escapeHtml(notification.mensagem) + '</p>' +
-                '<p class="event-meta"><span>' + escapeHtml(notification.status) + '</span>' +
-                (notification.criado_em ? '<span>' + formatDate(notification.criado_em) + '</span>' : '') +
-                '</p></li>';
-        }).join("");
-    }
-    catch {
-        list.innerHTML = '<li class="error-state">Não foi possível carregar as notificações.</li>';
     }
 }
 async function loadEvents() {
@@ -2435,7 +2219,6 @@ async function loadEvents() {
 function refreshFeeds() {
     void loadRegions();
     void loadSources();
-    void loadNotifications();
 }
 function initMapa() {
     if (appInitialized)
@@ -2466,7 +2249,6 @@ function initMapa() {
         initRail();
         initComputerVision();
         initYoloTester();
-        initIncidentComposer();
         initEvidenceViewer();
         initFusionControls();
         initEventDetailDrawer();
@@ -2534,7 +2316,6 @@ function initMapa() {
     initRail();
     initComputerVision();
     initYoloTester();
-    initIncidentComposer();
     initEvidenceViewer();
     initFusionControls();
     initEventDetailDrawer();

@@ -9,7 +9,7 @@ calibrar a confiabilidade — reforça quando já há chuva/aviso ao vivo e derr
 quando não há nenhum sinal e a via nunca alagou (falso positivo provável).
 
 Dados em ``data/pontos_alagamento_sp.json`` — pontos recorrentes no entorno das
-11 câmeras CET-SP (``cet_camera_catalog``), compilados do histórico do CGE-SP e
+câmeras CET-SP (``cet_camera_catalog``), compilados do histórico do CGE-SP e
 da camada de Desastres do GeoSampa. Coordenadas aproximadas em nível de
 cruzamento (mesma limitação do catálogo de câmeras).
 """

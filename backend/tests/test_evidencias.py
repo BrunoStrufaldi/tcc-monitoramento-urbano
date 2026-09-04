@@ -1,4 +1,8 @@
-"""Testes de integração para evidências visuais."""
+"""Testes de integração para evidências visuais.
+
+``/evidencias`` é somente consulta: as evidências são gravadas pela
+detecção (``services/detection_events.py``), nunca por requisição.
+"""
 
 from fastapi.testclient import TestClient
 
@@ -33,59 +37,21 @@ def test_obter_arquivo_de_evidencia_inexistente(client: TestClient, tmp_path, mo
     assert response.status_code == 404
 
 
-def _criar_evento(client: TestClient) -> int:
-    r = client.post(
-        "/eventos",
-        json={"titulo": "Evento teste", "tipo": "incendio", "latitude": -23.55, "longitude": -46.63},
-    )
-    return r.json()["id"]
-
-
 def test_listar_evidencias_vazio(client: TestClient):
     response = client.get("/evidencias")
     assert response.status_code == 200
     assert response.json() == []
 
 
-def test_criar_evidencia(client: TestClient):
-    evento_id = _criar_evento(client)
-    payload = {
-        "evento_id": evento_id,
-        "tipo": "imagem",
-        "url_externa": "https://exemplo.com/foto.jpg",
-        "modelo_ia": "yolov8n",
-        "classe_detectada": "fire",
-        "confianca": 0.85,
-    }
-    response = client.post("/evidencias", json=payload)
-    assert response.status_code == 201
-    data = response.json()
-    assert data["tipo"] == "imagem"
-    assert data["classe_detectada"] == "fire"
-    assert data["evento_id"] == evento_id
+def test_obter_evidencia_por_id(client: TestClient, criar_evento, criar_evidencia):
+    evento = criar_evento()
+    evidencia = criar_evidencia(evento.id, tipo="imagem", classe_detectada="carro", confianca=0.91)
 
-
-def test_criar_evidencia_evento_inexistente(client: TestClient):
-    payload = {
-        "evento_id": 9999,
-        "tipo": "video",
-        "url_externa": "https://exemplo.com/video.mp4",
-    }
-    response = client.post("/evidencias", json=payload)
-    assert response.status_code == 404
-
-
-def test_obter_evidencia_por_id(client: TestClient):
-    evento_id = _criar_evento(client)
-    criar = client.post(
-        "/evidencias",
-        json={"evento_id": evento_id, "tipo": "frame", "url_externa": "https://exemplo.com/frame.jpg"},
-    )
-    evidencia_id = criar.json()["id"]
-
-    response = client.get(f"/evidencias/{evidencia_id}")
+    response = client.get(f"/evidencias/{evidencia.id}")
     assert response.status_code == 200
-    assert response.json()["id"] == evidencia_id
+    dados = response.json()
+    assert dados["id"] == evidencia.id
+    assert dados["classe_detectada"] == "carro"
 
 
 def test_obter_evidencia_inexistente(client: TestClient):
@@ -93,50 +59,32 @@ def test_obter_evidencia_inexistente(client: TestClient):
     assert response.status_code == 404
 
 
-def test_delete_evidencia(client: TestClient):
-    evento_id = _criar_evento(client)
-    criar = client.post(
-        "/evidencias",
-        json={"evento_id": evento_id, "tipo": "thumbnail", "url_externa": "https://exemplo.com/thumb.jpg"},
-    )
-    evidencia_id = criar.json()["id"]
+def test_filtrar_por_evento(client: TestClient, criar_evento, criar_evidencia):
+    evento = criar_evento()
+    outro = criar_evento(titulo="Outro evento")
+    criar_evidencia(evento.id)
+    criar_evidencia(evento.id)
+    criar_evidencia(outro.id)
 
-    response = client.delete(f"/evidencias/{evidencia_id}")
-    assert response.status_code == 200
-    assert response.json()["id"] == evidencia_id
-
-    get_after = client.get(f"/evidencias/{evidencia_id}")
-    assert get_after.status_code == 404
-
-
-def test_delete_evidencia_inexistente(client: TestClient):
-    response = client.delete("/evidencias/9999")
-    assert response.status_code == 404
-
-
-def test_filtrar_por_evento(client: TestClient):
-    evento_id = _criar_evento(client)
-    client.post(
-        "/evidencias",
-        json={"evento_id": evento_id, "tipo": "imagem", "url_externa": "https://exemplo.com/1.jpg"},
-    )
-    client.post(
-        "/evidencias",
-        json={"evento_id": evento_id, "tipo": "video", "url_externa": "https://exemplo.com/1.mp4"},
-    )
-
-    response = client.get(f"/evidencias?evento_id={evento_id}")
+    response = client.get(f"/evidencias?evento_id={evento.id}")
     assert response.status_code == 200
     assert len(response.json()) == 2
 
 
-def test_filtrar_por_tipo(client: TestClient):
-    evento_id = _criar_evento(client)
-    client.post(
-        "/evidencias",
-        json={"evento_id": evento_id, "tipo": "imagem", "url_externa": "https://exemplo.com/a.jpg"},
-    )
+def test_filtrar_por_tipo(client: TestClient, criar_evento, criar_evidencia):
+    evento = criar_evento()
+    criar_evidencia(evento.id, tipo="imagem")
+    criar_evidencia(evento.id, tipo="video")
 
-    response = client.get("/evidencias?tipo=imagem")
+    response = client.get("/evidencias?tipo=video")
     assert response.status_code == 200
-    assert all(e["tipo"] == "imagem" for e in response.json())
+    assert [item["tipo"] for item in response.json()] == ["video"]
+
+
+def test_escrita_em_evidencias_nao_existe(client: TestClient, criar_evento, criar_evidencia):
+    """O painel não registra evidência na mão — quem grava é a detecção."""
+    evento = criar_evento()
+    evidencia = criar_evidencia(evento.id)
+
+    assert client.post("/evidencias", json={"evento_id": evento.id, "tipo": "imagem"}).status_code == 405
+    assert client.delete(f"/evidencias/{evidencia.id}").status_code == 405

@@ -156,75 +156,66 @@ def test_ws_message_handles_nested_data() -> None:
 # ── Integration: broadcast via eventos.py ──────────────────────────
 
 
-def test_criar_evento_aciona_broadcast(client: TestClient) -> None:
-    """Verifica que criar evento retorna dados que seriam broadcastados."""
-    payload = {
-        "titulo": "Broadcast Teste",
-        "tipo": "alagamento",
-        "severidade": "alta",
-        "latitude": -23.55,
-        "longitude": -46.63,
-    }
-    resp = client.post("/eventos", json=payload)
-    assert resp.status_code == 201
-    data = resp.json()
-    assert data["titulo"] == "Broadcast Teste"
-    assert data["severidade"] == "alta"
-    # Dados são válidos para broadcast (seriam enviados via WS)
-    msg = WSMessage("evento_criado", data)
-    parsed = json.loads(msg.to_json())
+def test_evento_detectado_gera_payload_de_broadcast(client: TestClient, criar_evento) -> None:
+    """O evento nasce da detecção; o payload transmitido é o do EventoResponse."""
+    from app.schemas.evento import EventoResponse
+
+    evento = criar_evento(titulo="Broadcast Teste", tipo="alagamento", severidade="alta")
+    dados = EventoResponse.model_validate(evento, from_attributes=True).model_dump(mode="json")
+
+    parsed = json.loads(WSMessage("evento_criado", dados).to_json())
     assert parsed["tipo"] == "evento_criado"
     assert parsed["dados"]["titulo"] == "Broadcast Teste"
+    assert parsed["dados"]["severidade"] == "alta"
 
 
-def test_atualizar_evento_aciona_broadcast(client: TestClient) -> None:
-    """Verifica que atualizar evento retorna dados válidos para broadcast."""
-    resp = client.post(
-        "/eventos",
-        json={"titulo": "Original", "tipo": "transito", "latitude": -23.55, "longitude": -46.63},
+def test_publicar_evento_transmite_atualizacao(db_session, criar_evento, monkeypatch) -> None:
+    """``publicar_evento`` é o caminho real de 'evento_atualizado' (usado após
+    recalcular a fusão e ao refrescar um evento no mesmo ponto)."""
+    from app.services import detection_events
+
+    enviados: list[tuple[str, dict]] = []
+    monkeypatch.setattr(detection_events, "schedule_coroutine", lambda coro: coro.close())
+    monkeypatch.setattr(
+        detection_events.ws_manager, "broadcast_evento",
+        lambda tipo, dados: enviados.append((tipo, dados)) or _noop(),
     )
-    evento_id = resp.json()["id"]
-    resp = client.patch(f"/eventos/{evento_id}", json={"titulo": "Atualizado"})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["titulo"] == "Atualizado"
-    msg = WSMessage("evento_atualizado", data)
-    parsed = json.loads(msg.to_json())
-    assert parsed["tipo"] == "evento_atualizado"
+
+    evento = criar_evento(titulo="Original", tipo="transito")
+    detection_events.publicar_evento(db_session, evento.id)
+
+    assert enviados and enviados[0][0] == "evento_atualizado"
+    assert enviados[0][1]["titulo"] == "Original"
 
 
-def test_remover_evento_aciona_broadcast(client: TestClient) -> None:
-    """Verifica que remover evento gera payload válido para broadcast."""
-    resp = client.post(
-        "/eventos",
-        json={"titulo": "Removido", "tipo": "incendio", "latitude": -23.55, "longitude": -46.63},
+def _noop():
+    async def _c() -> None:
+        return None
+    return _c()
+
+
+def test_purga_de_evento_expirado_transmite_remocao(db_session, criar_evento, monkeypatch) -> None:
+    """'evento_removido' vem da retenção automática, não de uma rota DELETE."""
+    from datetime import datetime, timedelta
+
+    from app.services import event_retention
+
+    enviados: list[tuple[str, dict]] = []
+    monkeypatch.setattr(event_retention, "schedule_coroutine", lambda coro: coro.close())
+    monkeypatch.setattr(
+        event_retention.ws_manager, "broadcast_evento",
+        lambda tipo, dados: enviados.append((tipo, dados)) or _noop(),
     )
-    evento_id = resp.json()["id"]
-    resp = client.delete(f"/eventos/{evento_id}")
-    assert resp.status_code == 200
-    # Payload de remoção contém apenas o id
-    msg = WSMessage("evento_removido", {"id": evento_id})
-    parsed = json.loads(msg.to_json())
-    assert parsed["dados"]["id"] == evento_id
 
+    evento = criar_evento(titulo="Antigo", tipo="incendio")
+    evento.detectado_em = datetime.now() - timedelta(days=30)
+    db_session.commit()
+    evento_id = evento.id
 
-def test_criar_notificacao_aciona_broadcast(client: TestClient) -> None:
-    """Verifica que criar notificação retorna dados válidos para broadcast."""
-    resp = client.post(
-        "/eventos",
-        json={"titulo": "Evt N", "tipo": "transito", "latitude": -23.55, "longitude": -46.63},
-    )
-    evento_id = resp.json()["id"]
-    resp = client.post(
-        "/notificacoes",
-        json={"evento_id": evento_id, "titulo": "Alerta", "mensagem": "Msg"},
-    )
-    assert resp.status_code == 201
-    data = resp.json()
-    assert data["titulo"] == "Alerta"
-    msg = WSMessage("notificacao_criada", data)
-    parsed = json.loads(msg.to_json())
-    assert parsed["tipo"] == "notificacao_criada"
+    event_retention.purgar_eventos_expirados(db_session)
+
+    assert enviados and enviados[0][0] == "evento_removido"
+    assert enviados[0][1]["id"] == evento_id
 
 
 # ── Endpoint availability ──────────────────────────────────────────
@@ -241,10 +232,8 @@ def test_ws_endpoint_exists(client: TestClient) -> None:
 
 def test_websocket_responde_ping_com_pong(client: TestClient) -> None:
     """O canal em tempo real aceita uma sessão real e responde ao heartbeat."""
-    token = client.headers["Authorization"].split(" ", 1)[1]
     with client.websocket_connect("/ws") as websocket:
-        websocket.send_json({"tipo": "auth", "token": token})
-        assert websocket.receive_json()["tipo"] == "auth_ok"
+        assert websocket.receive_json()["tipo"] == "pronto"
         websocket.send_json({"tipo": "ping"})
         message = websocket.receive_json()
     assert message["tipo"] == "pong"

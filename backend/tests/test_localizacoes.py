@@ -87,21 +87,17 @@ def test_delete_localizacao_inexistente(client: TestClient):
     assert response.status_code == 404
 
 
-def test_delete_localizacao_com_evento_retorna_409(client: TestClient):
+def test_delete_localizacao_com_evento_retorna_409(client: TestClient, db_session):
+    from app.models.evento import Evento
+
     criar_loc = client.post(
         "/localizacoes",
         json={"latitude": -23.55, "longitude": -46.63},
     )
     localizacao_id = criar_loc.json()["id"]
 
-    client.post(
-        "/eventos",
-        json={
-            "titulo": "Evento na localizacao",
-            "tipo": "transito",
-            "localizacao_id": localizacao_id,
-        },
-    )
+    db_session.add(Evento(titulo="Evento na localizacao", tipo="transito", localizacao_id=localizacao_id))
+    db_session.commit()
 
     response = client.delete(f"/localizacoes/{localizacao_id}")
     assert response.status_code == 409

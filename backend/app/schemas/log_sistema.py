@@ -13,5 +13,4 @@ class LogSistemaResponse(BaseModel):
     mensagem: str
     evento_id: int | None
     contexto: dict[str, Any] | None
-    ip_origem: str | None
     criado_em: datetime

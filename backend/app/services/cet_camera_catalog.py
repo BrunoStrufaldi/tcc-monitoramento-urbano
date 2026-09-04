@@ -1,10 +1,19 @@
 """Catálogo das câmeras públicas da CET-SP expostas em cameras.cetsp.com.br.
 
 Não existe uma API de listagem — este conjunto foi extraído do HTML público de
-``https://cameras.cetsp.com.br/View/Cam.aspx`` (11 câmeras "favoritas" que o
+``https://cameras.cetsp.com.br/View/Cam.aspx`` (as 11 câmeras "favoritas" que o
 próprio site expõe, cada uma com ID e nome do cruzamento; confirmado em
 2026-08-26). É um subconjunto pequeno da rede real de câmeras da CET, não a
 cobertura completa da cidade.
+
+Ficaram 10: a câmera 22 ("Paulista - Metrô Consolação") foi retirada em
+04/09/2026 por estar permanentemente travada — o endpoint responde 200 com um
+JPEG válido, mas ``Last-Modified`` de ~191 dias atrás, e a checagem de frescor
+descartava todo frame dela. Manter no catálogo só custava uma thread e um GET
+por intervalo pra jogar o resultado fora a cada volta. A cobertura do ponto não
+se perde: a câmera 23 ("Paulista - Av Brigadeiro Luiz Antônio") fica a ~50 m
+dali. ``frame_esta_desatualizado`` continua valendo pra todas — a CET pode
+travar qualquer outra do mesmo jeito, e foi assim que esta foi descoberta.
 
 As coordenadas foram geocodificadas a partir do nome do cruzamento (Nominatim/
 OpenStreetMap) — são aproximações de rua/quarteirão, não o ponto exato do
@@ -45,7 +54,6 @@ CAMERAS: tuple[CameraCET, ...] = (
     CameraCET(224, "Ibirapuera - R Ipê", -23.5877, -46.6585),
     CameraCET(200, "Iguatemi - Av Brig Faria Lima", -23.5772, -46.6880),
     CameraCET(23, "Paulista - Av Brigadeiro Luiz Antônio", -23.5576, -46.6606),
-    CameraCET(22, "Paulista - Metrô Consolação", -23.5572, -46.6610),
 )
 
 

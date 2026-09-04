@@ -133,27 +133,6 @@ CREATE TABLE dados_contextuais (
   INDEX idx_contexto_coletado (coletado_em)
 ) ENGINE=InnoDB;
 
-CREATE TABLE notificacoes (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  evento_id INT NOT NULL,
-  canal ENUM('painel', 'push', 'email', 'sms', 'webhook') NOT NULL DEFAULT 'painel',
-  destinatario VARCHAR(200) NULL,
-  titulo VARCHAR(200) NOT NULL,
-  mensagem TEXT NOT NULL,
-  status ENUM('pendente', 'enviada', 'falha', 'lida') NOT NULL DEFAULT 'pendente',
-  tentativas TINYINT UNSIGNED NOT NULL DEFAULT 0,
-  erro_detalhe TEXT NULL,
-  agendada_para DATETIME NULL,
-  enviada_em DATETIME NULL,
-  lida_em DATETIME NULL,
-  criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_notificacoes_evento FOREIGN KEY (evento_id) REFERENCES eventos(id) ON DELETE CASCADE,
-  INDEX idx_notificacoes_evento (evento_id),
-  INDEX idx_notificacoes_status (status),
-  INDEX idx_notificacoes_canal (canal)
-) ENGINE=InnoDB;
-
 CREATE TABLE logs_sistema (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   nivel ENUM('DEBUG', 'INFO', 'WARN', 'ERROR', 'CRITICAL') NOT NULL DEFAULT 'INFO',
@@ -161,7 +140,6 @@ CREATE TABLE logs_sistema (
   mensagem TEXT NOT NULL,
   evento_id INT NULL,
   contexto JSON NULL,
-  ip_origem VARCHAR(45) NULL,
   criado_em DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   CONSTRAINT fk_logs_evento FOREIGN KEY (evento_id) REFERENCES eventos(id) ON DELETE SET NULL,
   INDEX idx_logs_nivel (nivel),

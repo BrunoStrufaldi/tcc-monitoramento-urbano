@@ -90,13 +90,6 @@
                 </article>
               </section>
 
-              <section class="operator-level" aria-label="Progresso do operador">
-                <div class="operator-level-head"><span>OPERADOR URBANO</span><strong id="operator-level">NÍVEL 1</strong></div>
-                <div class="operator-xp-track"><span id="operator-xp-fill"></span></div>
-                <div class="operator-level-meta"><span id="operator-xp">0 XP</span><span id="operator-goal">Próximo nível: 250 XP</span></div>
-                <div class="operator-objectives"><span>✓ Monitorar ocorrências</span><span id="operator-streak">🔥 Sequência: 0</span></div>
-              </section>
-
               <section class="selected-event" id="evento-selecionado" aria-live="polite">
                 <div class="selected-event-section-title"><span>Evento selecionado</span></div>
                 <div class="selected-event-header">
@@ -166,19 +159,6 @@
                 </div>
                 <ul id="lista-eventos" class="event-list">
                   <li class="loading-state">Carregando eventos...</li>
-                </ul>
-              </section>
-            </section>
-
-            <!-- Alertas -->
-            <section class="view" id="view-alertas" hidden>
-              <section class="section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-                <div class="section-header">
-                  <span class="section-title">Notificações</span>
-                  <span id="contagem-notificacoes" class="section-count">0</span>
-                </div>
-                <ul id="lista-notificacoes" class="event-list">
-                  <li class="loading-state">Carregando notificações...</li>
                 </ul>
               </section>
             </section>
@@ -416,18 +396,6 @@
     </main>
   </div>
 
-  <div class="incident-modal" id="incident-modal" hidden role="dialog" aria-modal="true" aria-labelledby="incident-modal-title">
-    <form id="incident-form" class="incident-form">
-      <div class="incident-form-head"><div><span>COMANDO OPERACIONAL</span><h2 id="incident-modal-title">Registrar ocorrência</h2></div><button id="incident-close" type="button" aria-label="Fechar">×</button></div>
-      <label>Título<input name="titulo" required maxlength="200" placeholder="Ex.: Alagamento detectado"></label>
-      <label>Descrição<textarea name="descricao" rows="3" placeholder="Contexto operacional"></textarea></label>
-      <div class="incident-grid"><label>Tipo<input name="tipo" required value="incidente"></label><label>Severidade<select name="severidade"><option value="baixa">Baixa</option><option value="media" selected>Média</option><option value="alta">Alta</option><option value="critica">Crítica</option></select></label></div>
-      <div class="incident-grid"><label>Latitude<input name="latitude" type="number" step="any" required value="-23.5505"></label><label>Longitude<input name="longitude" type="number" step="any" required value="-46.6333"></label></div>
-      <p id="incident-feedback" class="incident-feedback" role="status"></p>
-      <button class="btn-primary" type="submit">Registrar e transmitir</button>
-    </form>
-  </div>
-
   <div class="evidence-viewer" id="evidence-viewer" hidden role="dialog" aria-modal="true" aria-labelledby="evidence-viewer-title">
     <div class="evidence-viewer-dialog" role="document">
       <div class="evidence-viewer-head"><h2 id="evidence-viewer-title">Evidência visual</h2><button id="evidence-viewer-close" type="button" aria-label="Fechar visualização ampliada">×</button></div>
@@ -446,49 +414,15 @@
       <button type="button" role="tab" data-detail-tab="evidencias">Evidências</button>
       <button type="button" role="tab" data-detail-tab="clima">Clima</button>
       <button type="button" role="tab" data-detail-tab="fusion">Data Fusion</button>
-      <button type="button" role="tab" data-detail-tab="notificacoes">Notificações</button>
       <button type="button" role="tab" data-detail-tab="historico">Histórico e logs</button>
     </div>
     <section class="event-detail-actions" aria-labelledby="event-detail-actions-title">
-      <div class="detail-actions-heading"><h3 id="event-detail-actions-title">Ações operacionais</h3><p>As alterações são enviadas para a API do MotSP.</p></div>
-      <div class="detail-action-status">
-        <label for="detail-event-status">Status</label>
-        <select id="detail-event-status" aria-label="Status do evento">
-          <option value="ativo">Ativo</option>
-          <option value="em_analise">Em análise</option>
-          <option value="resolvido">Resolvido</option>
-        </select>
-        <button type="button" class="detail-action-button" data-detail-action="update-status">Atualizar status</button>
-        <button type="button" class="detail-action-button detail-action-danger" data-detail-action="resolve-event">Marcar como resolvido</button>
-      </div>
+      <div class="detail-actions-heading"><h3 id="event-detail-actions-title">Ações</h3><p>Consulta e atalhos; o painel não altera eventos.</p></div>
       <div class="detail-action-grid">
         <button type="button" class="detail-action-button" data-detail-action="recalculate">Recalcular confiança</button>
         <button type="button" class="detail-action-button" data-detail-action="copy-coordinates">Copiar coordenadas</button>
         <a id="detail-route-link" class="detail-action-button" target="_blank" rel="noopener">Abrir rota</a>
       </div>
-      <details class="detail-action-disclosure">
-        <summary>Criar notificação</summary>
-        <form id="detail-notification-form" class="detail-action-form">
-          <label>Canal<select name="canal"><option value="painel">Painel</option><option value="push">Push</option><option value="email">E-mail</option><option value="sms">SMS</option><option value="webhook">Webhook</option></select></label>
-          <label>Destinatário <input name="destinatario" maxlength="200" autocomplete="off"></label>
-          <label>Título <input name="titulo" maxlength="200" required></label>
-          <label>Mensagem <textarea name="mensagem" required rows="3"></textarea></label>
-          <button type="submit" class="detail-action-button" data-detail-action="create-notification">Criar notificação</button>
-        </form>
-      </details>
-      <details class="detail-action-disclosure">
-        <summary>Adicionar evidência</summary>
-        <p class="detail-action-help">O backend atual registra metadados e uma URL; não oferece upload de arquivo.</p>
-        <form id="detail-evidence-form" class="detail-action-form">
-          <label>Tipo <input name="tipo" maxlength="20" value="imagem" required></label>
-          <label>URL externa <input name="url_externa" type="url" maxlength="500" inputmode="url"></label>
-          <label>Modelo <input name="modelo_ia" maxlength="80"></label>
-          <label>Classe <input name="classe_detectada" maxlength="80"></label>
-          <label>Confiança (0–1) <input name="confianca" type="number" min="0" max="1" step="0.01"></label>
-          <button type="submit" class="detail-action-button" data-detail-action="create-evidence">Adicionar evidência</button>
-        </form>
-      </details>
-      <p class="detail-action-gap"><strong>Observações indisponíveis.</strong> Não há endpoint de observações no backend atual.</p>
       <p id="detail-operation-feedback" class="detail-operation-feedback" role="status" aria-live="polite"></p>
     </section>
     <section id="event-detail-content" class="event-detail-content" aria-live="polite"></section>

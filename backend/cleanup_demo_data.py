@@ -55,11 +55,9 @@ def main(apply: bool) -> None:
     event_marks = ",".join("?" for _ in event_ids)
     location_marks = ",".join("?" for _ in location_ids)
     with connection:
-        for table in ("notificacoes", "dados_contextuais", "evidencias_visuais"):
+        for table in ("dados_contextuais", "evidencias_visuais"):
             connection.execute(f"DELETE FROM {table} WHERE evento_id IN ({event_marks})", event_ids)
         connection.execute(f"UPDATE logs_sistema SET evento_id = NULL WHERE evento_id IN ({event_marks})", event_ids)
-        if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='auditoria_acoes'").fetchone():
-            connection.execute(f"UPDATE auditoria_acoes SET evento_id = NULL WHERE evento_id IN ({event_marks})", event_ids)
         connection.execute(f"DELETE FROM eventos WHERE id IN ({event_marks})", event_ids)
         connection.execute(
             f"DELETE FROM localizacoes WHERE id IN ({location_marks}) AND NOT EXISTS "

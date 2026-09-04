@@ -93,3 +93,29 @@ def test_evento_manual_ativo_nao_e_rebaixado(db_session: Session, monkeypatch):
     )
 
     assert atualizado.status == "ativo"
+
+
+def test_evento_yolo_promovido_quando_arredonda_para_o_limiar(db_session: Session, monkeypatch):
+    """0.7977 é exibido como "80%" no painel — a promoção segue o valor exibido."""
+    monkeypatch.setattr(settings, "gx_fusion_auto_ativo_min", 0.80)
+    _fixar_confiabilidade(monkeypatch, 0.7977)
+    evento = _criar_evento(db_session, status="em_analise", fonte_tipo="yolo")
+
+    _, atualizado = data_fusion_service.aplicar_fusao_evento(
+        db_session, evento.id, persistir=True
+    )
+
+    assert atualizado.status == "ativo"
+
+
+def test_evento_yolo_nao_promovido_quando_arredonda_abaixo_do_limiar(db_session: Session, monkeypatch):
+    """0.7949 é exibido como "79%" — continua em análise."""
+    monkeypatch.setattr(settings, "gx_fusion_auto_ativo_min", 0.80)
+    _fixar_confiabilidade(monkeypatch, 0.7949)
+    evento = _criar_evento(db_session, status="em_analise", fonte_tipo="yolo")
+
+    _, atualizado = data_fusion_service.aplicar_fusao_evento(
+        db_session, evento.id, persistir=True
+    )
+
+    assert atualizado.status == "em_analise"

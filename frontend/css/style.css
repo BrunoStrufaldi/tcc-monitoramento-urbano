@@ -1238,8 +1238,6 @@ input, select, textarea { font-family: inherit; }
   transition: background var(--dur) var(--ease);
 }
 .rp-alert-card:hover { background: var(--bg-hover); }
-.rp-alert-card.rp-read { border-left-color: var(--text-muted); opacity: 0.6; }
-.rp-alert-card.rp-fail { border-left-color: var(--danger); }
 .rp-alert-head {
   display: flex;
   align-items: center;
@@ -1354,26 +1352,12 @@ input, select, textarea { font-family: inherit; }
 .event-detail-actions { display: grid; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); background: linear-gradient(90deg, rgba(255,138,0,.055), transparent 58%); }
 .detail-actions-heading { display: grid; gap: 2px; }
 .detail-actions-heading h3 { margin: 0; color: var(--text-primary); font-size: 14px; }
-.detail-actions-heading p, .detail-action-help, .detail-action-gap { margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.42; }
-.detail-action-status { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: end; gap: 7px; }
-.detail-action-status > label { padding-bottom: 7px; color: var(--text-secondary); font-size: 12px; font-weight: 700; }
-.detail-action-status select, .detail-action-form input, .detail-action-form select, .detail-action-form textarea { box-sizing: border-box; min-width: 0; width: 100%; min-height: 33px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--bg-base); color: var(--text-primary); font: inherit; font-size: 12px; }
-.detail-action-status select { padding: 0 8px; }
+.detail-actions-heading p { margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.42; }
 .detail-action-button { display: inline-grid; min-height: 33px; align-items: center; justify-content: center; padding: 0 9px; border: 1px solid rgba(255,138,0,.4); border-radius: var(--r-sm); background: var(--gx-dim); color: var(--gx-light); font: inherit; font-size: 12px; font-weight: 700; line-height: 1.2; text-align: center; text-decoration: none; cursor: pointer; }
 .detail-action-button:hover { border-color: var(--gx-light); background: rgba(255,138,0,.17); }
-.detail-action-button:focus-visible, .detail-action-disclosure summary:focus-visible { outline: 2px solid var(--gx-light); outline-offset: 2px; }
+.detail-action-button:focus-visible { outline: 2px solid var(--gx-light); outline-offset: 2px; }
 .detail-action-button:disabled { cursor: wait; opacity: .58; }
-.detail-action-danger { border-color: rgba(255,76,76,.52); background: rgba(255,76,76,.08); color: #ff8b8b; }
 .detail-action-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
-.detail-action-disclosure { border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--bg-base); }
-.detail-action-disclosure summary { padding: 9px; color: var(--text-secondary); font-size: 12px; font-weight: 700; cursor: pointer; }
-.detail-action-disclosure[open] summary { border-bottom: 1px solid var(--border); color: var(--text-primary); }
-.detail-action-disclosure .detail-action-help { padding: 9px 9px 0; }
-.detail-action-form { display: grid; gap: 8px; padding: 9px; }
-.detail-action-form label { display: grid; gap: 4px; color: var(--text-muted); font-size: 11px; font-weight: 650; }
-.detail-action-form input, .detail-action-form select, .detail-action-form textarea { padding: 6px 8px; }
-.detail-action-form textarea { min-height: 64px; resize: vertical; }
-.detail-action-gap { padding: 8px 9px; border-left: 2px solid var(--border-strong); background: var(--bg-base); }
 .detail-operation-feedback { min-height: 16px; margin: 0; font-size: 12px; line-height: 1.35; }
 .detail-operation-feedback.is-progress { color: var(--gx-light); }
 .detail-operation-feedback.is-success { color: var(--success); }
@@ -1419,8 +1403,6 @@ input, select, textarea { font-family: inherit; }
   .event-detail-tabs { padding: 9px 12px; }
   .event-detail-content { padding: 14px; }
   .event-detail-actions { padding: 12px 14px; }
-  .detail-action-status { grid-template-columns: auto minmax(0, 1fr); }
-  .detail-action-status > :nth-child(3), .detail-action-status > :nth-child(4) { grid-column: span 1; }
 }
 
 /* Activity Items */
@@ -1624,8 +1606,6 @@ input, select, textarea { font-family: inherit; }
   color: var(--gx-light);
 }
 .code-pill { color: var(--warn); }
-.notif { border-left: 3px solid var(--gx-light); }
-.notif-read { border-left-color: var(--ok); }
 
 /* Fusion Breakdown */
 .fusion-breakdown {
@@ -2101,7 +2081,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .fusion-detail { display: block; }
   .fusion-section-level, .fusion-row { font-size: 11px; }
   /* No painel compacto, detalhes operacionais têm prioridade sobre gamificação. */
-  .operator-level { display: none; }
   .section { padding: 11px; border-radius: 7px; }
   .section-title { font-size: 12px; }
   .severity-filters { gap: 5px; padding: 7px 0 0; }
@@ -2170,15 +2149,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     transition-duration: 0.001ms !important;
   }
 }
-.operator-level { padding: 9px; border: 1px solid rgba(255,138,0,.2); border-radius: 6px; background: linear-gradient(125deg, rgba(255,85,0,.12), rgba(14,20,26,.9)); }
-.operator-level-head,.operator-level-meta,.operator-objectives { display:flex; justify-content:space-between; gap:6px; font-size:9px; }
-.operator-level-head span,.operator-level-meta { color:var(--text-muted); font-weight:700; letter-spacing:.04em; }
-.operator-level-head strong { color:var(--gx-light); font-size:10px; }
-.operator-xp-track { height:5px; overflow:hidden; margin:7px 0 5px; border-radius:9px; background:rgba(255,255,255,.08); }
-.operator-xp-track span { display:block; height:100%; width:0; border-radius:inherit; background:linear-gradient(90deg,var(--gx),#ffd166); transition:width .45s ease; }
-.operator-objectives { margin-top:7px; color:var(--ok); font-size:8px; }
-.incident-modal { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:16px; background:rgba(0,0,0,.7); backdrop-filter:blur(5px); }
-.incident-modal[hidden] { display:none; }
 
 /* ============================================================
    OPERATION DESK — visual inspirado no painel de referência
@@ -2226,7 +2196,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .kpi-label { color: #9eabb4; font-size: 10px; }
   .kpi-value { font-size: 25px; }
   .kpi-delta { font-size: 9px; }
-  .operator-level { display: none; }
   .selected-event { padding: 13px; border-color: #1d2d37; border-radius: 7px; background: linear-gradient(145deg, #101922, #0b1218); }
   .selected-event-header { padding-left: 56px; min-height: 58px; position: relative; }
   .selected-event-header::before { content: "≋"; position: absolute; left: 0; top: 4px; display: grid; width: 46px; height: 46px; place-items: center; border: 1px solid #e46f0b; border-radius: 50%; color: #ff8a00; background: radial-gradient(circle, rgba(255,112,0,.16), transparent 68%); font-size: 31px; line-height: 1; box-shadow: 0 0 18px rgba(255,112,0,.14); }
@@ -2262,19 +2231,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .rp-evidence-card { padding: 8px; border-radius: 6px; border-color: #21323c; background: #0e171e; }
   .rp-evidence-img { margin-bottom: 7px; border-radius: 4px; }
 }
-.incident-form { width:min(440px,100%); padding:18px; border:1px solid var(--border-strong); border-radius:10px; background:var(--bg-panel); box-shadow:var(--sh-lg); }
-.incident-form-head { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:15px; }
-.incident-form-head span { color:var(--gx-light); font-size:9px; font-weight:800; letter-spacing:.1em; }
-.incident-form h2 { margin-top:3px; font-size:18px; }
-.incident-form-head button { border:0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:24px; line-height:1; }
-.incident-form label { display:flex; flex-direction:column; gap:4px; margin-bottom:10px; color:var(--text-secondary); font-size:11px; font-weight:700; }
-.incident-form input,.incident-form textarea,.incident-form select { width:100%; padding:8px; border:1px solid var(--border); border-radius:5px; outline:0; background:var(--bg-input); color:var(--text-primary); font:inherit; }
-.incident-form input:focus,.incident-form textarea:focus,.incident-form select:focus { border-color:var(--gx-light); }
-.incident-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
-.incident-feedback { min-height:18px; margin:0 0 8px; color:var(--text-muted); font-size:11px; }
-.incident-feedback.error { color:var(--danger); }
-.incident-feedback.success { color:var(--ok); }
-@media (min-width:721px) { .operator-level{padding:7px}.operator-level-head,.operator-level-meta{font-size:8px}.operator-objectives{font-size:7px}.operator-xp-track{margin:5px 0 4px;height:4px} }
 
 /* ============================================================
    MotSP — identidade visual e hierarquia da marca
