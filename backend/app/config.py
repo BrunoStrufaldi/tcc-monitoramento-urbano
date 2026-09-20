@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     cors_origins: str = "http://localhost:5500,http://127.0.0.1:5500,http://localhost:8080"
+    # Em desenvolvimento o painel é servido à parte (python -m http.server 5500)
+    # e a API só fala JSON. Num deploy de container os dois moram na mesma
+    # origem: um link só, e CORS deixa de existir. Ligado pelo Dockerfile.
+    gx_serve_frontend: bool = False
     yolo_threshold: float = 0.45
     # Confiança mínima só para o modelo de incidentes (alagamento). Mais alta que
     # a de veículos de propósito: enquanto o peso de alagamento não é retreinado
@@ -64,7 +68,7 @@ class Settings(BaseSettings):
     gx_evento_janela_minutos: int = 45
     # Confiabilidade (Data Fusion) a partir da qual um evento "em_analise" é
     # promovido automaticamente para "ativo".
-    gx_fusion_auto_ativo_min: float = 0.80
+    gx_fusion_auto_ativo_min: float = 0.77
     # Chave da TomTom Traffic API. Precisa passar por aqui, e não por
     # os.getenv direto no serviço: o .env é lido pelo pydantic-settings, que
     # popula este objeto mas NÃO o os.environ do processo. Enquanto o serviço

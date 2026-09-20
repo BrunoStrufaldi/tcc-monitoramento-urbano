@@ -1854,7 +1854,7 @@ function renderFusionExplain(result: FusionResult, eventoTipo?: string): void {
     '</div>';
 
   // --- Decisão ---
-  const limiar = typeof result.limiar_ativo === "number" ? result.limiar_ativo : 0.75;
+  const limiar = typeof result.limiar_ativo === "number" ? result.limiar_ativo : 0.77;
   const limiarPct = p0(limiar);
   const veredito = atingeLimiarAtivo(result.confiabilidade, limiar)
     ? 'Passou de ' + limiarPct + ' &rarr; promovido automaticamente para <strong>Ativo</strong>.'

@@ -34,6 +34,7 @@ alagamento da via) e publica no painel apenas o que sobrevive a esse cruzamento.
 18. [Segurança e limitações](#18-segurança-e-limitações)
 19. [Decisões de escopo (o que foi removido e por quê)](#19-decisões-de-escopo-o-que-foi-removido-e-por-quê)
 20. [Referências técnicas](#20-referências-técnicas)
+21. [Deploy no Google Cloud Run](#21-deploy-no-google-cloud-run)
 
 ---
 
@@ -50,7 +51,7 @@ alagamento da via) e publica no painel apenas o que sobrevive a esse cruzamento.
   daquela via (CGE-SP/GeoSampa, camada estática).
 - **Pontua a confiabilidade.** O módulo Data Fusion combina IA (40%), contexto/clima (30%)
   e fonte oficial (30%) num score 0–1. Um evento só é promovido a `ativo` no painel quando
-  cruza o limiar (padrão 80%); abaixo disso fica `em_analise`.
+  cruza o limiar (padrão 77%); abaixo disso fica `em_analise`.
 - **Publica em tempo real.** Toda criação, atualização e remoção de evento é transmitida
   por WebSocket, com fallback automático para SSE e depois polling.
 - **Expira sozinho.** "Tempo real" é literal: um evento vive no máximo 45 minutos após a
@@ -359,7 +360,7 @@ Todas as variáveis são lidas por `backend/app/config.py` (pydantic-settings). 
 | `GX_ALERTA_COOLDOWN_SECONDS` | `1800` (30 min) | Silêncio da câmera depois de um evento **criado**. |
 | `GX_TRANSITO_VETO_COOLDOWN_SECONDS` | `600` (10 min) | Silêncio depois de um **veto** da TomTom. Curto de propósito: um veto às 19h00 não pode calar a câmera até 19h30 se a via travar no meio do caminho. Também é o teto de consumo da API: 1 consulta por câmera a cada 10 min ≈ 1,4 k chamadas/dia nas 10 câmeras, dentro do plano gratuito. |
 | `GX_EVENTO_JANELA_MINUTOS` | `45` | Janela de "tempo real". Evento detectado antes disso é apagado do banco. Mantido acima do cooldown de alerta para não abrir buraco entre uma detecção e a próxima. |
-| `GX_FUSION_AUTO_ATIVO_MIN` | `0.80` | Confiabilidade a partir da qual um evento `em_analise` é promovido a `ativo`. |
+| `GX_FUSION_AUTO_ATIVO_MIN` | `0.77` | Confiabilidade a partir da qual um evento `em_analise` é promovido a `ativo`. |
 
 ---
 
@@ -1348,6 +1349,170 @@ foi assim que esta foi descoberta.
 | TypeScript | Frontend e contratos de interface | https://www.typescriptlang.org/docs/ |
 | Pytest | Testes de backend | https://docs.pytest.org/ |
 | Roboflow | Datasets públicos para o treino | https://universe.roboflow.com/ |
+
+---
+
+## 21. Deploy no Google Cloud Run
+
+O sistema sobe como **uma única imagem** (API + painel + YOLO) no Cloud Run. A
+escolha não é arbitrária: o Cloud Run escala a zero, então **não existe
+instância ligada enquanto ninguém está usando o link** — que é exatamente o
+regime de custo que um TCC hospedado com crédito gratuito precisa.
+
+### 21.1 Por que o sistema "só funciona quando alguém entra"
+
+Três mecanismos se somam, e vale entender a diferença entre eles:
+
+| Mecanismo | Efeito |
+|---|---|
+| `--min-instances 0` | Sem acesso, zero instâncias de pé. Zero cobrança. |
+| CPU alocada por requisição | O Cloud Run congela a CPU do container entre requisições. As threads de `live_detection` e `flood_detection` **não rodam** com o painel fechado, mesmo com `GX_MONITORAMENTO_ATIVO=true`. |
+| WebSocket do painel | Enquanto alguém tem o painel aberto, o `/ws` mantém uma requisição viva — e é durante ela que a CPU fica alocada e a detecção contínua efetivamente acontece. |
+
+Ou seja: o próprio acesso de uma pessoa é o "gatilho de ativação". Fechou o
+painel, o monitoramento para; ~15 minutos depois a instância é destruída.
+
+`--max-instances 1` é igualmente proposital: o banco é um SQLite **dentro** do
+container, então duas instâncias simultâneas teriam estados divergentes. Serve
+também de teto de gasto — um pico de acessos não multiplica a conta.
+
+### 21.2 O que sobe e o que não sobe
+
+| Vai para a imagem | Fica de fora (`.dockerignore` / `.gcloudignore`) |
+|---|---|
+| `backend/`, `ml/`, `data_fusion/`, `database/`, `frontend/` compilado | `backend/venv/` (4,8 GB), `ml/datasets/` (5,4 GB), `ml/runs/`, `runs/` |
+| `ml/models/yolo11m.pt` e `ml/models/gx-incident.pt` | demais pesos (`-anterior`, `-backup`, `-v4-attempt`, `yolo11n/s`) |
+| torch **CPU** + ultralytics | `backend/.env`, `*.db`, `backend/app/data/` (evidências locais), testes |
+
+> **Armadilha do `.gcloudignore`.** Sem esse arquivo, o `gcloud` usa o
+> `.gitignore` como filtro de upload — e o `.gitignore` exclui `ml/models/*.pt`.
+> A imagem subiria sem peso nenhum e toda rota de detecção responderia
+> "modelo indisponível". O `.gcloudignore` existe para quebrar essa herança.
+
+O `Dockerfile` instala o torch pelo índice de CPU
+(`--index-url https://download.pytorch.org/whl/cpu`). O wheel padrão do PyPI
+traz ~2,5 GB de CUDA que não tem uso no Cloud Run, que não oferece GPU no plano
+gratuito.
+
+### 21.3 Passo a passo (primeira vez)
+
+**1. Criar a conta e o projeto**
+
+1. Entre em <https://console.cloud.google.com> com uma conta Google.
+2. Aceite a **avaliação gratuita**: US$ 300 de crédito por 90 dias. Exige cartão
+   (há uma cobrança temporária de verificação, ~R$ 1, estornada). Ao fim do
+   período o Google **não** cobra automaticamente: é preciso fazer o upgrade
+   manual para conta paga.
+3. Crie um projeto — ex.: nome `MotSP TCC`, e **anote o Project ID** gerado
+   (algo como `motsp-tcc-473120`). É o ID, não o nome, que os comandos usam.
+
+**2. Instalar o Google Cloud CLI**
+
+Baixe e instale o [GoogleCloudSDKInstaller.exe](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe),
+depois, num PowerShell novo:
+
+```powershell
+gcloud init      # faz login no navegador e seleciona o projeto
+```
+
+**3. Publicar**
+
+```powershell
+.\deploy.ps1 -ProjectId SEU-PROJECT-ID
+```
+
+O script habilita as APIs necessárias (Cloud Run, Cloud Build, Artifact
+Registry), lê a `TOMTOM_API_KEY` do `backend/.env` e a envia como variável de
+ambiente do serviço, e dispara o build. Na primeira execução o `gcloud` pergunta
+se pode criar o repositório `cloud-run-source-deploy` — responda `Y`.
+
+A primeira build leva ~10 minutos (instalar o torch domina o tempo). No fim, o
+script imprime a URL pública, no formato
+`https://motsp-XXXXXXXX.southamerica-east1.run.app`. **Esse é o link para
+compartilhar** — o serviço sobe com `--allow-unauthenticated`, então qualquer
+pessoa com o endereço abre o painel, sem conta Google.
+
+**4. Ligar o monitoramento contínuo (opcional)**
+
+Por padrão o deploy sobe com as threads de detecção **desligadas**: o painel
+funciona, a inferência sob demanda funciona, e nada consome CPU sozinho.
+
+```powershell
+.\deploy.ps1 -ProjectId SEU-PROJECT-ID -Monitoramento -PularApis
+```
+
+Ou, sem rebuildar a imagem:
+
+```powershell
+gcloud run services update motsp --region southamerica-east1 --update-env-vars "GX_MONITORAMENTO_ATIVO=true,GX_TRANSITO_MONITORAR_CATALOGO=true"
+```
+
+> As **aspas são obrigatórias no PowerShell**: sem elas, `a,b` vira uma lista e o
+> gcloud recebe um único valor `"true GX_TRANSITO_MONITORAR_CATALOGO=true"`. O
+> pydantic recusa o booleano, o container sai com `exit(1)` e o Cloud Run
+> reporta "failed to start and listen on the port" — a mensagem engana: a porta
+> não é o problema, o log da revisão mostra o `ValidationError` real.
+
+> Em CPU, uma inferência do `yolo11m` a `imgsz=1280` custa alguns segundos —
+> ordens de grandeza acima da GPU local. Por isso o deploy usa
+> `GX_LIVE_DETECTION_INTERVAL_SECONDS=60` em vez dos 15s locais. Ligar as 20
+> threads do catálogo (10 trânsito + 10 alagamento) em 2 vCPU satura a
+> instância: para demonstração, prefira ligar só `GX_TRANSITO_MONITORAR_CATALOGO`,
+> ou apontar `GX_CAMERA_SNAPSHOT_URL` para uma câmera só.
+
+### 21.4 Custo e proteção do crédito
+
+Cota gratuita mensal do Cloud Run: 180.000 vCPU-s, 360.000 GiB-s e 2 milhões de
+requisições. Com a configuração deste deploy (2 vCPU / 4 GiB), isso equivale a
+**~25 horas por mês de painel aberto, de graça**. Acima disso, ~US$ 0,30 por
+hora de uso efetivo — e o crédito de US$ 300 cobre ~1.000 horas. Com o painel
+fechado, o custo é o armazenamento da imagem no Artifact Registry: centavos.
+
+Proteções recomendadas:
+
+1. **Orçamento com alerta**: Console → Faturamento → Orçamentos e alertas →
+   criar orçamento de, por exemplo, US$ 20 com alerta em 50%/90%/100%.
+2. **`--max-instances 1`**: já aplicado pelo script; é o teto físico do gasto.
+3. **Desligar de vez** quando a banca acabar:
+   ```powershell
+   gcloud run services delete motsp --region southamerica-east1
+   ```
+
+### 21.5 Limitações conhecidas do ambiente de nuvem
+
+- **Primeiro acesso é lento.** A imagem tem ~2 GB (torch + pesos); o cold start
+  fica entre 30 e 60 segundos. Se for apresentar para a banca, abra o link
+  alguns minutos antes para "acordar" o serviço.
+- **O banco não persiste.** O SQLite vive no sistema de arquivos efêmero do
+  container: cada vez que o serviço acorda, começa vazio e as tabelas são
+  recriadas no startup. Coerente com a janela de 45 minutos dos eventos
+  ([§13](#13-ciclo-de-vida-de-um-evento)), mas nada sobrevive ao sono. Para
+  persistir de verdade seria preciso montar um bucket do Cloud Storage ou usar
+  Cloud SQL — nenhum dos dois é gratuito de forma indefinida.
+- **Evidências ocupam memória.** Os JPEGs anotados são gravados em
+  `backend/app/data/evidencias/`, que no Cloud Run é um tmpfs contado dentro dos
+  4 GiB de RAM da instância.
+- **`GX_YOLO_MODEL`, `GX_YOLO_IMGSZ` e `GX_YOLO_CLASS_MAPPING` são lidos com
+  `os.getenv`** direto em `ml/detector.py`, não via `config.py`. No Cloud Run
+  isso funciona (são variáveis de ambiente reais do processo), ao contrário do
+  ambiente local, onde só o `.env` é lido — ver a nota sobre `TOMTOM_API_KEY`
+  em [§5](#5-configuração-env).
+
+### 21.6 Diferenças de execução entre local e container
+
+| | Local (`start.ps1`) | Container (Cloud Run) |
+|---|---|---|
+| Painel | `http.server` na porta 5500, origem separada | servido pelo próprio FastAPI, mesma origem |
+| `GET /` | JSON de status | `index.html` do painel |
+| Status da API | `GET /` | `GET /api/status` |
+| CORS | necessário (origens diferentes) | irrelevante (origem única) |
+| `API_BASE_URL` | fixo em `frontend/js/config.js` | `window.location.origin`, via `config.prod.js` |
+| Configuração | `backend/.env` | variáveis de ambiente do serviço |
+
+O chaveamento é a flag `GX_SERVE_FRONTEND` (padrão `false`), lida em
+`config.py`. Ligada, `app/main.py` monta `frontend/` como estático em `/` — o
+mount é registrado **depois** de todos os routers, senão engoliria `/eventos`,
+`/ws` e `/docs`.
 
 ---
 
