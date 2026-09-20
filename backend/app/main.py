@@ -1,8 +1,10 @@
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.broadcast import set_main_loop
 from app.config import settings
@@ -91,11 +93,29 @@ app.include_router(deteccao.router)
 app.include_router(websocket.router)
 
 
-@app.get("/")
-def raiz() -> dict[str, str]:
+def _status() -> dict[str, str]:
     return {"status": "online", "message": "API do TCC rodando com sucesso"}
+
+
+# Sempre disponível: no deploy o "/" é o painel, e sobrou este endereço para
+# checar a API sem depender do HTML.
+app.add_api_route("/api/status", _status, methods=["GET"])
 
 
 @app.get("/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# Painel estático servido pela própria API (deploy em container).
+#
+# O mount tem que ser a ÚLTIMA rota registrada: ele responde por "/" inteiro e
+# engoliria /eventos, /ws e /docs se viesse antes dos routers. Pela mesma razão
+# o "/" JSON só existe quando o painel NÃO está sendo servido — com o mount
+# ativo, quem abre o link recebe o index.html, não um dicionário.
+_FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
+
+if settings.gx_serve_frontend and _FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="painel")
+else:
+    app.add_api_route("/", _status, methods=["GET"])

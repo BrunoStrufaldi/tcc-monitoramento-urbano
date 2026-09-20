@@ -1,0 +1,49 @@
+# Nada aqui é copiado para a imagem. O objetivo é duplo: imagem pequena
+# (cold start rápido no Cloud Run) e nenhum segredo/dado local viajando junto.
+
+.git/
+.gitignore
+.idea/
+.vscode/
+.codex/
+.claude/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+
+# Ambientes e dependências que a imagem reinstala do zero
+backend/venv/
+notificacoes-urbanas/
+node_modules/
+
+# Segredos e config local — as variáveis vêm do Cloud Run, não de arquivo
+backend/.env
+frontend/js/config.js
+
+# Dados de runtime da máquina local: o deploy sobe com banco vazio
+**/*.db
+**/*.db-shm
+**/*.db-wal
+backend/app/data/
+backend/data/
+
+# Treino: datasets, runs e pesos intermediários não vão para produção
+ml/datasets/
+ml/runs/
+runs/
+weights/
+
+# Testes não rodam dentro da imagem
+backend/tests/
+frontend/tests/
+
+# Dos pesos, só os dois que o runtime carrega (yolo11m = trânsito,
+# gx-incident = alagamento). Os backups/tentativas antigas ficam de fora.
+ml/models/*
+!ml/models/yolo11m.pt
+!ml/models/gx-incident.pt
+backend/ml/
+
+# ATENÇÃO: a existência deste arquivo é o que impede o gcloud de usar o
+# .gitignore como filtro de upload. Sem ele, ml/models/*.pt (ignorado no git)
+# nunca chegaria ao Cloud Build e a imagem subiria sem os pesos do YOLO.
