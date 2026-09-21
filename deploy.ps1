@@ -15,9 +15,18 @@
     variável de ambiente do serviço. Ela nunca é escrita neste script nem vai
     para dentro da imagem (o .dockerignore exclui o .env).
 
+    As variáveis são enviadas com --update-env-vars (mescla), não --set-env-vars
+    (substitui). Isso importa: o monitoramento contínuo e qualquer ajuste feito
+    depois com `gcloud run services update` sobrevivem a um redeploy. Sem
+    -Monitoramento nem -DesligarMonitoramento o script não toca nesse estado.
+
+    Este script é o caminho MANUAL. O automático é o gatilho do Cloud Build
+    (cloudbuild.yaml), que publica a cada push na main do GitHub.
+
 .EXAMPLE
     .\deploy.ps1 -ProjectId motsp-tcc
     .\deploy.ps1 -ProjectId motsp-tcc -Monitoramento
+    .\deploy.ps1 -ProjectId motsp-tcc -DesligarMonitoramento
 #>
 param(
     [Parameter(Mandatory = $true)]
@@ -30,9 +39,13 @@ param(
     # vCPU-segundo se o crédito ficar apertado.
     [string]$Region = "southamerica-east1",
 
-    # Sem esta flag o sistema sobe com as threads de detecção DESLIGADAS: o
-    # painel funciona, o YOLO responde sob demanda, e nada consome CPU sozinho.
+    # Liga as threads de detecção contínua (trânsito + alagamento) no serviço.
+    # Sem esta flag o estado atual da nuvem é PRESERVADO — um redeploy nunca
+    # desliga o monitoramento por acidente.
     [switch]$Monitoramento,
+
+    # Desliga as threads explicitamente. É o único jeito de desligar por aqui.
+    [switch]$DesligarMonitoramento,
 
     # Pula o "enable services" (só precisa na primeira vez; leva ~1 min).
     [switch]$PularApis
@@ -85,20 +98,36 @@ if (-not $tomtom) {
     Write-Warning "TOMTOM_API_KEY nao encontrada em backend/.env — a arbitragem de transito vai degradar."
 }
 
-$ativo = if ($Monitoramento) { "true" } else { "false" }
+if ($Monitoramento -and $DesligarMonitoramento) {
+    Write-Error "Escolha -Monitoramento OU -DesligarMonitoramento, nao os dois."
+    exit 1
+}
 
-# Delimitador customizado (^@^): evita que o gcloud quebre valores em virgulas.
-$envVars = "^@^" + (@(
+# Variaveis que este script sempre garante (idempotentes: mesmo valor a cada
+# deploy). Tudo que NAO esta aqui e preservado como esta na nuvem.
+$pares = @(
     "GX_SERVE_FRONTEND=true",
     "DATABASE_URL=sqlite:///./gx.db",
-    "GX_MONITORAMENTO_ATIVO=$ativo",
-    "GX_TRANSITO_MONITORAR_CATALOGO=$ativo",
-    "GX_ALAGAMENTO_MONITORAR_CATALOGO=$ativo",
     # 15s (valor local, com GPU) viraria fila infinita em CPU: cada inferencia
     # do yolo11m a 1280 leva alguns segundos por camera.
-    "GX_LIVE_DETECTION_INTERVAL_SECONDS=60",
-    "TOMTOM_API_KEY=$tomtom"
-) -join "@")
+    "GX_LIVE_DETECTION_INTERVAL_SECONDS=60"
+)
+# So sobrescreve a chave se ela foi encontrada: um .env sem a chave nao pode
+# apagar a que ja esta configurada no servico.
+if ($tomtom) { $pares += "TOMTOM_API_KEY=$tomtom" }
+
+$ativo = "(preservado)"
+if ($Monitoramento -or $DesligarMonitoramento) {
+    $ativo = if ($Monitoramento) { "true" } else { "false" }
+    $pares += @(
+        "GX_MONITORAMENTO_ATIVO=$ativo",
+        "GX_TRANSITO_MONITORAR_CATALOGO=$ativo",
+        "GX_ALAGAMENTO_MONITORAR_CATALOGO=$ativo"
+    )
+}
+
+# Delimitador customizado (^@^): evita que o gcloud quebre valores em virgulas.
+$envVars = "^@^" + ($pares -join "@")
 
 # O Cloud Build assume 10 min por build; instalar o torch passa disso com
 # folga e a build morreria no meio, sem imagem e sem mensagem clara.
@@ -116,7 +145,7 @@ gcloud run deploy $Service `
     --max-instances 1 `
     --concurrency 40 `
     --timeout 3600 `
-    --set-env-vars $envVars
+    --update-env-vars $envVars
 
 if (-not $?) { Write-Error "Deploy falhou. Veja o log do Cloud Build no link acima."; exit 1 }
 
