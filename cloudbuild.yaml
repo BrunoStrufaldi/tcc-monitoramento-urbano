@@ -10,22 +10,31 @@
 substitutions:
   _REGION: southamerica-east1
   _SERVICE: motsp
-  _IMAGE: southamerica-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/motsp
+  # Repositório criado pelo primeiro `gcloud run deploy --source` (deploy.ps1).
+  _REPO: southamerica-east1-docker.pkg.dev
 
+# O caminho da imagem é repetido nos passos em vez de virar uma substituição
+# (_IMAGE): $PROJECT_ID dentro do valor de uma substituição NÃO é expandido —
+# nem com dynamic_substitutions — e o docker recebia a tag literal
+# "...pkg.dev/$PROJECT_ID/..." ("repository name must be lowercase"). Nos
+# args dos passos as variáveis embutidas sempre expandem.
 steps:
   # 1. Builda a imagem com o Dockerfile da raiz (o mesmo do deploy manual).
   - id: build
     name: gcr.io/cloud-builders/docker
     args:
       - build
-      - --tag=${_IMAGE}:${COMMIT_SHA}
-      - --tag=${_IMAGE}:latest
+      - --tag=${_REPO}/${PROJECT_ID}/cloud-run-source-deploy/${_SERVICE}:${COMMIT_SHA}
+      - --tag=${_REPO}/${PROJECT_ID}/cloud-run-source-deploy/${_SERVICE}:latest
       - .
 
   # 2. Envia a imagem para o Artifact Registry.
   - id: push
     name: gcr.io/cloud-builders/docker
-    args: [push, --all-tags, "${_IMAGE}"]
+    args:
+      - push
+      - --all-tags
+      - ${_REPO}/${PROJECT_ID}/cloud-run-source-deploy/${_SERVICE}
 
   # 3. Publica uma nova revisão no Cloud Run. Sem --set-env-vars de propósito:
   #    memória, CPU, min/max-instances, TOMTOM_API_KEY e as demais variáveis já
@@ -37,7 +46,7 @@ steps:
       - run
       - deploy
       - ${_SERVICE}
-      - --image=${_IMAGE}:${COMMIT_SHA}
+      - --image=${_REPO}/${PROJECT_ID}/cloud-run-source-deploy/${_SERVICE}:${COMMIT_SHA}
       - --region=${_REGION}
       - --platform=managed
       - --quiet
@@ -50,7 +59,3 @@ options:
   # Obrigatório quando a build roda com a conta de serviço do Compute (o
   # padrão em projetos novos) em vez da conta legada do Cloud Build.
   logging: CLOUD_LOGGING_ONLY
-  # Sem isto o $PROJECT_ID dentro de _IMAGE não é expandido e o docker recebe
-  # a tag literal "...pkg.dev/$PROJECT_ID/..." — "repository name must be
-  # lowercase" (primeira execução do gatilho, 21/09/2026).
-  dynamic_substitutions: true
