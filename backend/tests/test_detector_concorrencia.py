@@ -92,6 +92,34 @@ def test_inferencias_simultaneas_respeitam_o_semaforo(detector_limpo, monkeypatc
     assert modelo.pico <= 2
 
 
+def test_cada_modelo_infere_uma_vez_por_vez(detector_limpo, monkeypatch):
+    """Regressão do "'Conv' object has no attribute 'bn'": duas threads no mesmo
+    objeto YOLO disputavam o fuse da primeira predict. Mesmo com o semáforo
+    liberando 2, um modelo nunca atende duas chamadas ao mesmo tempo."""
+    _, modelo = detector_limpo
+    monkeypatch.setattr(detector, "_inferencia_semaforo", threading.BoundedSemaphore(2))
+
+    _disparar(lambda: detector.detectar_imagem_real("qualquer.jpg"), 20)
+    assert modelo.pico == 1
+
+    modelo.pico = 0
+    _disparar(lambda: detector.detectar_incidentes_imagem("qualquer.jpg"), 20)
+    assert modelo.pico == 1
+
+
+def test_transito_e_alagamento_seguem_em_paralelo(detector_limpo, monkeypatch):
+    """Os locks são por modelo: o de trânsito não bloqueia o de alagamento."""
+    _, modelo = detector_limpo
+    monkeypatch.setattr(detector, "_inferencia_semaforo", threading.BoundedSemaphore(2))
+    alvos = [lambda: detector.detectar_imagem_real("a.jpg"), lambda: detector.detectar_incidentes_imagem("b.jpg")] * 10
+    threads = [threading.Thread(target=alvo) for alvo in alvos]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=10)
+    assert modelo.pico <= 2
+
+
 def test_limite_de_concorrencia_vem_do_ambiente(monkeypatch):
     monkeypatch.setenv("GX_YOLO_MAX_CONCORRENCIA", "3")
     assert detector._max_inferencias_simultaneas() == 3

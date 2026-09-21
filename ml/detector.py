@@ -109,6 +109,17 @@ _inferencia_semaforo = threading.BoundedSemaphore(_max_inferencias_simultaneas()
 # que a inferência em si, que estourou os 4 GiB do Cloud Run em 19 s.
 _carga_lock = threading.Lock()
 
+# Uma inferência por vez em cada modelo. O objeto YOLO do Ultralytics não é
+# seguro entre threads: na primeira ``predict`` ele funde Conv+BatchNorm e
+# apaga o atributo ``bn`` — duas threads chegando juntas quebram com
+# "'Conv' object has no attribute 'bn'" (21/09/2026, monitoramento local) — e
+# depois disso o predictor guarda estado entre chamadas, podendo misturar
+# resultados de câmeras diferentes. Com um lock por modelo, o semáforo acima
+# vira só o teto global (útil em CPU); trânsito e alagamento seguem em paralelo
+# porque são objetos distintos.
+_model_infer_lock = threading.Lock()
+_incident_infer_lock = threading.Lock()
+
 
 def _imgsz() -> int:
     """Resolução de inferência. 1280 (não o padrão 640 do Ultralytics) porque
@@ -230,7 +241,8 @@ def detectar_incidentes_imagem(caminho_imagem: str, confianca_minima: float = 0.
         raise RuntimeError(_incident_model_error or "Detector de incidentes indisponível")
 
     resultados: list[Deteccao] = []
-    with _inferencia_semaforo:
+    # Lock antes do semáforo: quem espera a vez do modelo não ocupa uma vaga global.
+    with _incident_infer_lock, _inferencia_semaforo:
         predicoes = model.predict(source=caminho_imagem, conf=confianca_minima, verbose=False)
     for resultado in predicoes:
         nomes = resultado.names
@@ -267,7 +279,7 @@ def detectar_imagem_real(caminho_imagem: str, confianca_minima: float = 0.45) ->
         raise RuntimeError(_model_error or "Detector YOLO indisponível")
 
     resultados: list[Deteccao] = []
-    with _inferencia_semaforo:
+    with _model_infer_lock, _inferencia_semaforo:
         predicoes = model.predict(source=caminho_imagem, conf=confianca_minima, imgsz=_imgsz(), verbose=False)
     for resultado in predicoes:
         nomes = resultado.names
