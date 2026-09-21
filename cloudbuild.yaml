@@ -1,0 +1,52 @@
+# Deploy automático do MotSP.
+#
+# O gatilho "motsp-main" do Cloud Build roda este arquivo a cada push na
+# branch main do GitHub. Faz o mesmo que o deploy.ps1, só que a partir do
+# repositório em vez da máquina local — por isso os dois pesos do YOLO
+# (ml/models/yolo11m.pt e gx-incident.pt) precisam estar commitados.
+#
+# O deploy.ps1 continua valendo para deploy manual.
+
+substitutions:
+  _REGION: southamerica-east1
+  _SERVICE: motsp
+  _IMAGE: southamerica-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/motsp
+
+steps:
+  # 1. Builda a imagem com o Dockerfile da raiz (o mesmo do deploy manual).
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag=${_IMAGE}:${COMMIT_SHA}
+      - --tag=${_IMAGE}:latest
+      - .
+
+  # 2. Envia a imagem para o Artifact Registry.
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: [push, --all-tags, "${_IMAGE}"]
+
+  # 3. Publica uma nova revisão no Cloud Run. Sem --set-env-vars de propósito:
+  #    memória, CPU, min/max-instances, TOMTOM_API_KEY e as demais variáveis já
+  #    configuradas no serviço são preservadas de uma revisão para a outra.
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_IMAGE}:${COMMIT_SHA}
+      - --region=${_REGION}
+      - --platform=managed
+      - --quiet
+
+# Instalar o torch passa dos 10 min padrão de build (mesmo motivo do
+# `builds/timeout 1800` no deploy.ps1).
+timeout: 1800s
+
+options:
+  # Obrigatório quando a build roda com a conta de serviço do Compute (o
+  # padrão em projetos novos) em vez da conta legada do Cloud Build.
+  logging: CLOUD_LOGGING_ONLY

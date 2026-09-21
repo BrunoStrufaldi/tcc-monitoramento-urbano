@@ -153,6 +153,10 @@ TCC-Atualizado/
 ├── README.md                     ← este arquivo (documentação única)
 ├── package.json                  build/test do frontend (tsc + node:test)
 ├── start.ps1                     sobe backend (8000) e frontend (5500) em janelas separadas
+├── Dockerfile                    imagem única API + painel + YOLO (CPU) para o Cloud Run — §21
+├── deploy.ps1                    deploy manual no Cloud Run (build a partir da pasta local)
+├── cloudbuild.yaml               deploy automático: gatilho a cada push na main do GitHub
+├── .dockerignore / .gcloudignore o que fica fora da imagem (venv, datasets, .env, pesos extras)
 ├── reset_mysql.ps1 / .bat        reset da senha root do MySQL local (utilitário de máquina)
 │
 ├── backend/
@@ -315,6 +319,7 @@ Todas as variáveis são lidas por `backend/app/config.py` (pydantic-settings). 
 | `GX_YOLO_INCIDENT_MODEL` | `ml/models/gx-incident.pt` | Peso dedicado a alagamento, carregado **separado** do modelo padrão (trocar o global quebraria a contagem de veículos). |
 | `GX_YOLO_INCIDENT_CONF` | `0.6` | Confiança mínima só do modelo de alagamento. Mais alta de propósito: enquanto o peso não é retreinado com negativos, ele crava caixa em cena seca com score baixo. |
 | `GX_YOLO_CLASS_MAPPING` | — | JSON opcional, ex.: `{"car":"veiculo","truck":"caminhao"}`. Destinos inválidos são ignorados para não converter classe desconhecida em ocorrência urbana. |
+| `GX_YOLO_MAX_CONCORRENCIA` | `2` | Quantas inferências rodam ao mesmo tempo no processo (semáforo em `ml/detector.py`). Com o catálogo ligado são 20 threads chamando o YOLO; em GPU tanto faz, em CPU com 4 GiB (Cloud Run) 20 inferências simultâneas a 1280 estouram a memória e o container é morto. As threads continuam existindo — só esperam a vez. O carregamento dos pesos também tem trava própria: sem ela cada thread carregava a sua cópia. |
 
 ### Validação de frame (upload / câmera do navegador)
 
@@ -1434,11 +1439,15 @@ pessoa com o endereço abre o painel, sem conta Google.
 
 **4. Ligar o monitoramento contínuo (opcional)**
 
-Por padrão o deploy sobe com as threads de detecção **desligadas**: o painel
-funciona, a inferência sob demanda funciona, e nada consome CPU sozinho.
+No primeiro deploy as threads de detecção sobem **desligadas** (padrão do
+`config.py`): o painel funciona, a inferência sob demanda funciona, e nada
+consome CPU sozinho. O script só mexe nesse estado quando você pede — um
+redeploy sem flag **preserva** o que está na nuvem (ele usa `--update-env-vars`,
+que mescla, e não `--set-env-vars`, que substituiria tudo).
 
 ```powershell
-.\deploy.ps1 -ProjectId SEU-PROJECT-ID -Monitoramento -PularApis
+.\deploy.ps1 -ProjectId SEU-PROJECT-ID -Monitoramento -PularApis          # liga
+.\deploy.ps1 -ProjectId SEU-PROJECT-ID -DesligarMonitoramento -PularApis  # desliga
 ```
 
 Ou, sem rebuildar a imagem:
@@ -1489,6 +1498,13 @@ Proteções recomendadas:
   ([§13](#13-ciclo-de-vida-de-um-evento)), mas nada sobrevive ao sono. Para
   persistir de verdade seria preciso montar um bucket do Cloud Storage ou usar
   Cloud SQL — nenhum dos dois é gratuito de forma indefinida.
+- **Memória é o gargalo, não CPU.** No primeiro deploy com monitoramento ligado
+  o container foi morto por OOM (`4249 MiB` de `4096`) 19 s depois de carregar
+  o YOLO: as 10 threads de cada tipo chegavam juntas no carregamento e cada uma
+  subia a própria cópia do peso, e depois inferiam todas ao mesmo tempo. A
+  trava de carga e o semáforo de inferência (`GX_YOLO_MAX_CONCORRENCIA`, [§5](#modelos-yolo))
+  existem por causa disso. Quando o container morre, o SQLite morre junto —
+  o painel volta a zero sem nenhum aviso.
 - **Evidências ocupam memória.** Os JPEGs anotados são gravados em
   `backend/app/data/evidencias/`, que no Cloud Run é um tmpfs contado dentro dos
   4 GiB de RAM da instância.
@@ -1513,6 +1529,43 @@ O chaveamento é a flag `GX_SERVE_FRONTEND` (padrão `false`), lida em
 `config.py`. Ligada, `app/main.py` monta `frontend/` como estático em `/` — o
 mount é registrado **depois** de todos os routers, senão engoliria `/eventos`,
 `/ws` e `/docs`.
+
+### 21.7 Deploy automático a cada push (Cloud Build)
+
+`cloudbuild.yaml` na raiz descreve o caminho automático: um gatilho do Cloud
+Build observa a branch `main` do GitHub e, a cada push, builda a imagem com o
+mesmo `Dockerfile`, envia ao Artifact Registry e publica uma revisão nova no
+Cloud Run. É o mesmo resultado do `deploy.ps1`, sem depender da máquina local.
+
+| | `deploy.ps1` (manual) | Gatilho do Cloud Build (automático) |
+|---|---|---|
+| Fonte do código | pasta local, como está no disco (`.gcloudignore` filtra) | clone do GitHub (só o que está commitado) |
+| Pesos do YOLO | copiados do disco | **precisam estar no Git** — por isso `.gitignore` libera só `yolo11m.pt` e `gx-incident.pt` |
+| Variáveis do serviço | mescla as que o script conhece (`--update-env-vars`) | não toca em nenhuma: memória, TomTom e monitoramento ficam como estão |
+| Quando usar | emergência, ou testar sem passar pelo GitHub | rotina: `git push` e pronto |
+
+Cada push na `main` é uma publicação real (~10 min de build; a cota gratuita
+do Cloud Build é de 120 min/dia). Trabalho em andamento fica em branch e só
+entra na `main` quando estiver pronto para o link público.
+
+**Ativação (uma vez).** Depois de commitar `cloudbuild.yaml` e os dois pesos:
+
+1. Console → **Cloud Build → Gatilhos → Conectar repositório** (instala o app
+   do Cloud Build no GitHub e autoriza o repositório).
+2. **Criar gatilho**: evento *push para uma branch*, branch `^main$`, tipo de
+   configuração *arquivo de configuração do Cloud Build*, local `cloudbuild.yaml`,
+   conta de serviço a do Compute (`<número>-compute@developer.gserviceaccount.com`).
+3. Essa conta precisa, além de `cloudbuild.builds.builder` (o `deploy.ps1` já
+   concede), de **Cloud Run Admin** e **Service Account User** para o passo de
+   deploy — sem eles a build passa e a publicação falha com *permission denied*:
+   ```powershell
+   gcloud projects add-iam-policy-binding SEU-PROJECT-ID --member "serviceAccount:NUMERO-compute@developer.gserviceaccount.com" --role roles/run.admin
+   gcloud projects add-iam-policy-binding SEU-PROJECT-ID --member "serviceAccount:NUMERO-compute@developer.gserviceaccount.com" --role roles/iam.serviceAccountUser
+   ```
+
+O gatilho também pode ser criado por linha de comando
+(`gcloud builds triggers create github ...`), mas a conexão com o GitHub
+(passo 1) só existe pelo console.
 
 ---
 

@@ -13,8 +13,12 @@ node_modules/
 # Frontend — não commitar chaves
 frontend/js/config.js
 
-# Pesos grandes de modelos locais (baixados na máquina de inferência)
+# Pesos grandes de modelos locais (baixados na máquina de inferência).
+# Exceção: os dois que o runtime carrega vão para o Git, porque o deploy
+# automático (cloudbuild.yaml) builda a imagem a partir do GitHub.
 ml/models/*.pt
+!ml/models/yolo11m.pt
+!ml/models/gx-incident.pt
 backend/ml/models/*.pt
 weights/
 
