@@ -618,6 +618,28 @@ input, select, textarea { font-family: inherit; }
 .search-input:focus ~ .search-hint { border-color: rgba(255,138,0,0.3); color: var(--gx-light); }
 
 /* ============================================================
+   STATUS FILTER (painel lateral, mobile/tablet)
+   Só aparece nas larguras em que .map-controls está oculto.
+   ============================================================ */
+.status-filter {
+  display: none;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-bottom: 10px;
+}
+.status-filter .sev-btn { justify-content: center; min-height: 40px; }
+.status-filter .status-ativo { --sev-color: var(--ok); --sev-dim: rgba(46,170,90,.14); }
+.status-filter .status-analise { --sev-color: var(--warn); --sev-dim: rgba(240,180,41,.14); }
+.status-filter .status-ativo .sev-dot { background: var(--ok); }
+.status-filter .status-analise .sev-dot { background: var(--warn); }
+.status-filter .sev-btn.active:not(.status-ativo):not(.status-analise) {
+  --sev-color: var(--text-primary); --sev-dim: var(--bg-hover);
+}
+@media (max-width: 980px) {
+  .status-filter { display: grid; }
+}
+
+/* ============================================================
    SEVERITY FILTERS
    ============================================================ */
 .severity-filters {
@@ -1002,34 +1024,6 @@ input, select, textarea { font-family: inherit; }
 @keyframes gx-critical-pulse {
   0%, 100% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--marker-color) 13%, transparent), 0 4px 12px rgba(0,0,0,.55); }
   50% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--marker-color) 5%, transparent), 0 0 20px var(--marker-color); }
-}
-
-.floating-summary {
-  bottom: 16px;
-  right: 16px;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: var(--r-lg);
-  background: rgba(17, 22, 27, 0.92);
-  border: 1px solid var(--border-strong);
-  backdrop-filter: blur(14px);
-  box-shadow: var(--sh-sm);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  max-width: calc(100% - 32px);
-}
-.pulse-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--ok);
-  animation: pulse 2.5s ease-in-out infinite;
-}
-@keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(46,170,90,0.35); }
-  50% { box-shadow: 0 0 0 6px rgba(46,170,90,0); }
 }
 
 /* Map Controls */
@@ -1987,6 +1981,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     box-shadow: var(--sh-lg);
   }
   .right-panel.open { transform: translateX(0); }
+  /* iOS/WebKit: os painéis do Leaflet usam translate3d (camadas compostas) e
+     o Safari já desenhou o mapa por cima da sidebar fixa mesmo com z-index
+     maior. Três defesas: (1) o mapa vira uma camada composta própria, (2) os
+     painéis fixos também, com z-index acima de qualquer valor interno do mapa,
+     (3) com a sidebar aberta o mapa nem é pintado — ela cobre 94vw, e a
+     sidebar vem antes do mapa no DOM, então o seletor de irmão funciona. */
+  .map-stage { isolation: isolate; transform: translateZ(0); }
+  .sidebar, .right-panel { z-index: 1050; will-change: transform; }
+  .sidebar.open ~ .map-stage { visibility: hidden; }
   .left-toggle { display: inline-flex !important; }
   .topbar-center { display: none; }
   .topbar-sep { display: none; }
@@ -2101,7 +2104,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .map-command-card .command-meta { font-size: 12px; margin-top: 2px; }
   .map-controls { top: 12px; right: 12px; }
   .map-controls .map-search { width: 210px; height: 34px; font-size: 12px; }
-  .floating-summary { bottom: 14px; right: 14px; padding: 8px 10px; font-size: 12px; border-radius: 7px; }
 
   .right-panel { grid-column: 4; grid-row: 1; position: static; width: auto; transform: none; box-shadow: none; }
   .right-panel-header { min-height: 44px; padding: 11px 13px; }
@@ -2147,7 +2149,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 @media (max-width: 680px) {
   .map-stage { grid-column: 1; grid-row: 1; }
-  .floating-summary { bottom: 98px; left: 12px; right: auto; }
+  /* Zoom do Leaflet: afastado do rodapé (barra do Safari / gesto de início)
+     e com alvo de toque de 44px; o "−" ficava cortado abaixo da tela. */
+  #mapa .leaflet-bottom.leaflet-right { right: 12px; bottom: 24px; }
+  #mapa .leaflet-control-zoom { margin: 0; }
+  #mapa .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 43px; font-size: 20px; }
+  #mapa .leaflet-control-attribution { font-size: 9px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2224,8 +2231,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .map-controls { top: 12px; left: 12px; padding: 4px; border-radius: 7px; }
   .map-search { width: 230px; height: 34px; background: transparent; font-size: 11px; }
   .map-filter-button { height: 34px; border-radius: 5px; font-size: 11px; }
-  .map-command-card, .floating-summary { display: none; }
-
+  .map-command-card,
   .right-panel { background: #0b1218; border-left-color: #1b2b35; }
   .right-panel-header { min-height: 46px; padding: 10px 13px; border-bottom-color: #1d2d37; }
   .right-panel-title { color: #e0e7eb; font-size: 13px; }
@@ -2278,7 +2284,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .section, .selected-event, .kpi-card, .right-panel-header, .right-panel-content, .rp-alert-card, .rp-evidence-card {
   background-color: #101820;
 }
-.map-command-card, .map-controls, .floating-summary {
+.map-command-card, .map-controls {
   background: rgba(9, 15, 21, .82);
   border-color: rgba(149, 169, 185, .24);
   backdrop-filter: blur(10px);
@@ -2344,7 +2350,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .map-command-card strong { font-size: 16px; }
   .map-controls { top: 14px; right: 14px; }
   .map-controls .map-search { width: 238px; height: 36px; font-size: 12px; }
-  .floating-summary { bottom: 16px; right: 16px; }
 
   .right-panel { grid-column: 4; border-left-color: #202a33; }
   .right-panel-header { min-height: 50px; padding: 13px 15px; border-bottom-color: #26313b; }
@@ -2428,7 +2433,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .map-command-card .command-meta:not(.live-air-status) { display: none; }
   .map-command-card strong { font-size: 13px; }
   .map-command-card .live-air-status { display: block; margin-top: 2px; font-size: 11px; }
-  .floating-summary { bottom: 14px; right: 14px; }
 }
 
 @media (min-width: 721px) and (max-width: 1200px) {

@@ -5,6 +5,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.types import Scope
+from starlette.responses import Response
 
 from app.broadcast import set_main_loop
 from app.config import settings
@@ -115,7 +117,25 @@ def health_check() -> dict[str, str]:
 # ativo, quem abre o link recebe o index.html, não um dicionário.
 _FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 
+
+class _PainelStaticFiles(StaticFiles):
+    """StaticFiles com ``Cache-Control: no-cache`` no HTML.
+
+    O index.html é quem aponta para o CSS/JS versionados pelo ``?v=``. Sem
+    cabeçalho de cache o Safari do iOS reaproveitava o HTML antigo por horas
+    (cache heurístico) e continuava carregando o CSS antigo mesmo depois de um
+    deploy. ``no-cache`` obriga a revalidar pelo ETag a cada abertura — um 304
+    barato — e os demais arquivos ficam com o cache padrão.
+    """
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        if response.headers.get("content-type", "").startswith("text/html"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 if settings.gx_serve_frontend and _FRONTEND_DIR.is_dir():
-    app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="painel")
+    app.mount("/", _PainelStaticFiles(directory=_FRONTEND_DIR, html=True), name="painel")
 else:
     app.add_api_route("/", _status, methods=["GET"])

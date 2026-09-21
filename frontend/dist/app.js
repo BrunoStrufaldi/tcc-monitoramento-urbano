@@ -948,11 +948,11 @@ function initYoloTester() {
     byId("yt-analyze").addEventListener("click", () => { void ytAnalisar(); });
     void ytCarregarStatus();
 }
+/** Baixa todos os status de uma vez: o filtro Ativos/Em análise é aplicado no
+ * cliente (isEventVisible), assim os KPIs mostram o total real de cada status
+ * mesmo com o filtro ligado. */
 async function fetchEvents() {
     const params = new URLSearchParams({ limite: "200" });
-    const statusElement = byId("filtro-status");
-    if (statusElement.value)
-        params.set("status", statusElement.value);
     const response = await apiFetch("/eventos?" + params.toString());
     if (!response.ok)
         throw new Error("API retornou " + response.status);
@@ -1007,11 +1007,39 @@ async function loadLiveAirQuality() {
 function formatClock(value) {
     return value.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
+function currentStatusFilter() {
+    return byId("filtro-status")?.value || "";
+}
+function matchesStatusFilter(event) {
+    const statusFiltro = currentStatusFilter();
+    return !statusFiltro || event.status === statusFiltro;
+}
+/** Sincroniza o controle segmentado do painel lateral (mobile) com o <select>
+ * do mapa (desktop); os dois manipulam o mesmo filtro. */
+function syncStatusFilterButtons() {
+    const current = currentStatusFilter();
+    document.querySelectorAll("#filtro-status-mobile button[data-status]").forEach((btn) => {
+        const active = (btn.dataset.status || "") === current;
+        btn.classList.toggle("active", active);
+        btn.setAttribute("aria-selected", String(active));
+    });
+}
+function initStatusFilter() {
+    const select = byId("filtro-status");
+    select.addEventListener("change", () => { syncStatusFilterButtons(); void loadEvents(); });
+    document.querySelectorAll("#filtro-status-mobile button[data-status]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            select.value = btn.dataset.status || "";
+            syncStatusFilterButtons();
+            void loadEvents();
+        });
+    });
+    syncStatusFilterButtons();
+}
 function isEventVisible(event) {
     if (!activeSeverities.has(normalizeSeverity(event.severidade)))
         return false;
-    const statusFiltro = byId("filtro-status")?.value;
-    if (statusFiltro && event.status !== statusFiltro)
+    if (!matchesStatusFilter(event))
         return false;
     if (!searchTerm)
         return true;
@@ -1513,12 +1541,13 @@ function renderSelectedEvent(event) {
 function renderSeverityFilters() {
     const container = byId("legenda-criticidade");
     const allActive = activeSeverities.size === Object.keys(SEVERITIES).length;
-    const countFor = (key) => loadedEvents.filter((e) => normalizeSeverity(e.severidade) === key).length;
+    const byStatus = loadedEvents.filter(matchesStatusFilter);
+    const countFor = (key) => byStatus.filter((e) => normalizeSeverity(e.severidade) === key).length;
     const items = [
         '<button class="sev-btn sev-all' + (allActive ? " active" : "") + '" data-criticidade="__all__" role="tab" aria-selected="' + allActive + '">' +
             '<span class="sev-dot" style="background:var(--text-secondary)"></span>' +
             '<span class="sev-label">Todos</span>' +
-            '<span class="sev-count">' + loadedEvents.length + '</span>' +
+            '<span class="sev-count">' + byStatus.length + '</span>' +
             '</button>',
         ...Object.entries(SEVERITIES).map(([key, style]) => {
             const active = activeSeverities.has(key);
@@ -1565,8 +1594,8 @@ function seedActivityFromEvents(events) {
     })));
 }
 function updateMetrics(events) {
-    const naoResolvidos = events.filter((e) => e.status !== "resolvido");
-    animateKpi(byId("kpi-ativos"), String(naoResolvidos.length));
+    const noMapa = events.filter((e) => e.status !== "resolvido" && matchesStatusFilter(e));
+    animateKpi(byId("kpi-ativos"), String(noMapa.length));
     animateKpi(byId("kpi-status-ativos"), String(events.filter((e) => e.status === "ativo").length));
     animateKpi(byId("kpi-status-analise"), String(events.filter((e) => e.status === "em_analise").length));
     renderSeverityFilters();
@@ -2253,7 +2282,7 @@ function initMapa() {
         initFusionControls();
         initEventDetailDrawer();
         byId("btn-atualizar").addEventListener("click", loadEvents);
-        byId("filtro-status").addEventListener("change", loadEvents);
+        initStatusFilter();
         const toggleRightBtn = byId("btn-toggle-right");
         if (toggleRightBtn) {
             toggleRightBtn.hidden = false;
@@ -2292,6 +2321,15 @@ function initMapa() {
     }).addTo(map);
     window.L.control.zoom({ position: "bottomright" }).addTo(map);
     map.on("zoomend", scheduleMarkerRefresh);
+    // iOS Safari: a barra de endereço recolhe/expande depois do carregamento e o
+    // mapa fica com a altura medida no primeiro layout — os controles do rodapé
+    // caem fora da tela. O Leaflet só escuta o resize da window, que nem sempre
+    // dispara nesse caso; o visualViewport dispara.
+    const remedirMapa = () => { if (map)
+        map.invalidateSize({ pan: false }); };
+    window.visualViewport?.addEventListener("resize", remedirMapa);
+    window.addEventListener("orientationchange", () => { window.setTimeout(remedirMapa, 250); });
+    window.setTimeout(remedirMapa, 500);
     map.on("popupopen", (popupEvent) => {
         openInfoWindow = popupEvent.popup;
     });
@@ -2320,7 +2358,7 @@ function initMapa() {
     initFusionControls();
     initEventDetailDrawer();
     byId("btn-atualizar").addEventListener("click", loadEvents);
-    byId("filtro-status").addEventListener("change", loadEvents);
+    initStatusFilter();
     const toggleRightBtn = byId("btn-toggle-right");
     if (toggleRightBtn) {
         toggleRightBtn.hidden = false;
