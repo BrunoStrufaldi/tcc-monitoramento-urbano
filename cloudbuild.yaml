@@ -50,3 +50,7 @@ options:
   # Obrigatório quando a build roda com a conta de serviço do Compute (o
   # padrão em projetos novos) em vez da conta legada do Cloud Build.
   logging: CLOUD_LOGGING_ONLY
+  # Sem isto o $PROJECT_ID dentro de _IMAGE não é expandido e o docker recebe
+  # a tag literal "...pkg.dev/$PROJECT_ID/..." — "repository name must be
+  # lowercase" (primeira execução do gatilho, 21/09/2026).
+  dynamic_substitutions: true
