@@ -84,6 +84,8 @@ input, select, textarea { font-family: inherit; }
   display: grid;
   grid-template-rows: 56px 1fr;
   height: 100vh;
+  /* iOS Safari: 100vh inclui a barra do navegador e corta o rodapé do mapa. */
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -285,6 +287,7 @@ input, select, textarea { font-family: inherit; }
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   height: calc(100vh - 56px);
+  height: calc(100dvh - 56px);
   overflow: hidden;
   gap: 0;
 }
@@ -897,6 +900,10 @@ input, select, textarea { font-family: inherit; }
    ============================================================ */
 .map-stage {
   position: relative;
+  /* Cria um stacking context próprio: os painéis do Leaflet (z-index 200–700)
+     e os overlays do mapa (1000) ficam confinados aqui e não passam por cima
+     da sidebar/right-panel fixos no mobile (z-index 90–92). */
+  z-index: 0;
   background: var(--bg-base);
   grid-column: 3;
   grid-row: 1;
@@ -2392,6 +2399,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .workspace {
     box-sizing: border-box;
     height: calc(100vh - 62px);
+    height: calc(100dvh - 62px);
     padding: 8px;
     gap: 8px;
     grid-template-columns: 64px 304px minmax(390px, 1fr) 370px;
