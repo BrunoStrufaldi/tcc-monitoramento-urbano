@@ -10,6 +10,7 @@ permite trocar por outro peso urbano próprio.
 import os
 import random
 import json
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -80,6 +81,35 @@ def _model_path() -> str:
     return os.getenv("GX_YOLO_MODEL", str(_DEFAULT_MODEL))
 
 
+def _max_inferencias_simultaneas() -> int:
+    """Quantas inferências podem rodar ao mesmo tempo no processo.
+
+    Com o monitoramento do catálogo ligado sobem 20 threads (10 câmeras ×
+    trânsito + alagamento), e cada uma chama o YOLO por conta própria. Em GPU
+    isso nunca doeu: a inferência leva dezenas de ms e as chamadas se
+    enfileiram no próprio CUDA. Em CPU (Cloud Run, 20/09/2026) 20 inferências
+    simultâneas a imgsz=1280 passaram de 4 GiB e o container foi morto por
+    OOM 19 s depois de carregar o modelo — levando o SQLite junto. O semáforo
+    faz as threads esperarem a vez em vez de alocarem todas de uma vez; o
+    ciclo completo das 10 câmeras fica mais longo, mas nenhuma decisão muda.
+    ``GX_YOLO_MAX_CONCORRENCIA`` ajusta (lido em os.environ, como os outros
+    knobs deste módulo — no .env local não chega, e não precisa: lá tem GPU).
+    """
+    try:
+        return max(1, int(os.getenv("GX_YOLO_MAX_CONCORRENCIA", "2")))
+    except ValueError:
+        return 2
+
+
+_inferencia_semaforo = threading.BoundedSemaphore(_max_inferencias_simultaneas())
+
+# Trava de carga dos pesos. Sem ela, no cold start com o catálogo ligado as 10
+# threads de uma mesma classe chegam juntas em ``_load_*``, todas veem o modelo
+# ainda ``None`` e cada uma carrega sua própria cópia do peso — foi isso, mais
+# que a inferência em si, que estourou os 4 GiB do Cloud Run em 19 s.
+_carga_lock = threading.Lock()
+
+
 def _imgsz() -> int:
     """Resolução de inferência. 1280 (não o padrão 640 do Ultralytics) porque
     as câmeras da CET acumulam fila de carro pequeno ao fundo — em 640 o YOLO
@@ -119,20 +149,24 @@ def _load_model() -> Any | None:
     if _model_error is not None:
         return None
 
-    model_path = _model_path()
-    if not Path(model_path).is_file():
-        _model_error = f"Modelo não encontrado: {model_path}"
-        return None
-    try:
-        from ultralytics import YOLO
+    with _carga_lock:
+        # Quem esperou a trava reaproveita a cópia de quem carregou primeiro.
+        if _model is not None or _model_error is not None:
+            return _model
+        model_path = _model_path()
+        if not Path(model_path).is_file():
+            _model_error = f"Modelo não encontrado: {model_path}"
+            return None
+        try:
+            from ultralytics import YOLO
 
-        _model = YOLO(model_path)
-        return _model
-    except ImportError:
-        _model_error = "Pacote ultralytics não instalado. Instale backend/requirements-yolo.txt."
-    except Exception as exc:
-        _model_error = f"Não foi possível carregar o modelo YOLO: {exc}"
-    return None
+            _model = YOLO(model_path)
+            return _model
+        except ImportError:
+            _model_error = "Pacote ultralytics não instalado. Instale backend/requirements-yolo.txt."
+        except Exception as exc:
+            _model_error = f"Não foi possível carregar o modelo YOLO: {exc}"
+        return None
 
 
 def status_detector() -> dict[str, Any]:
@@ -160,20 +194,23 @@ def _load_incident_model() -> Any | None:
     if _incident_model_error is not None:
         return None
 
-    model_path = _incident_model_path()
-    if not Path(model_path).is_file():
-        _incident_model_error = f"Modelo de incidentes não encontrado: {model_path}"
-        return None
-    try:
-        from ultralytics import YOLO
+    with _carga_lock:
+        if _incident_model is not None or _incident_model_error is not None:
+            return _incident_model
+        model_path = _incident_model_path()
+        if not Path(model_path).is_file():
+            _incident_model_error = f"Modelo de incidentes não encontrado: {model_path}"
+            return None
+        try:
+            from ultralytics import YOLO
 
-        _incident_model = YOLO(model_path)
-        return _incident_model
-    except ImportError:
-        _incident_model_error = "Pacote ultralytics não instalado. Instale backend/requirements-yolo.txt."
-    except Exception as exc:
-        _incident_model_error = f"Não foi possível carregar o modelo de incidentes: {exc}"
-    return None
+            _incident_model = YOLO(model_path)
+            return _incident_model
+        except ImportError:
+            _incident_model_error = "Pacote ultralytics não instalado. Instale backend/requirements-yolo.txt."
+        except Exception as exc:
+            _incident_model_error = f"Não foi possível carregar o modelo de incidentes: {exc}"
+        return None
 
 
 def status_incident_detector() -> dict[str, Any]:
@@ -193,7 +230,9 @@ def detectar_incidentes_imagem(caminho_imagem: str, confianca_minima: float = 0.
         raise RuntimeError(_incident_model_error or "Detector de incidentes indisponível")
 
     resultados: list[Deteccao] = []
-    for resultado in model.predict(source=caminho_imagem, conf=confianca_minima, verbose=False):
+    with _inferencia_semaforo:
+        predicoes = model.predict(source=caminho_imagem, conf=confianca_minima, verbose=False)
+    for resultado in predicoes:
         nomes = resultado.names
         for box in resultado.boxes:
             classe_modelo = int(box.cls.item())
@@ -228,7 +267,9 @@ def detectar_imagem_real(caminho_imagem: str, confianca_minima: float = 0.45) ->
         raise RuntimeError(_model_error or "Detector YOLO indisponível")
 
     resultados: list[Deteccao] = []
-    for resultado in model.predict(source=caminho_imagem, conf=confianca_minima, imgsz=_imgsz(), verbose=False):
+    with _inferencia_semaforo:
+        predicoes = model.predict(source=caminho_imagem, conf=confianca_minima, imgsz=_imgsz(), verbose=False)
+    for resultado in predicoes:
         nomes = resultado.names
         for box in resultado.boxes:
             classe_modelo = int(box.cls.item())
