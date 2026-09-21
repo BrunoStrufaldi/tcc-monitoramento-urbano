@@ -89,9 +89,11 @@ function updateConnectionStatus() {
     const el = byId("status-conexao");
     if (!el)
         return;
+    // O canal (WebSocket/SSE) fica só na classe CSS e no title: para quem usa
+    // o painel a diferença não importa, os dois são tempo real.
     const labels = {
-        ws: "Sistema ao vivo (WS)",
-        sse: "Sistema ao vivo (SSE)",
+        ws: "Sistema ao vivo",
+        sse: "Sistema ao vivo",
         polling: "Sistema em polling",
         disconnected: "Desconectado",
     };
@@ -101,7 +103,14 @@ function updateConnectionStatus() {
         polling: "conn-polling",
         disconnected: "conn-off",
     };
+    const titles = {
+        ws: "Atualizações em tempo real via WebSocket",
+        sse: "Atualizações em tempo real via Server-Sent Events",
+        polling: "Consultando a API periodicamente",
+        disconnected: "Sem conexão com o backend",
+    };
     el.textContent = labels[connectionMode];
+    el.title = titles[connectionMode];
     el.className = "status-badge " + classes[connectionMode];
 }
 function clearAllConnections() {
@@ -2253,14 +2262,11 @@ function initMapa() {
     if (appInitialized)
         return;
     appInitialized = true;
-    // Ao iniciar o sistema o mapa mostra apenas eventos "ativos"; o navegador
-    // pode restaurar a seleção anterior do <select>, então forçamos o padrão.
+    // Ao iniciar o sistema o mapa mostra todos os status; o navegador pode
+    // restaurar a seleção anterior do <select>, então forçamos o padrão.
     const filtroStatusInicial = byId("filtro-status");
     if (filtroStatusInicial)
-        filtroStatusInicial.value = "ativo";
-    byId("topbar-map-search")?.addEventListener("click", () => {
-        byId("map-search")?.focus();
-    });
+        filtroStatusInicial.value = "";
     const toggleLeftBtn = byId("btn-toggle-left");
     if (toggleLeftBtn) {
         toggleLeftBtn.hidden = false;
@@ -2402,33 +2408,6 @@ function initMapa() {
         applySearch();
         searchInput.focus();
     });
-    const mapSearch = byId("map-search");
-    if (mapSearch) {
-        mapSearch.addEventListener("input", () => {
-            searchTerm = mapSearch.value.trim().toLowerCase();
-            const mainSearch = byId("busca-eventos");
-            if (mainSearch)
-                mainSearch.value = mapSearch.value;
-            const clearBtn = byId("busca-limpar");
-            if (clearBtn)
-                clearBtn.hidden = !mapSearch.value;
-            applySearch();
-        });
-        mapSearch.addEventListener("keydown", (event) => {
-            if (event.key === "Escape") {
-                mapSearch.value = "";
-                searchTerm = "";
-                const mainSearch = byId("busca-eventos");
-                if (mainSearch)
-                    mainSearch.value = "";
-                const clearBtn = byId("busca-limpar");
-                if (clearBtn)
-                    clearBtn.hidden = true;
-                applySearch();
-                mapSearch.blur();
-            }
-        });
-    }
     loadEvents();
     connectWebSocket();
 }

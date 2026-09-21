@@ -577,9 +577,9 @@ WebSocket ──falha──► SSE (/events/stream) ──falha──► Polling
 
 | Estado | Badge | Cor |
 |---|---|---|
-| `ws` | "Tempo real" | verde |
-| `sse` | "Tempo real (SSE)" | azul |
-| `polling` | "Polling" | amarelo |
+| `ws` | "Sistema ao vivo" | verde |
+| `sse` | "Sistema ao vivo" (canal só no `title`) | azul |
+| `polling` | "Sistema em polling" | amarelo |
 | `disconnected` | "Desconectado" | cinza |
 
 ---

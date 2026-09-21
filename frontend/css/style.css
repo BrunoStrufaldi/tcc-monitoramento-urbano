@@ -1034,21 +1034,6 @@ input, select, textarea { font-family: inherit; }
   gap: 6px;
   align-items: center;
 }
-.map-controls .map-search {
-  width: 200px;
-  height: 38px;
-  padding: 0 12px;
-  border-radius: var(--r-sm);
-  background: rgba(17, 22, 27, 0.92);
-  border: 1px solid var(--border-strong);
-  color: var(--text-primary);
-  font-size: 12px;
-  backdrop-filter: blur(12px);
-  outline: none;
-  transition: border-color var(--dur) var(--ease);
-}
-.map-controls .map-search:focus { border-color: var(--gx-light); }
-.map-controls .map-search::placeholder { color: var(--text-muted); }
 
 /* Filtro de status (menu suspenso) no overlay do mapa */
 .map-filter-select {
@@ -1876,7 +1861,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   outline: 2px solid var(--gx-light);
   outline-offset: 2px;
 }
-.map-search:focus-visible { outline: none; border-color: var(--gx-light); }
 .sev-btn:focus-visible { outline: 2px solid var(--gx-light); outline-offset: 1px; }
 .event-card:focus-visible { outline: 2px solid var(--gx-light); outline-offset: -2px; }
 .rail-btn:focus-visible { outline: 2px solid var(--gx-light); outline-offset: 2px; }
@@ -2103,7 +2087,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .map-command-card strong { font-size: 15px; }
   .map-command-card .command-meta { font-size: 12px; margin-top: 2px; }
   .map-controls { top: 12px; right: 12px; }
-  .map-controls .map-search { width: 210px; height: 34px; font-size: 12px; }
 
   .right-panel { grid-column: 4; grid-row: 1; position: static; width: auto; transform: none; box-shadow: none; }
   .right-panel-header { min-height: 44px; padding: 11px 13px; }
@@ -2229,7 +2212,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   #mapa { filter: saturate(.72) brightness(.72) contrast(1.1); }
   .map-overlay { border: 1px solid #21323d; background: rgba(8, 16, 22, .94); backdrop-filter: blur(10px); box-shadow: 0 5px 20px rgba(0,0,0,.28); }
   .map-controls { top: 12px; left: 12px; padding: 4px; border-radius: 7px; }
-  .map-search { width: 230px; height: 34px; background: transparent; font-size: 11px; }
   .map-filter-button { height: 34px; border-radius: 5px; font-size: 11px; }
   .map-command-card,
   .right-panel { background: #0b1218; border-left-color: #1b2b35; }
@@ -2349,7 +2331,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .map-command-card { top: 16px; left: 16px; width: 248px; padding: 12px 14px; }
   .map-command-card strong { font-size: 16px; }
   .map-controls { top: 14px; right: 14px; }
-  .map-controls .map-search { width: 238px; height: 36px; font-size: 12px; }
 
   .right-panel { grid-column: 4; border-left-color: #202a33; }
   .right-panel-header { min-height: 50px; padding: 13px 15px; border-bottom-color: #26313b; }
@@ -2420,7 +2401,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .right-panel-content { padding: 12px; }
 
   .map-controls { top: 14px; left: 14px; right: auto; }
-  .map-controls .map-search { width: 236px; }
   .map-command-card { display: none; }
   .map-command-card {
     top: 62px;
@@ -2685,24 +2665,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .topbar-clock-block .topbar-clock { padding: 0; color: #e5e9ec; font-size: 14px; font-weight: 600; }
 .topbar-date { color: #87949e; font-size: 10px; font-variant-numeric: tabular-nums; }
-.topbar-map-search {
-  display: inline-flex;
-  width: 205px;
-  height: 38px;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-  border: 1px solid #27333d;
-  border-radius: 8px;
-  background: #0b1117;
-  color: #84929d;
-  font: 500 11px/1 var(--font-sans);
-  cursor: text;
-}
-.topbar-map-search svg { width: 17px; height: 17px; }
-.topbar-map-search span { flex: 1; text-align: left; }
-.topbar-map-search kbd { padding: 3px 5px; border: 1px solid #303b44; border-radius: 4px; background: #141b21; color: #9aa7b1; font: 9px/1 var(--font-sans); }
-.topbar-map-search:hover { border-color: #495a66; color: #c8d1d7; }
 
 @media (min-width: 1201px) {
   .topbar-center { flex: 1; }
@@ -2723,9 +2685,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .rp-evidence-img { aspect-ratio: 16 / 8.2; }
 }
 
-@media (max-width: 1400px) {
-  .topbar-map-search { display: none; }
-}
 
 /* Passagem de comparação direta com a composição 1672 × 941. */
 .fusion-section {
@@ -3222,7 +3181,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     align-content: center;
     padding: 0 12px;
   }
-  #topbar-map-search { left: 536px; top: 2px; width: 202px; }
   .topbar-actions > .topbar-sep { left: 746px; top: 7px; width: 1px; height: 28px; margin: 0; }
   #btn-toggle-right { left: 756px; top: 2px; width: 38px; height: 38px; display: inline-flex !important; }
   #btn-config { left: 804px; top: 2px; width: 38px; height: 38px; }
@@ -3330,7 +3288,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     box-shadow: none;
     backdrop-filter: none;
   }
-  .map-controls .map-search { width: 236px; height: 38px; padding: 0 13px; background: rgba(9, 15, 21, .9); }
   .map-filter-button { height: 38px; padding: 0 13px; background: rgba(9, 15, 21, .9); }
   #mapa .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) sepia(.18) hue-rotate(155deg) saturate(1.65) brightness(1.08) contrast(1.08); }
   #mapa .leaflet-bottom.leaflet-right { right: 14px; bottom: 54px; }
@@ -3389,7 +3346,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   }
   .rail { width: 72px; padding-inline: 5px; }
   .rail-btn { width: 61px; }
-  #topbar-map-search { display: inline-flex !important; }
   .right-panel-content { padding-inline: 7px; }
   .rp-alert-card, .rp-observation-card, .rp-system-card { padding-inline: 8px; }
 }
