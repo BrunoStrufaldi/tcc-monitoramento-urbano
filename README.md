@@ -73,20 +73,6 @@ alagamento da via) e publica no painel apenas o que sobrevive a esse cruzamento.
   (GeoSampa/Defesa Civil como gatilho) foram removidas: o evento saía carimbado com o
   horário em que o sistema notou o registro, não com o horário do incidente.
 
-### Números atuais (verificados)
-
-| Item | Valor |
-|---|---|
-| Testes de backend (pytest) | **165 passando** |
-| Testes de frontend (node:test) | **2 passando** |
-| Models SQLAlchemy | 8 |
-| Routers FastAPI | 11 (+ 2 endpoints WebSocket) |
-| Tabelas no banco | 7 |
-| Câmeras CET-SP catalogadas | 10 |
-| Pontos de alagamento históricos | 20 |
-| `frontend/src/app.ts` | 2.472 linhas |
-| `frontend/css/style.css` | 3.487 linhas |
-
 ---
 
 ## 2. Arquitetura e fluxo de dados
