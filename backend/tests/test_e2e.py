@@ -60,11 +60,11 @@ def test_fluxo_evento_detectado_ate_consulta(client: TestClient, db_session, cri
     evid_list = client.get(f"/evidencias?evento_id={evento_id}")
     assert len(evid_list.json()) == 1
 
-    # 4. Dado contextual (clima) gravado pela coleta automática
+    # 4. Dado contextual (chuva) gravado pela coleta automática
     db_session.add(
         DadoContextual(
             evento_id=evento_id,
-            categoria="clima",
+            categoria="contexto",
             chave="precipitacao",
             valor_texto="Chuva de 45mm/h nas últimas 2 horas",
         )

@@ -30,7 +30,7 @@ acima de ``gx_transito_min_veiculos_confirmado`` a contagem cria sozinha; entre
 ``TOMTOM_API_KEY``, essa faixa volta a ser decidida só por contagem); e entre
 ``gx_transito_min_veiculos_corroborado`` e ``gx_transito_min_veiculos`` é a
 TomTom que **cria** — sem ela essa faixa não gera nada. Criado o evento, os
-dois índices entram na mesma dimensão de clima do ``data_fusion``.
+dois índices entram na mesma dimensão de contexto do ``data_fusion``.
 
 Duas fontes de câmera, cada uma opt-in:
 - ``GX_CAMERA_SNAPSHOT_URL`` (+ latitude/longitude): uma câmera avulsa
@@ -59,7 +59,7 @@ from app.database import SessionLocal
 from app.models.dado_contextual import DadoContextual
 from app.services import cet_camera_catalog
 from app.services.detection_events import publicar_evento, refrescar_evento_no_ponto, registrar_deteccao
-from app.services.data_fusion_service import aplicar_fusao_evento
+from app.services.data_fusion_service import CATEGORIA_CONTEXTO, aplicar_fusao_evento
 from app.services.tomtom_traffic_source import obter_fluxo_transito
 from ml.detector import CLASSES_URBANAS, Deteccao, detectar_imagem_real
 
@@ -219,7 +219,7 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
             )
             db.add(DadoContextual(
                 evento_id=evento.id,
-                categoria="clima",
+                categoria=CATEGORIA_CONTEXTO,
                 chave="indice_congestionamento",
                 valor_numerico=indice,
                 unidade="indice_0_10",
@@ -227,7 +227,7 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
             if fluxo_tomtom.get("disponivel"):
                 db.add(DadoContextual(
                     evento_id=evento.id,
-                    categoria="clima",
+                    categoria=CATEGORIA_CONTEXTO,
                     chave="indice_congestionamento_tomtom",
                     valor_numerico=fluxo_tomtom["indice_congestionamento"],
                     unidade="indice_0_10",

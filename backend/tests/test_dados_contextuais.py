@@ -10,7 +10,7 @@ from app.models.dado_contextual import DadoContextual
 
 
 def _criar_dado(db_session, **campos) -> DadoContextual:
-    campos.setdefault("categoria", "clima")
+    campos.setdefault("categoria", "contexto")
     campos.setdefault("chave", "temp")
     dado = DadoContextual(**campos)
     db_session.add(dado)
@@ -57,12 +57,12 @@ def test_filtrar_por_evento(client: TestClient, db_session, criar_evento):
 
 
 def test_filtrar_por_categoria(client: TestClient, db_session):
-    _criar_dado(db_session, categoria="clima")
-    _criar_dado(db_session, categoria="transito")
+    _criar_dado(db_session, categoria="contexto")
+    _criar_dado(db_session, categoria="outra")
 
-    response = client.get("/dados-contextuais?categoria=clima")
+    response = client.get("/dados-contextuais?categoria=contexto")
     assert response.status_code == 200
-    assert [d["categoria"] for d in response.json()] == ["clima"]
+    assert [d["categoria"] for d in response.json()] == ["contexto"]
 
 
 def test_escrita_em_dados_contextuais_nao_existe(client: TestClient, db_session):
