@@ -22,34 +22,32 @@ Comandos de teste:
       `data_fusion/*`, `backend/app/routers/fusion.py`, `schemas/fusion.py`,
       `frontend/src/app.ts`, `fusion-format.ts`, `ml/detector.py` com TTA).
 
-## 1. Código morto (deletar)
+## 1. Código morto (deletar) — concluído em 02/10/2026
 
-### Frontend — telas inalcançáveis
-O rail só tem `rail-inicio` e `rail-yolo-teste`; `initRail()` é vazio e `#btn-config`
-não existe no HTML. Inalcançáveis em `frontend/index.html`:
-- [ ] `view-cv` (câmera do navegador): funções `cv*` em `app.ts` (~L485-806), regras `.cv-` no CSS
-- [ ] `view-eventos` (lista + busca `busca-eventos` — a busca morre junto; decidir se move para o dashboard)
-- [ ] `view-regioes`, `view-fontes` (`loadRegions`, `loadSources`)
-- [ ] `view-fusao`, `view-config` (`switchView`, `initFusionControls`, `recalculateFusion`)
-- [ ] import não usado `isResolvedStatus` (`app.ts:3`, `event-actions-format.ts`)
-- [ ] bloco duplicado `if (!window.L)` em `initMapa` (~L2367-2400)
-- [ ] CSS órfão depois das remoções acima
+- [x] (`4c1aa46`) Scripts e dependências: `reset_mysql.*`, `cleanup_demo_data.py`,
+      `migrate_yolo_observations.py`, `pyproj`, `python-dotenv`
+- [x] (`8958b3d`) Backend: `/deteccao/simular`, `/video`, `/frame`, `/confirmar`, `/ws/cv`,
+      `visual_validation.py` (+ configs `YOLO_MAX_FPS/FRAME/COOLDOWN`), simulação e classe
+      `hidrante` em `ml/detector.py`, model `OcorrenciaExterna`, status `resolvido`/`resolvido_em`
+      (migração `006`), schemas `EventoCreate/Update` e `EvidenciaVisualCreate`, `_fonte_yolo`.
+      `benchmark_latencia.py` agora mede o caminho real (frame → YOLO → evento → WebSocket).
+- [x] (`69149fb`) Frontend: 6 telas inalcançáveis, drawer de detalhe (decisão: apagar), blocos
+      "Alertas"/"Atividade" (contêineres inexistentes), busca (decisão: apagar), filtro de
+      severidade (seção com `display:none`), `refreshFeeds`, módulos `event-detail-format` e
+      `event-actions-format`, `initMapa` sem duplicação. `app.ts` 2505 → 1407 linhas,
+      `style.css` 3455 → 2394. Conferido no Chrome (desktop e celular), sem erros no console.
+- [x] Arquivos locais apagados: `gx.db` da raiz, `notificacoes-urbanas/`, `weights/`, `backend/ml/`,
+      `ml/models/yolo11n.pt` (pesos públicos, rebaixáveis).
+- [ ] **Decisão sua — guardados de propósito** (artefatos próprios, não dá para recriar; podem
+      servir de evidência no TCC): `runs/detect/val*` (curvas PR/F1 e matriz de confusão) e
+      `ml/models/gx-incident-anterior.pt`, `-v3-backup.pt`, `-v4-attempt.pt`. Sugestão: mover
+      para uma pasta fora do projeto (ex.: `TCC/artefatos-treino/`) em vez de apagar.
+- [ ] **Movido para o 3a:** ramos mortos de `data_fusion/scores.py` (fontes `api/sensor/manual/
+      data_fusion`, chaves `precipitacao`/`congestionamento`) e as fontes "Painel manual" e
+      "Open-Meteo" do `backend/seed.py` — estão presos à dimensão "fonte oficial", que o 3a redesenha.
 
-### Backend
-- [ ] `/deteccao/simular`, `/deteccao/video` + `detectar_imagem`/`detectar_video` (`ml/detector.py`) + `simulate_frame` (`visual_validation.py`)
-- [ ] `/ws/cv`, `/deteccao/frame`, `/deteccao/confirmar` (só usados pela `view-cv`) — ajustar testes
-- [ ] model `OcorrenciaExterna` (resto do GeoSampa)
-- [ ] classe `hidrante` em `CLASSES_URBANAS`
-- [ ] ramos mortos em `data_fusion/scores.py`: fontes `api/sensor/manual/data_fusion`; chaves `precipitacao`, `congestionamento`
-- [ ] status `resolvido` / campo `resolvido_em` (evento é apagado após 45 min, nunca resolvido)
-- [ ] `_fonte_yolo` em `routers/deteccao.py` (renomeava "GX YOLO", migração já feita)
-
-### Scripts / dependências / arquivos locais
-- [ ] `reset_mysql.bat`, `reset_mysql.ps1`
-- [ ] `backend/cleanup_demo_data.py`, `backend/migrate_yolo_observations.py`
-- [ ] `pyproj`, `python-dotenv` do `backend/requirements.txt` (não importados)
-- [ ] Locais (fora do Git): `gx.db` da raiz, `notificacoes-urbanas/`, `runs/`, `weights/`,
-      `backend/ml/`, `ml/models/gx-incident-anterior.pt`, `-v3-backup.pt`, `-v4-attempt.pt`, `yolo11n.pt`
+### Observação encontrada no teste visual (não corrigida)
+- No celular (390px) o relógio do topo fica cortado na borda direita. Já acontecia antes da limpeza.
 
 ## 2. Rápido, baixo risco
 - [ ] **Segurança:** remover POST/PATCH/DELETE públicos de `/regioes`, `/fontes`, `/localizacoes`,
