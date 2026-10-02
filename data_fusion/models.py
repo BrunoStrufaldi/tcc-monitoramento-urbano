@@ -38,6 +38,9 @@ class ComponenteConfiabilidade:
     peso: float
     contribuicao: float
     detalhe: str
+    # Peso antes do rateio entre as dimensões presentes (o de clima já com o
+    # ajuste de concordância); `peso` é o efetivamente aplicado.
+    peso_base: float = 0.0
 
 
 @dataclass

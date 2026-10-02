@@ -132,6 +132,16 @@ def _imgsz() -> int:
         return 1280
 
 
+def _tta() -> bool:
+    """Test-time augmentation na contagem de veículos: o Ultralytics roda o
+    frame também espelhado e em escalas menores e funde as caixas. Medido em 40
+    frames reais das câmeras CET (480x270, JPEG pesado): confiança média dos 12
+    melhores veículos 0,725 -> 0,761 e ~1 veículo a mais por frame, sem trocar
+    de peso. Custa ~2x a inferência — irrelevante em GPU; em CPU (Cloud Run)
+    ``GX_YOLO_TTA=false`` desliga se o ciclo das câmeras ficar apertado."""
+    return os.getenv("GX_YOLO_TTA", "true").strip().lower() not in ("0", "false", "no", "off")
+
+
 def class_mapping() -> dict[str, str]:
     """Mapeamento configurável de classes do peso para tipos urbanos GX.
 
@@ -280,7 +290,7 @@ def detectar_imagem_real(caminho_imagem: str, confianca_minima: float = 0.45) ->
 
     resultados: list[Deteccao] = []
     with _model_infer_lock, _inferencia_semaforo:
-        predicoes = model.predict(source=caminho_imagem, conf=confianca_minima, imgsz=_imgsz(), verbose=False)
+        predicoes = model.predict(source=caminho_imagem, conf=confianca_minima, imgsz=_imgsz(), augment=_tta(), verbose=False)
     for resultado in predicoes:
         nomes = resultado.names
         for box in resultado.boxes:

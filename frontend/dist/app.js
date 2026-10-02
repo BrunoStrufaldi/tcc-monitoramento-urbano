@@ -1757,6 +1757,8 @@ function setFusionLoadingState() {
         explain.hidden = true;
 }
 // Pesos-base das dimensões da fusão — espelham data_fusion/fusion.py (PESOS).
+// Só fallback: a API manda `peso_base` por componente, e o de clima varia
+// com a concordância entre as fontes contextuais.
 const PESO_BASE_FUSAO = { ia: 0.4, clima: 0.3, fonte_oficial: 0.3 };
 /** Painel no mapa: a conta completa da fusão, o veredito e o dado decisivo. */
 function renderFusionExplain(result, eventoTipo) {
@@ -1774,11 +1776,17 @@ function renderFusionExplain(result, eventoTipo) {
     panel.hidden = false;
     const p0 = (valor) => formatFusionPercent(valor, 0);
     const rotulo = (c) => c.nome === "ia" ? "IA" : fusionComponentLabel(c.nome, eventoTipo);
-    const pesoBase = (c) => PESO_BASE_FUSAO[c.nome] ?? c.peso;
+    const pesoBase = (c) => c.peso_base || PESO_BASE_FUSAO[c.nome] || c.peso;
     const finalPct = p0(result.confiabilidade);
     levelBadge.textContent = formatFusionLevel(result.nivel) + " · " + finalPct;
     levelBadge.className = "fusion-explain-level nivel-" + result.nivel;
     // --- A conta ---
+    // Peso contextual flexionado pela concordância das fontes: vira frase própria
+    // para a lista "Base" continuar mostrando os pesos fixos, que somam 100%.
+    const ajustados = usados.filter((c) => PESO_BASE_FUSAO[c.nome] != null
+        && Math.abs(pesoBase(c) - PESO_BASE_FUSAO[c.nome]) > 0.005);
+    const ajuste = ajustados.map((c) => escapeHtml(rotulo(c)) + " " + p0(PESO_BASE_FUSAO[c.nome]) + "&rarr;" + p0(pesoBase(c)) +
+        (pesoBase(c) > PESO_BASE_FUSAO[c.nome] ? " (fontes concordam)" : " (fontes divergem)")).join(", ");
     const redistribuido = foraDeUso.length > 0
         && usados.some((c) => Math.abs(c.peso - pesoBase(c)) > 0.005);
     let pesos;
@@ -1786,7 +1794,8 @@ function renderFusionExplain(result, eventoTipo) {
         const somaFora = foraDeUso.reduce((soma, c) => soma + pesoBase(c), 0);
         const nomesFora = foraDeUso.map(rotulo).join(" e ");
         pesos = '<p class="fx-weights">Base: ' +
-            result.componentes.map((c) => escapeHtml(rotulo(c)) + " " + p0(pesoBase(c))).join(", ") + '. ' +
+            result.componentes.map((c) => escapeHtml(rotulo(c)) + " " + p0(PESO_BASE_FUSAO[c.nome] ?? pesoBase(c))).join(", ") + '. ' +
+            (ajuste ? 'Ajuste por concordância: ' + ajuste + '. ' : '') +
             escapeHtml(nomesFora) + (foraDeUso.length > 1 ? " não pontuaram" : " não pontuou") +
             ', então ' + p0(somaFora) + ' de peso ' + (foraDeUso.length > 1 ? "delas foram rateados" : "dela foi rateado") +
             ' entre as demais &rarr; ' +
@@ -1794,7 +1803,8 @@ function renderFusionExplain(result, eventoTipo) {
     }
     else {
         pesos = '<p class="fx-weights">Pesos: ' +
-            usados.map((c) => escapeHtml(rotulo(c)) + " " + p0(c.peso)).join(", ") + '.</p>';
+            usados.map((c) => escapeHtml(rotulo(c)) + " " + p0(c.peso)).join(", ") + '.' +
+            (ajuste ? ' Ajuste por concordância: ' + ajuste + '.' : '') + '</p>';
     }
     const linhas = usados.map((c) => '<div class="fx-calc">' +
         '<span class="fx-calc-nome">' + escapeHtml(rotulo(c)) + '</span>' +
