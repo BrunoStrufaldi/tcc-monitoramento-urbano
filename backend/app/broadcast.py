@@ -18,8 +18,12 @@ def set_main_loop(loop: asyncio.AbstractEventLoop) -> None:
 def schedule_coroutine(coro: Coroutine[Any, Any, Any]) -> None:
     """Envia coroutine para o loop principal — seguro a partir de threads sync."""
     if _main_loop is None or not _main_loop.is_running():
+        # Sem loop (testes, scripts): fecha a coroutine para não gerar
+        # "coroutine was never awaited".
+        coro.close()
         return
     try:
         asyncio.run_coroutine_threadsafe(coro, _main_loop)
     except Exception:
+        coro.close()
         logger.exception("Falha ao agendar coroutine")

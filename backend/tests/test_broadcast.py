@@ -39,6 +39,17 @@ async def test_schedule_coroutine_from_worker_thread() -> None:
     await asyncio.wait_for(done.wait(), timeout=1.0)
 
 
+def test_schedule_coroutine_sem_loop_fecha_coroutine() -> None:
+    set_main_loop(None)
+
+    async def task() -> None:
+        pass
+
+    coro = task()
+    schedule_coroutine(coro)
+    assert coro.cr_frame is None  # fechada: não vira "never awaited"
+
+
 @pytest.mark.asyncio
 async def test_event_stream_cleanup_removes_client() -> None:
     tempo_real._clients.clear()
