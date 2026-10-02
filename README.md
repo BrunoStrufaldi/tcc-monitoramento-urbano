@@ -441,7 +441,7 @@ quadro ao vivo, não um histórico.
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/fusion/eventos/{id}/confiabilidade` | Calcula sem gravar. |
-| POST | `/fusion/eventos/{id}/recalcular` | `?persistir=true` (padrão) grava em `eventos.confianca`, ajusta o status e loga. |
+| POST | `/fusion/eventos/{id}/recalcular` | `?persistir=true` (padrão) grava em `eventos.confianca`, ajusta o status e loga se ele mudar. |
 
 A resposta traz `confiabilidade`, `nivel`, `limiar_ativo` e a lista de `componentes` com
 `pontuacao`, `peso`, `contribuicao` e `detalhe` em texto — é isso que o painel exibe como
