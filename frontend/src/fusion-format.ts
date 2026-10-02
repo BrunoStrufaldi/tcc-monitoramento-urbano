@@ -4,6 +4,7 @@ export type FusionDisplayComponent = {
   peso: number;
   contribuicao: number;
   detalhe: string;
+  peso_base?: number;
 };
 
 export function formatFusionPercent(value: number, fractionDigits = 1): string {

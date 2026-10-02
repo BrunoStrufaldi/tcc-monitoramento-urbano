@@ -30,6 +30,7 @@ def _resultado_para_response(
                 peso=c.peso,
                 contribuicao=c.contribuicao,
                 detalhe=c.detalhe,
+                peso_base=c.peso_base,
             )
             for c in resultado.componentes
         ],

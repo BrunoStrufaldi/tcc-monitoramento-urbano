@@ -29,17 +29,47 @@ def pontuar_ia(evidencias: list[EvidenciaIA]) -> tuple[float, str]:
     return _clamp(melhor), detalhe
 
 
-def _pontuar_chuva(chuva: float) -> tuple[float, str]:
+def _interpolar(valor: float, ancoras: tuple[tuple[float, float], ...]) -> float:
+    """Interpolação linear por trechos entre âncoras (x, nota), saturando nas pontas.
+
+    Substitui as faixas em degrau: com degrau, todo índice de trânsito entre 4 e
+    7 virava a mesma nota 0.72 — e, com o peso rateado de 43%, a mesma
+    contribuição de 31% em praticamente todo evento, por mais forte ou fraco que
+    fosse o sinal. Com a rampa, cada décimo do índice mexe na nota."""
+    if valor <= ancoras[0][0]:
+        return ancoras[0][1]
+    for (x0, y0), (x1, y1) in zip(ancoras, ancoras[1:]):
+        if valor <= x1:
+            return y0 + (y1 - y0) * (valor - x0) / (x1 - x0)
+    return ancoras[-1][1]
+
+
+# Âncoras (mm/h, nota). Os limiares 5/15/30 mm/h seguem as faixas de
+# intensidade usadas antes (moderada, elevada, intensa).
+_ANCORAS_CHUVA = ((0.0, 0.30), (5.0, 0.55), (15.0, 0.78), (30.0, 0.93), (50.0, 0.97))
+
+# Âncoras (índice 0-10, nota). Cada âncora interna fica no meio de uma das
+# antigas faixas e reproduz a nota que ela dava (5.5 -> 0.72, 8 -> 0.92).
+_ANCORAS_TRANSITO = ((0.0, 0.25), (3.0, 0.45), (5.5, 0.72), (8.0, 0.92), (10.0, 0.97))
+
+
+def _rotulo_chuva(chuva: float) -> str:
     if chuva >= 30:
-        return 0.95, f"chuva intensa ({chuva:.1f} mm/h)"
+        return "chuva intensa"
     if chuva >= 15:
-        return 0.82, f"precipitação elevada ({chuva:.1f} mm/h)"
+        return "precipitação elevada"
     if chuva >= 5:
-        return 0.62, f"chuva moderada ({chuva:.1f} mm/h)"
-    return 0.35, f"baixa precipitação ({chuva:.1f} mm/h)"
+        return "chuva moderada"
+    return "baixa precipitação"
+
+
+def _pontuar_chuva(chuva: float) -> tuple[float, str]:
+    return _interpolar(chuva, _ANCORAS_CHUVA), f"{_rotulo_chuva(chuva)} ({chuva:.1f} mm/h)"
 
 
 def _pontuar_aviso_inmet(indice: float) -> tuple[float, str]:
+    # Fica em degrau de propósito: o INMET emite níveis categóricos (perigo
+    # potencial / perigo / grande perigo), não uma medida contínua.
     if indice >= 9:
         return 0.93, "aviso INMET de grande perigo ativo"
     if indice >= 6:
@@ -107,21 +137,82 @@ def _pontuar_clima_por_tipo(tipo: str, dados: list[DadoClima]) -> tuple[float, s
         return _clamp(pontuacao), f"Corroboração de alagamento: {detalhe}{origem}"
 
     if tipo_norm == "transito":
-        indices = [
-            valores[chave] for chave in ("indice_congestionamento", "indice_congestionamento_tomtom", "congestionamento")
-            if chave in valores
-        ]
+        indices = _indices_transito(valores)
         if not indices:
             return 0.50, "Dados de trânsito sem índice de congestionamento"
         indice = sum(indices) / len(indices)
         origem = f" (média de {len(indices)} fontes)" if len(indices) > 1 else ""
         if indice >= 7:
-            return 0.92, f"Índice de congestionamento alto ({indice:.1f}/10){origem}"
-        if indice >= 4:
-            return 0.72, f"Congestionamento moderado ({indice:.1f}/10){origem}"
-        return 0.40, f"Índice baixo ({indice:.1f}/10){origem} — contexto fraco para trânsito"
+            rotulo = "Índice de congestionamento alto"
+        elif indice >= 4:
+            rotulo = "Congestionamento moderado"
+        else:
+            rotulo = "Índice baixo"
+        detalhe = f"{rotulo} ({indice:.1f}/10){origem}"
+        if indice < 4:
+            detalhe += " — contexto fraco para trânsito"
+        return _interpolar(indice, _ANCORAS_TRANSITO), detalhe
 
     return 0.58, f"Contexto climático genérico para evento tipo '{tipo_norm}'"
+
+
+def _indices_transito(valores: dict[str, float]) -> list[float]:
+    return [
+        valores[chave] for chave in ("indice_congestionamento", "indice_congestionamento_tomtom", "congestionamento")
+        if chave in valores
+    ]
+
+
+def _notas_por_fonte_ao_vivo(tipo: str, dados: list[DadoClima]) -> list[float]:
+    """Nota isolada de cada fonte contextual independente e ao vivo do evento.
+
+    Trânsito: contagem de veículos do frame e TomTom. Alagamento: chuva medida
+    (Open-Meteo) e aviso do INMET. O histórico de alagamento fica de fora de
+    propósito — é prior estático da via, não uma segunda testemunha do agora."""
+    tipo_norm = tipo.lower().strip()
+    valores = {d.chave.lower(): d.valor_numerico for d in dados if d.valor_numerico is not None}
+    if tipo_norm == "transito":
+        return [_interpolar(i, _ANCORAS_TRANSITO) for i in _indices_transito(valores)]
+    if tipo_norm == "alagamento":
+        notas = []
+        chuva = valores.get("precipitacao_mm_h") or valores.get("precipitacao")
+        if chuva is not None:
+            notas.append(_pontuar_chuva(chuva)[0])
+        if valores.get("alerta_inmet_severidade") is not None:
+            notas.append(_pontuar_aviso_inmet(valores["alerta_inmet_severidade"])[0])
+        return notas
+    return []
+
+
+# Peso do dado contextual conforme a concordância entre fontes independentes:
+# 0.8x quando se contradizem, 1.4x quando dizem a mesma coisa. Divergência de
+# nota a partir de _DIVERGENCIA_TOTAL conta como contradição completa.
+FATOR_PESO_CONTEXTO_MIN = 0.8
+FATOR_PESO_CONTEXTO_MAX = 1.4
+_DIVERGENCIA_TOTAL = 0.4
+
+
+def fator_peso_clima(tipo: str, dados: list[DadoClima]) -> tuple[float, str | None]:
+    """Multiplicador do peso-base da dimensão contextual.
+
+    Peso fixo tratava igual um índice isolado e dois sensores independentes
+    batendo o mesmo número. Aqui o peso flexiona: com uma fonte só fica no
+    base (1.0x); com duas, sobe linearmente com a concordância entre elas até
+    1.4x e desce até 0.8x quando uma desmente a outra — contexto contraditório
+    é contexto incerto, e deve pesar menos que a evidência visual."""
+    notas = _notas_por_fonte_ao_vivo(tipo, dados)
+    if len(notas) < 2:
+        return 1.0, None
+    divergencia = max(notas) - min(notas)
+    concordancia = _clamp(1 - divergencia / _DIVERGENCIA_TOTAL)
+    fator = FATOR_PESO_CONTEXTO_MIN + (FATOR_PESO_CONTEXTO_MAX - FATOR_PESO_CONTEXTO_MIN) * concordancia
+    if concordancia >= 0.75:
+        resumo = "fontes concordam"
+    elif concordancia >= 0.35:
+        resumo = "fontes concordam em parte"
+    else:
+        resumo = "fontes divergem"
+    return round(fator, 4), f"peso ajustado {fator:.2f}x ({resumo}, concordância {concordancia:.0%})"
 
 
 def pontuar_clima(tipo: str, dados: list[DadoClima]) -> tuple[float, str]:
