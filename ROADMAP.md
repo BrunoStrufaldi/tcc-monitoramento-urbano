@@ -82,8 +82,11 @@ Itens 0–2 publicados no Cloud Run em 02/10/2026 (revisão `motsp-00011-85j`, c
       (`624e443`) `categoria` dos dados contextuais `clima` → `contexto`, com `UPDATE` idempotente
       no startup + migração `007` para o MySQL. (`ed3f180`) seed e README §12.
       Conferido ponta a ponta local: evento gravado com a categoria antiga dá o mesmo 0,7805.
-- [ ] **(b) Unificar `live_detection.py` + `flood_detection.py`:** uma thread por câmera, baixa o
-      frame uma vez e roda os dois modelos (hoje 20 threads e download duplo).
+- [~] **(b) Removido do roteiro em 02/10/2026** — era unificar `live_detection.py` +
+      `flood_detection.py` (uma thread por câmera, download único). Ganho pequeno: o custo está na
+      inferência, que continuaria igual (2 modelos por frame); 10 downloads/min a mais e 20 threads
+      dormindo são irrelevantes. Risco alto: mexe nas únicas peças que criam evento, os testes
+      simulam câmera/YOLO/TomTom, e uma falha deixaria o painel vazio em silêncio. Não refazer.
 - [ ] **(c) Tempo real com 2 canais:** WebSocket + polling; remover SSE (`routers/tempo_real.py`,
       chamadas `_broadcast` duplicadas, `fallbackToSSE` no front).
 - [ ] **(d) Config única:** mover `GX_YOLO_MODEL`, `GX_YOLO_IMGSZ`, `GX_YOLO_TTA`,
@@ -96,4 +99,4 @@ Itens 0–2 publicados no Cloud Run em 02/10/2026 (revisão `motsp-00011-85j`, c
 - [ ] **(h) README em duas camadas:** README curto + `docs/` com detalhes; §19 vira apêndice.
 
 ## Ordem sugerida
-0 → 1 + itens 2 → 3a → 3b + 3c → resto.
+0 → 1 + itens 2 → 3a → 3c → resto (3b removido).
