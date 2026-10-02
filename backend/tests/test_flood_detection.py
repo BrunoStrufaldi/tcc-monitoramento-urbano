@@ -57,7 +57,7 @@ def test_processar_frame_sinaliza_alagamento_com_tipo_corrigido(db_session: Sess
     assert eventos[0].tipo == "alagamento"
     # A confiança persistida é a da fusão, não a bruta do YOLO (0.81): sem chuva,
     # sem aviso INMET e fora de qualquer ponto com histórico de alagamento
-    # (fixture fixa o prior em 0.0), a dimensão de clima cai para 0.25 e derruba
+    # (fixture fixa o prior em 0.0), a dimensão de contexto cai para 0.25 e derruba
     # o score — falso positivo provável fica em análise.
     assert float(eventos[0].confianca) == 0.57
     assert eventos[0].status == "em_analise"
@@ -87,7 +87,7 @@ def test_processar_frame_com_chuva_disponivel_registra_contexto_climatico(db_ses
         DadoContextual.chave == "precipitacao_mm_h",
     ).all()
     assert len(contexto) == 1
-    assert contexto[0].categoria == "clima"
+    assert contexto[0].categoria == "contexto"
     assert float(contexto[0].valor_numerico) == 18.5
 
 
@@ -211,7 +211,7 @@ def test_processar_frame_registra_indice_historico_de_alagamento(db_session: Ses
         DadoContextual.evento_id == evento.id,
         DadoContextual.chave == "historico_alagamento_indice",
     ).one()
-    assert row.categoria == "clima"
+    assert row.categoria == "contexto"
     assert float(row.valor_numerico) == 8.5
     assert row.unidade == "indice_0_10"
 

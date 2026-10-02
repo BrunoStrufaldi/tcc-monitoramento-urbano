@@ -51,7 +51,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models.dado_contextual import DadoContextual
 from app.services import cet_camera_catalog
-from app.services.data_fusion_service import aplicar_fusao_evento
+from app.services.data_fusion_service import CATEGORIA_CONTEXTO, aplicar_fusao_evento
 from app.services.detection_events import publicar_evento, refrescar_evento_no_ponto, registrar_deteccao
 from app.services.inmet_alert_source import obter_aviso_ativo
 from app.services.weather_source import obter_condicoes_atuais
@@ -111,7 +111,7 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
             if condicoes.get("disponivel") and condicoes.get("chuva_mm") is not None:
                 db.add(DadoContextual(
                     evento_id=evento.id,
-                    categoria="clima",
+                    categoria=CATEGORIA_CONTEXTO,
                     chave="precipitacao_mm_h",
                     valor_numerico=float(condicoes["chuva_mm"]),
                     unidade="mm/h",
@@ -121,7 +121,7 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
             if aviso.get("disponivel") and aviso.get("menciona_alagamento"):
                 db.add(DadoContextual(
                     evento_id=evento.id,
-                    categoria="clima",
+                    categoria=CATEGORIA_CONTEXTO,
                     chave="alerta_inmet_severidade",
                     valor_numerico=float(aviso["severidade_indice"]),
                     unidade="indice_0_10",
@@ -133,7 +133,7 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
             indice_hist, descricao_hist = indice_historico(latitude, longitude)
             db.add(DadoContextual(
                 evento_id=evento.id,
-                categoria="clima",
+                categoria=CATEGORIA_CONTEXTO,
                 chave="historico_alagamento_indice",
                 valor_numerico=indice_hist,
                 unidade="indice_0_10",

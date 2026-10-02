@@ -125,3 +125,19 @@ def test_evento_yolo_nao_promovido_quando_arredonda_abaixo_do_limiar(db_session:
     )
 
     assert atualizado.status == "em_analise"
+
+
+def test_migrar_categoria_legada_mantem_contexto_do_evento(db_session: Session):
+    """Dado gravado antes da renomeação ("clima") continua entrando na fusão."""
+    from app.models.dado_contextual import DadoContextual
+
+    evento = _criar_evento(db_session, status="em_analise", fonte_tipo="yolo")
+    db_session.add(DadoContextual(evento_id=evento.id, categoria="clima", chave="indice_congestionamento", valor_numerico=8.0))
+    db_session.add(DadoContextual(evento_id=evento.id, categoria="outra", chave="x", valor_numerico=1.0))
+    db_session.commit()
+
+    assert data_fusion_service.migrar_categoria_legada(db_session) == 1
+    assert data_fusion_service.migrar_categoria_legada(db_session) == 0  # idempotente
+
+    entrada = data_fusion_service.evento_para_fusao(db_session.get(Evento, evento.id))
+    assert [d.chave for d in entrada.dados_contexto] == ["indice_congestionamento"]

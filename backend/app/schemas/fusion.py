@@ -11,7 +11,7 @@ class ComponenteConfiabilidadeResponse(BaseModel):
     detalhe: str
     peso_base: float = Field(
         0.0, ge=0,
-        description="Peso antes do rateio entre dimensões presentes (o de clima já ajustado pela concordância das fontes)",
+        description="Peso antes do rateio entre dimensões presentes (o de contexto já ajustado pela concordância das fontes)",
     )
 
 

@@ -5,6 +5,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
+from app.models.dado_contextual import DadoContextual
 from app.models.evento import Evento
 from app.models.log_sistema import LogSistema
 
@@ -21,6 +22,25 @@ from data_fusion.models import (  # noqa: E402
 )
 
 _CENTESIMO = Decimal("0.01")
+
+# Categoria dos DadoContextual que alimentam a dimensão "contexto" da fusão.
+CATEGORIA_CONTEXTO = "contexto"
+
+
+def migrar_categoria_legada(db: Session) -> int:
+    """Renomeia a categoria antiga ("clima") dos dados contextuais já gravados.
+
+    Idempotente; roda no startup. Só pega dados de eventos ainda vivos na
+    janela de retenção — sem ela, o recálculo periódico deixaria esses
+    eventos sem contexto até expirarem.
+    """
+    alterados = (
+        db.query(DadoContextual)
+        .filter(DadoContextual.categoria == "clima")
+        .update({"categoria": CATEGORIA_CONTEXTO}, synchronize_session=False)
+    )
+    db.commit()
+    return alterados
 
 
 def atinge_limiar_ativo(confiabilidade: float) -> bool:
@@ -72,7 +92,7 @@ def evento_para_fusao(evento: Evento) -> EventoFusionInput:
             unidade=d.unidade,
         )
         for d in evento.dados_contextuais
-        if d.categoria.lower() == "clima"
+        if d.categoria.lower() == CATEGORIA_CONTEXTO
     ]
 
     return EventoFusionInput(
@@ -166,7 +186,7 @@ def _publicar_evento_atualizado(db: Session, evento_id: int) -> None:
 def promover_eventos_por_confiabilidade(db: Session) -> int:
     """Recalcula os eventos automáticos abertos (em análise ou ativos) e ajusta
     o status ao limiar de confiabilidade: promove os que já batem e rebaixa os
-    que deixaram de bater (ex.: limiar elevado, dado de clima que chegou depois).
+    que deixaram de bater (ex.: limiar elevado, dado de contexto que chegou depois).
     Rede de segurança para o que só mudaria num recálculo posterior."""
     ids = [
         row[0]

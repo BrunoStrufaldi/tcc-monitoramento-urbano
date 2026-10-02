@@ -25,7 +25,7 @@ from app.routers import (
     websocket,
 )
 from app.services import flood_detection, live_detection
-from app.services.data_fusion_service import promover_eventos_por_confiabilidade
+from app.services.data_fusion_service import migrar_categoria_legada, promover_eventos_por_confiabilidade
 from app.services.event_retention import colapsar_eventos_duplicados, purgar_eventos_expirados
 
 
@@ -52,6 +52,7 @@ async def lifespan(_app: FastAPI):
         Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         purgar_eventos_expirados(db)
+        migrar_categoria_legada(db)
         colapsar_eventos_duplicados(db)
         promover_eventos_por_confiabilidade(db)
     set_main_loop(asyncio.get_running_loop())
