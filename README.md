@@ -442,7 +442,6 @@ quadro ao vivo, não um histórico.
 |---|---|---|
 | GET | `/fusion/eventos/{id}/confiabilidade` | Calcula sem gravar. |
 | POST | `/fusion/eventos/{id}/recalcular` | `?persistir=true` (padrão) grava em `eventos.confianca`, ajusta o status e loga. |
-| POST | `/fusion/recalcular-todos` | Processa em lote (`?limite=`, `?persistir=`). |
 
 A resposta traz `confiabilidade`, `nivel`, `limiar_ativo` e a lista de `componentes` com
 `pontuacao`, `peso`, `contribuicao` e `detalhe` em texto — é isso que o painel exibe como
@@ -465,15 +464,19 @@ A resposta traz `confiabilidade`, `nivel`, `limiar_ativo` e a lista de `componen
 | GET | `/evidencias/{id}` | — |
 | GET | `/evidencias/arquivo/{nome}` | Serve o JPEG local; usa `Path(nome).name` para bloquear travessia de diretório. |
 | GET | `/logs` | Filtros: `nivel`, `modulo`, `evento_id`, `limite`. |
-| GET/POST/DELETE | `/dados-contextuais` | Leitura, ingestão e remoção de dado contextual. |
+| GET | `/dados-contextuais` | Filtros: `evento_id`, `regiao_id`, `categoria`, `limite`. Gravado só pela coleta automática. |
 
-### Cadastro (CRUD completo)
+### Cadastro — somente leitura
 
 | Rota | Métodos |
 |---|---|
-| `/regioes` | GET · GET/{id} · POST · PATCH · DELETE |
-| `/fontes` | GET · GET/{id} · POST · PATCH · DELETE |
-| `/localizacoes` | GET · GET/{id} · POST · PATCH · DELETE (409 se houver evento vinculado) |
+| `/regioes` | GET · GET/{id} |
+| `/fontes` | GET · GET/{id} |
+| `/localizacoes` | GET · GET/{id} |
+
+Não há login no deploy, então nenhuma rota pública escreve cadastro nem dado contextual
+(POST/PATCH/DELETE respondem 405). Quem grava é o próprio backend: a detecção cria
+evento/localização/evidência e a coleta de clima, INMET e trânsito grava o contexto.
 
 ### Fontes externas ao vivo (proxy)
 

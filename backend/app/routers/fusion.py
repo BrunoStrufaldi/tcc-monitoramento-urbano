@@ -61,20 +61,3 @@ def recalcular_confiabilidade(
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evento não encontrado")
     return _resultado_para_response(resultado, evento, persistido=persistir)
-
-
-@router.post("/recalcular-todos", response_model=list[ConfiabilidadeResponse])
-def recalcular_todos(
-    persistir: bool = Query(True),
-    limite: int = Query(100, ge=1, le=500),
-    db: Session = Depends(get_db),
-) -> list[ConfiabilidadeResponse]:
-    ids = [row[0] for row in db.query(Evento.id).limit(limite).all()]
-    respostas: list[ConfiabilidadeResponse] = []
-    for evento_id in ids:
-        try:
-            resultado, evento = aplicar_fusao_evento(db, evento_id, persistir=persistir)
-            respostas.append(_resultado_para_response(resultado, evento, persistido=persistir))
-        except ValueError:
-            continue
-    return respostas

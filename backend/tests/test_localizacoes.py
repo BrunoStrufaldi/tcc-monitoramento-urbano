@@ -1,44 +1,35 @@
-"""Testes de integração para localizações."""
+"""Testes de integração para localizações (somente leitura)."""
 
 from fastapi.testclient import TestClient
 
+from app.models.localizacao import Localizacao
+from app.models.regiao import Regiao
 
-def test_listar_localizacoes(client: TestClient):
+
+def _criar_localizacao(db_session, **campos) -> Localizacao:
+    campos.setdefault("latitude", -23.5505)
+    campos.setdefault("longitude", -46.6333)
+    localizacao = Localizacao(**campos)
+    db_session.add(localizacao)
+    db_session.commit()
+    db_session.refresh(localizacao)
+    return localizacao
+
+
+def test_listar_localizacoes(client: TestClient, db_session):
+    _criar_localizacao(db_session, endereco="Av. Paulista, 1000")
     response = client.get("/localizacoes")
     assert response.status_code == 200
-    assert isinstance(response.json(), list)
-
-
-def test_criar_localizacao(client: TestClient):
-    payload = {
-        "latitude": -23.5505,
-        "longitude": -46.6333,
-        "endereco": "Av. Paulista, 1000",
-        "bairro": "Bela Vista",
-    }
-    response = client.post("/localizacoes", json=payload)
-    assert response.status_code == 201
     data = response.json()
-    assert data["latitude"] == -23.5505
-    assert data["endereco"] == "Av. Paulista, 1000"
-    assert data["cidade"] == "São Paulo"
+    assert [loc["endereco"] for loc in data] == ["Av. Paulista, 1000"]
+    assert data[0]["cidade"] == "São Paulo"
 
 
-def test_criar_localizacao_sem_coordenadas_retorna_422(client: TestClient):
-    response = client.post("/localizacoes", json={"endereco": "Sem coords"})
-    assert response.status_code == 422
-
-
-def test_obter_localizacao_por_id(client: TestClient):
-    criar = client.post(
-        "/localizacoes",
-        json={"latitude": -23.56, "longitude": -46.65},
-    )
-    localizacao_id = criar.json()["id"]
-
-    response = client.get(f"/localizacoes/{localizacao_id}")
+def test_obter_localizacao_por_id(client: TestClient, db_session):
+    localizacao = _criar_localizacao(db_session)
+    response = client.get(f"/localizacoes/{localizacao.id}")
     assert response.status_code == 200
-    assert response.json()["id"] == localizacao_id
+    assert response.json()["id"] == localizacao.id
 
 
 def test_obter_localizacao_inexistente(client: TestClient):
@@ -46,72 +37,21 @@ def test_obter_localizacao_inexistente(client: TestClient):
     assert response.status_code == 404
 
 
-def test_patch_atualizar_localizacao(client: TestClient):
-    criar = client.post(
-        "/localizacoes",
-        json={"latitude": -23.55, "longitude": -46.63, "endereco": "Original"},
-    )
-    localizacao_id = criar.json()["id"]
-
-    response = client.patch(
-        f"/localizacoes/{localizacao_id}",
-        json={"endereco": "Atualizado", "bairro": "Novo Bairro"},
-    )
-    assert response.status_code == 200
-    assert response.json()["endereco"] == "Atualizado"
-    assert response.json()["bairro"] == "Novo Bairro"
-
-
-def test_patch_localizacao_inexistente(client: TestClient):
-    response = client.patch("/localizacoes/9999", json={"endereco": "X"})
-    assert response.status_code == 404
-
-
-def test_delete_localizacao(client: TestClient):
-    criar = client.post(
-        "/localizacoes",
-        json={"latitude": -23.55, "longitude": -46.63},
-    )
-    localizacao_id = criar.json()["id"]
-
-    response = client.delete(f"/localizacoes/{localizacao_id}")
-    assert response.status_code == 200
-    assert response.json()["id"] == localizacao_id
-
-    get_after = client.get(f"/localizacoes/{localizacao_id}")
-    assert get_after.status_code == 404
-
-
-def test_delete_localizacao_inexistente(client: TestClient):
-    response = client.delete("/localizacoes/9999")
-    assert response.status_code == 404
-
-
-def test_delete_localizacao_com_evento_retorna_409(client: TestClient, db_session):
-    from app.models.evento import Evento
-
-    criar_loc = client.post(
-        "/localizacoes",
-        json={"latitude": -23.55, "longitude": -46.63},
-    )
-    localizacao_id = criar_loc.json()["id"]
-
-    db_session.add(Evento(titulo="Evento na localizacao", tipo="transito", localizacao_id=localizacao_id))
+def test_filtrar_por_regiao(client: TestClient, db_session):
+    regiao = Regiao(nome="ZL", codigo="ZL")
+    db_session.add(regiao)
     db_session.commit()
+    _criar_localizacao(db_session, regiao_id=regiao.id)
+    _criar_localizacao(db_session)
 
-    response = client.delete(f"/localizacoes/{localizacao_id}")
-    assert response.status_code == 409
-
-
-def test_filtrar_por_regiao(client: TestClient):
-    criar_regiao = client.post("/regioes", json={"nome": "ZL", "codigo": "ZL"})
-    regiao_id = criar_regiao.json()["id"]
-
-    client.post(
-        "/localizacoes",
-        json={"latitude": -23.55, "longitude": -46.63, "regiao_id": regiao_id},
-    )
-
-    response = client.get(f"/localizacoes?regiao_id={regiao_id}")
+    response = client.get(f"/localizacoes?regiao_id={regiao.id}")
     assert response.status_code == 200
     assert len(response.json()) == 1
+
+
+def test_escrita_em_localizacoes_nao_existe(client: TestClient, db_session):
+    localizacao = _criar_localizacao(db_session)
+
+    assert client.post("/localizacoes", json={"latitude": 0, "longitude": 0}).status_code == 405
+    assert client.patch(f"/localizacoes/{localizacao.id}", json={"endereco": "X"}).status_code == 405
+    assert client.delete(f"/localizacoes/{localizacao.id}").status_code == 405
