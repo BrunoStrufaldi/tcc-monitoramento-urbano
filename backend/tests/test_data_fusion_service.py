@@ -13,6 +13,7 @@ from app.config import settings
 from app.models.evento import Evento
 from app.models.fonte_dados import FonteDados
 from app.models.localizacao import Localizacao
+from app.models.log_sistema import LogSistema
 from app.services import data_fusion_service
 from data_fusion.models import ResultadoFusao
 
@@ -71,6 +72,9 @@ def test_evento_yolo_em_analise_e_promovido_quando_atinge_limiar(db_session: Ses
     )
 
     assert atualizado.status == "ativo"
+    logs = db_session.query(LogSistema).filter(LogSistema.evento_id == evento.id).all()
+    assert len(logs) == 1
+    assert logs[0].contexto["promovido_para_ativo"] is True
 
 
 def test_evento_yolo_ativo_permanece_quando_acima_do_limiar(db_session: Session, monkeypatch):
@@ -82,6 +86,8 @@ def test_evento_yolo_ativo_permanece_quando_acima_do_limiar(db_session: Session,
     )
 
     assert atualizado.status == "ativo"
+    # Sem mudança de status não há log — o recálculo roda a cada ciclo.
+    assert db_session.query(LogSistema).filter(LogSistema.evento_id == evento.id).count() == 0
 
 
 def test_evento_manual_ativo_nao_e_rebaixado(db_session: Session, monkeypatch):

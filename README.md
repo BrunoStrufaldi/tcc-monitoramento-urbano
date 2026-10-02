@@ -387,7 +387,7 @@ erDiagram
 | `eventos` | `Evento` | Ocorrência urbana. Campos-chave: `tipo`, `severidade`, `status`, `confianca` (score do Data Fusion), `detectado_em`. |
 | `evidencias_visuais` | `EvidenciaVisual` | Imagem/frame + `modelo_ia`, `classe_detectada`, `confianca`, `bbox` e SHA-256 do original em `metadados`. |
 | `dados_contextuais` | `DadoContextual` | Pares chave/valor por evento. Categoria `clima` alimenta a dimensão de contexto da fusão. |
-| `logs_sistema` | `LogSistema` | Diagnóstico. Cada recálculo de fusão grava aqui os componentes e se houve promoção/rebaixamento. |
+| `logs_sistema` | `LogSistema` | Diagnóstico. A fusão grava aqui (com os componentes) só quando promove ou rebaixa um evento. |
 
 ### Enums do domínio
 
