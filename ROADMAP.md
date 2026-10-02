@@ -48,7 +48,9 @@ Comandos de teste:
       "Open-Meteo" do seed — resolvidos junto com o 3a.
 
 ### Observação encontrada no teste visual (não corrigida)
-- No celular (390px) o relógio do topo fica cortado na borda direita. Já acontecia antes da limpeza.
+- ~~No celular (390px) o relógio do topo fica cortado na borda direita.~~ Falso alarme (02/10/2026):
+  o Chrome headless não abre janela com menos de ~500px, renderiza em 500 e recorta em 390.
+  Medido num iframe de 390/360/320px, o topo cabe inteiro, inclusive com a pílula "Sinc.".
 
 ## 2. Rápido, baixo risco — concluído em 02/10/2026
 - [x] (`204b97c`) **Segurança:** `/regioes`, `/fontes`, `/localizacoes` e `/dados-contextuais`
@@ -105,9 +107,10 @@ Itens 0–2 publicados no Cloud Run em 02/10/2026 (revisão `motsp-00011-85j`, c
       associar câmera→região seria funcionalidade nova. A tabela parada não atrapalha.
 - [~] **(g) Removido em 02/10/2026** — quebrar `app.ts` (1407 linhas, quase sem teste de UI) arrisca
       quebrar a tela sem aviso por ganho só de organização. Reavaliar só se a banca for ler o front.
-- [ ] **(h) README em duas camadas:** README curto + `docs/` com detalhes; §19 vira apêndice. Corrigir
+- [x] (`d292c99`) **(h) README em duas camadas:** README curto + `docs/` com detalhes; §19 vira apêndice. Corrigir
       no caminho: "MySQL em produção" (é SQLite no Cloud Run) e a nota sobre `os.getenv` (§21.5).
-- [ ] **Relógio do topo cortado no celular (390px)** — ver observação no item 1.
+- [x] **Relógio do topo cortado no celular** — não era bug (ver observação no item 1); nada mudou.
+      Para conferir layout de celular: iframe com a largura certa, não `--window-size` do headless.
 
 ## Ordem sugerida
-0 → 1 + itens 2 → 3a → 3d → 3h → relógio. (3b, 3c, 3e, 3f e 3g removidos — ver motivos.)
+Roteiro concluído em 02/10/2026. (3b, 3c, 3e, 3f e 3g removidos — ver motivos.)
