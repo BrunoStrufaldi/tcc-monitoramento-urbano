@@ -1,8 +1,6 @@
-"""Pontuação por dimensão: IA, clima e fonte oficial."""
+"""Pontuação por dimensão: IA e contexto."""
 
-from data_fusion.models import DadoClima, EvidenciaIA, FonteInfo
-
-FONTES_OFICIAIS = frozenset({"api", "sensor", "data_fusion"})
+from data_fusion.models import DadoContexto, EvidenciaIA
 
 
 def _clamp(valor: float, minimo: float = 0.0, maximo: float = 1.0) -> float:
@@ -85,14 +83,14 @@ def _alagamento_sem_sinal_ao_vivo(historico: float | None) -> tuple[float, str]:
     via reconhecidamente crítica segura a pontuação e a ausência de histórico a
     derruba — o caso clássico de falso positivo do modelo de incidentes."""
     if historico is None:
-        return 0.45, "Dados climáticos sem precipitação nem aviso oficial registrados"
+        return 0.45, "Contexto sem precipitação nem aviso oficial registrados"
     if historico >= 4:
         return 0.45, f"Via com histórico de alagamento ({historico:.1f}/10), mas sem chuva nem aviso oficial agora"
     return 0.25, "Via sem histórico de alagamento e sem chuva/aviso oficial — provável falso positivo visual"
 
 
 def _ajustar_por_historico(pontuacao: float, historico: float) -> tuple[float, str]:
-    """Modifica a pontuação de clima já corroborada por sinal ao vivo conforme o
+    """Modifica a pontuação de contexto já corroborada por sinal ao vivo conforme o
     histórico de alagamento da via (prior espacial, nunca dimensão isolada)."""
     if historico >= 7:
         return pontuacao * 1.12, f"reforçado por ponto de alagamento crônico (histórico {historico:.1f}/10)"
@@ -103,7 +101,7 @@ def _ajustar_por_historico(pontuacao: float, historico: float) -> tuple[float, s
     return pontuacao * 0.90, "via sem histórico de alagamento — leve cautela"
 
 
-def _pontuar_clima_por_tipo(tipo: str, dados: list[DadoClima]) -> tuple[float, str]:
+def _pontuar_contexto_por_tipo(tipo: str, dados: list[DadoContexto]) -> tuple[float, str]:
     tipo_norm = tipo.lower().strip()
     valores = {d.chave.lower(): d.valor_numerico for d in dados if d.valor_numerico is not None}
 
@@ -115,7 +113,9 @@ def _pontuar_clima_por_tipo(tipo: str, dados: list[DadoClima]) -> tuple[float, s
         # histórico de alagamento da via (data_fusion.historico_alagamento), que
         # nunca confirma sozinho — só reforça quando já há sinal ao vivo, e cuja
         # ausência num ponto sem chuva/aviso derruba a pontuação.
-        chuva = valores.get("precipitacao_mm_h") or valores.get("precipitacao")
+        # 0.0 mm/h conta como "sem sinal de chuva", não como leitura: cai em
+        # _alagamento_sem_sinal_ao_vivo (comportamento de sempre, mantido).
+        chuva = valores.get("precipitacao_mm_h") or None
         aviso_inmet = valores.get("alerta_inmet_severidade")
         historico = valores.get("historico_alagamento_indice")
 
@@ -153,17 +153,17 @@ def _pontuar_clima_por_tipo(tipo: str, dados: list[DadoClima]) -> tuple[float, s
             detalhe += " — contexto fraco para trânsito"
         return _interpolar(indice, _ANCORAS_TRANSITO), detalhe
 
-    return 0.58, f"Contexto climático genérico para evento tipo '{tipo_norm}'"
+    return 0.58, f"Contexto genérico para evento tipo '{tipo_norm}'"
 
 
 def _indices_transito(valores: dict[str, float]) -> list[float]:
     return [
-        valores[chave] for chave in ("indice_congestionamento", "indice_congestionamento_tomtom", "congestionamento")
+        valores[chave] for chave in ("indice_congestionamento", "indice_congestionamento_tomtom")
         if chave in valores
     ]
 
 
-def _notas_por_fonte_ao_vivo(tipo: str, dados: list[DadoClima]) -> list[float]:
+def _notas_por_fonte_ao_vivo(tipo: str, dados: list[DadoContexto]) -> list[float]:
     """Nota isolada de cada fonte contextual independente e ao vivo do evento.
 
     Trânsito: contagem de veículos do frame e TomTom. Alagamento: chuva medida
@@ -175,7 +175,7 @@ def _notas_por_fonte_ao_vivo(tipo: str, dados: list[DadoClima]) -> list[float]:
         return [_interpolar(i, _ANCORAS_TRANSITO) for i in _indices_transito(valores)]
     if tipo_norm == "alagamento":
         notas = []
-        chuva = valores.get("precipitacao_mm_h") or valores.get("precipitacao")
+        chuva = valores.get("precipitacao_mm_h") or None
         if chuva is not None:
             notas.append(_pontuar_chuva(chuva)[0])
         if valores.get("alerta_inmet_severidade") is not None:
@@ -192,7 +192,7 @@ FATOR_PESO_CONTEXTO_MAX = 1.4
 _DIVERGENCIA_TOTAL = 0.4
 
 
-def fator_peso_clima(tipo: str, dados: list[DadoClima]) -> tuple[float, str | None]:
+def fator_peso_contexto(tipo: str, dados: list[DadoContexto]) -> tuple[float, str | None]:
     """Multiplicador do peso-base da dimensão contextual.
 
     Peso fixo tratava igual um índice isolado e dois sensores independentes
@@ -215,29 +215,8 @@ def fator_peso_clima(tipo: str, dados: list[DadoClima]) -> tuple[float, str | No
     return round(fator, 4), f"peso ajustado {fator:.2f}x ({resumo}, concordância {concordancia:.0%})"
 
 
-def pontuar_clima(tipo: str, dados: list[DadoClima]) -> tuple[float, str]:
+def pontuar_contexto(tipo: str, dados: list[DadoContexto]) -> tuple[float, str]:
     if not dados:
-        return 0.0, "Sem dados climáticos vinculados — dimensão não utilizada"
-    return _pontuar_clima_por_tipo(tipo, dados)
+        return 0.0, "Sem dados de contexto vinculados — dimensão não utilizada"
+    return _pontuar_contexto_por_tipo(tipo, dados)
 
-
-def pontuar_fonte_oficial(fonte: FonteInfo | None) -> tuple[float, str]:
-    if fonte is None:
-        return 0.0, "Sem fonte independente — dimensão não utilizada"
-
-    tipo = fonte.tipo.lower().strip()
-
-    if tipo in FONTES_OFICIAIS:
-        base = 0.92 if tipo == "api" else 0.85 if tipo == "sensor" else 0.88
-        if not fonte.ativo:
-            base *= 0.85
-        nome = fonte.nome or tipo
-        return _clamp(base), f"Fonte oficial: {nome} ({tipo})"
-
-    if tipo == "yolo":
-        return 0.0, "YOLO já contabilizado na dimensão IA — aguarda fonte independente"
-
-    if tipo == "manual":
-        return 0.50, "Registro manual — validação oficial pendente"
-
-    return 0.45, f"Fonte '{tipo}' com credibilidade intermediária"

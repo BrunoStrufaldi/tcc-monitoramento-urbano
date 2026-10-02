@@ -119,18 +119,21 @@ _FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 
 
 class _PainelStaticFiles(StaticFiles):
-    """StaticFiles com ``Cache-Control: no-cache`` no HTML.
+    """StaticFiles com ``Cache-Control: no-cache`` no HTML e no JavaScript.
 
     O index.html é quem aponta para o CSS/JS versionados pelo ``?v=``. Sem
     cabeçalho de cache o Safari do iOS reaproveitava o HTML antigo por horas
     (cache heurístico) e continuava carregando o CSS antigo mesmo depois de um
     deploy. ``no-cache`` obriga a revalidar pelo ETag a cada abertura — um 304
-    barato — e os demais arquivos ficam com o cache padrão.
+    barato. O JS entra junto porque ``app.js`` importa ``fusion-format.js``
+    sem ``?v=``: um módulo velho em cache ao lado do novo quebraria o painel.
     """
+
+    _SEM_CACHE = ("text/html", "text/javascript", "application/javascript")
 
     async def get_response(self, path: str, scope: Scope) -> Response:
         response = await super().get_response(path, scope)
-        if response.headers.get("content-type", "").startswith("text/html"):
+        if response.headers.get("content-type", "").startswith(self._SEM_CACHE):
             response.headers["Cache-Control"] = "no-cache"
         return response
 

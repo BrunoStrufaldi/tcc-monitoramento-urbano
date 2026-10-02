@@ -1030,9 +1030,9 @@ function scheduleMarkerRefresh(): void {
 }
 
 // Pesos-base das dimensões da fusão — espelham data_fusion/fusion.py (PESOS).
-// Só fallback: a API manda `peso_base` por componente, e o de clima varia
-// com a concordância entre as fontes contextuais.
-const PESO_BASE_FUSAO: Record<string, number> = { ia: 0.4, clima: 0.3, fonte_oficial: 0.3 };
+// Só fallback: a API manda `peso_base` por componente, e o de contexto varia
+// com a concordância entre as fontes contextuais. Proporção 4:3.
+const PESO_BASE_FUSAO: Record<string, number> = { ia: 4 / 7, contexto: 3 / 7 };
 
 /** Painel no mapa: a conta completa da fusão, o veredito e o dado decisivo. */
 function renderFusionExplain(result: FusionResult, eventoTipo?: string): void {

@@ -9,17 +9,13 @@ class EvidenciaIA:
 
 
 @dataclass
-class DadoClima:
+class DadoContexto:
+    """Sinal independente da câmera: chuva (Open-Meteo), aviso INMET, histórico
+    de alagamento da via, índice de veículos do frame ou TomTom."""
+
     chave: str
     valor_numerico: float | None = None
     unidade: str | None = None
-
-
-@dataclass
-class FonteInfo:
-    tipo: str
-    nome: str = ""
-    ativo: bool = True
 
 
 @dataclass
@@ -27,8 +23,7 @@ class EventoFusionInput:
     evento_id: int
     tipo: str
     evidencias_ia: list[EvidenciaIA] = field(default_factory=list)
-    dados_clima: list[DadoClima] = field(default_factory=list)
-    fonte: FonteInfo | None = None
+    dados_contexto: list[DadoContexto] = field(default_factory=list)
 
 
 @dataclass
@@ -38,8 +33,8 @@ class ComponenteConfiabilidade:
     peso: float
     contribuicao: float
     detalhe: str
-    # Peso antes do rateio entre as dimensões presentes (o de clima já com o
-    # ajuste de concordância); `peso` é o efetivamente aplicado.
+    # Peso antes do rateio entre as dimensões presentes (o de contexto já com
+    # o ajuste de concordância); `peso` é o efetivamente aplicado.
     peso_base: float = 0.0
 
 

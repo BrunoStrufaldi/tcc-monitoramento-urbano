@@ -85,6 +85,7 @@ def test_fluxo_fusao_dados(client: TestClient, criar_evento):
     dados = fusao.json()
     assert "confiabilidade" in dados
     assert dados["nivel"] in ("alta", "media", "baixa")
+    assert [c["nome"] for c in dados["componentes"]] == ["ia", "contexto"]
 
     recalculo = client.post(f"/fusion/eventos/{evento.id}/recalcular")
     assert recalculo.status_code == 200
@@ -121,3 +122,11 @@ def test_health_e_raiz(client: TestClient):
     health = client.get("/health")
     assert health.status_code == 200
     assert health.json()["status"] == "ok"
+
+
+def test_painel_html_e_js_revalidam_cache(client: TestClient):
+    """app.js importa fusion-format.js sem ?v=: os dois têm que revalidar juntos."""
+    assert client.get("/").headers["cache-control"] == "no-cache"
+    assert client.get("/dist/app.js").headers["cache-control"] == "no-cache"
+    assert client.get("/dist/fusion-format.js").headers["cache-control"] == "no-cache"
+    assert "cache-control" not in client.get("/css/style.css").headers

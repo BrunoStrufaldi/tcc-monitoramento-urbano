@@ -14,10 +14,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from data_fusion.fusion import calcular_confiabilidade  # noqa: E402
 from data_fusion.models import (  # noqa: E402
-    DadoClima,
+    DadoContexto,
     EvidenciaIA,
     EventoFusionInput,
-    FonteInfo,
     ResultadoFusao,
 )
 
@@ -66,8 +65,8 @@ def evento_para_fusao(evento: Evento) -> EventoFusionInput:
         for e in evento.evidencias
     ]
 
-    dados_clima = [
-        DadoClima(
+    dados_contexto = [
+        DadoContexto(
             chave=d.chave,
             valor_numerico=d.valor_numerico,
             unidade=d.unidade,
@@ -76,20 +75,11 @@ def evento_para_fusao(evento: Evento) -> EventoFusionInput:
         if d.categoria.lower() == "clima"
     ]
 
-    fonte = None
-    if evento.fonte:
-        fonte = FonteInfo(
-            tipo=evento.fonte.tipo,
-            nome=evento.fonte.nome,
-            ativo=bool(evento.fonte.ativo),
-        )
-
     return EventoFusionInput(
         evento_id=evento.id,
         tipo=evento.tipo,
         evidencias_ia=evidencias,
-        dados_clima=dados_clima,
-        fonte=fonte,
+        dados_contexto=dados_contexto,
     )
 
 
