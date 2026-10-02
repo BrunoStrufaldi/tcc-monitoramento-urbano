@@ -1,6 +1,5 @@
 # Python
 backend/venv/
-notificacoes-urbanas/venv/
 backend/.env
 __pycache__/
 *.py[cod]
@@ -19,7 +18,6 @@ frontend/js/config.js
 ml/models/*.pt
 !ml/models/yolo11m.pt
 !ml/models/gx-incident.pt
-backend/ml/models/*.pt
 weights/
 
 # Datasets baixados e runs de treino do modelo de incidentes (grandes, não são código)
