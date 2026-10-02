@@ -1,8 +1,7 @@
-"""Persiste um evento a partir de uma detecção YOLO já validada pelo servidor.
+"""Persiste um evento a partir de uma detecção YOLO feita no servidor.
 
-Usado tanto pela confirmação manual (upload no painel) quanto pela detecção
-contínua em câmera ao vivo — as duas produzem o mesmo tipo de evidência
-auditável e disparam o mesmo broadcast em tempo real.
+Usado pela detecção contínua nas câmeras (trânsito e alagamento): grava a
+evidência auditável e dispara o broadcast em tempo real.
 """
 
 from __future__ import annotations
@@ -27,12 +26,7 @@ from app.ws_manager import manager as ws_manager
 from ml.detector import Deteccao
 
 _EVIDENCIAS_DIR = Path(__file__).resolve().parents[1] / "data" / "evidencias"
-_DISPLAY_NAMES = {
-    "veiculo": "Veículo",
-    "onibus": "Ônibus",
-    "caminhao": "Caminhão",
-    "transito": "Trânsito",
-}
+_DISPLAY_NAMES = {"transito": "Trânsito"}
 
 
 def _fonte(db: Session, nome: str, descricao: str) -> FonteDados:
@@ -90,7 +84,7 @@ def registrar_deteccao(
     fonte_nome: str = "MotSP YOLO",
     fonte_descricao: str = "Evidências visuais geradas por validação computacional.",
     modelo_ia: str = "YOLO11 (inferência repetida no servidor)",
-    origem: str = "camera_ou_upload",
+    origem: str = "camera_continua",
     deteccoes_para_anotar: list[Deteccao] | None = None,
 ) -> Evento:
     """Cria localização, evento e evidência, e propaga via WebSocket/SSE."""
@@ -109,13 +103,10 @@ def registrar_deteccao(
         nome_arquivo = nome_original
 
     rotulo = _DISPLAY_NAMES.get(deteccao.nome, deteccao.nome.replace("_", " ").title())
-    observacao_objeto = deteccao.tipo == "observacao_visual"
-    titulo = ("Observação YOLO: " + rotulo + " detectado") if observacao_objeto else ("Possível " + rotulo + " detectado pelo YOLO")
+    titulo = "Possível " + rotulo + " detectado pelo YOLO"
     descricao = (
-        "Detecção visual produzida pelo modelo YOLO em imagem real. "
-        "Isto comprova a presença do objeto na captura, não um incidente urbano."
-        if observacao_objeto else
-        "Sinal visual produzido pelo modelo YOLO em imagem real; ocorrência mantida em análise até validação operacional."
+        "Sinal visual produzido pelo modelo YOLO em imagem real; ocorrência mantida "
+        "em análise até a fusão de dados atingir o limiar de confiabilidade."
     )
 
     localizacao = Localizacao(latitude=latitude, longitude=longitude)
@@ -151,7 +142,6 @@ def registrar_deteccao(
             "bbox": deteccao.bbox,
             "arquivo_original": nome_original,
             "sha256_original": hashlib.sha256(conteudo_imagem).hexdigest(),
-            "observacao_nao_e_incidente": observacao_objeto,
         },
     ))
     db.commit()

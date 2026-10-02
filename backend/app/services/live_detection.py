@@ -41,9 +41,8 @@ Cada câmera roda em thread própria, com cooldown independente, pra não deixar
 uma avenida congestionada silenciar o alerta de outra.
 
 Ativar qualquer uma dessas fontes é uma decisão explícita de quem opera o
-backend, ciente de que aqui não há a confirmação humana por evento que o
-resto do sistema exige. Eventos são publicados no loop assíncrono principal
-via ``app.broadcast.schedule_coroutine``.
+backend: não há confirmação humana por evento. Eventos são publicados no loop
+assíncrono principal via ``app.broadcast.schedule_coroutine``.
 """
 
 from __future__ import annotations

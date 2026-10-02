@@ -72,19 +72,6 @@ def test_fluxo_evento_detectado_ate_consulta(client: TestClient, db_session, cri
     assert client.get(f"/logs?evento_id={evento_id}").status_code == 200
 
 
-def test_fluxo_deteccao_yolo_simulada(client: TestClient):
-    """A simulação de detecção devolve os campos que o pipeline usaria."""
-    deteccao = client.post("/deteccao/simular", json={"num_deteccoes": 2})
-    assert deteccao.status_code == 200
-    resultados = deteccao.json()
-    assert len(resultados) == 2
-
-    det = resultados[0]
-    assert det["severidade"] in ("baixa", "media", "alta", "critica")
-    assert 0 <= det["confianca"] <= 1
-    assert det["tipo"]
-
-
 def test_fluxo_fusao_dados(client: TestClient, criar_evento):
     """Consulta e recálculo da confiabilidade de um evento detectado."""
     evento = criar_evento(titulo="Incêndio em prédio", tipo="incendio", severidade="critica")

@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import base64
 import json
 import math
 import os
@@ -31,7 +30,6 @@ import sys
 import tempfile
 import threading
 import time
-import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -54,7 +52,7 @@ from app.config import settings  # noqa: E402
 from app.services import detection_events  # noqa: E402
 from app.services.data_fusion_service import aplicar_fusao_evento  # noqa: E402
 from app.services.detection_events import registrar_deteccao  # noqa: E402
-from app.services.visual_validation import VisualValidationService  # noqa: E402
+from app.services.live_detection import _CLASSES_VEICULO, _detectar_congestionamento  # noqa: E402
 from ml import detector as ml_detector  # noqa: E402
 
 # Evidências da medição vão para o diretório temporário, não para o projeto.
@@ -252,17 +250,27 @@ def bloco_cpu(frames: list[tuple[str, bytes]], amostras_cpu: int) -> list[dict]:
     return linhas
 
 
-def bloco_pipeline(frames: list[tuple[str, bytes]], repeticoes: int) -> list[dict]:
-    """Serviço de validação completo: arquivo temporário + inferência + dedupe."""
-    servico = VisualValidationService()
+def _inferir_como_no_monitoramento(conteudo: bytes) -> list:
+    """Mesmo preparo de ``live_detection._processar_frame``: grava o JPEG em
+    arquivo temporário, roda o YOLO e apaga o arquivo."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg", dir=_TEMP_DIR) as arquivo:
+        arquivo.write(conteudo)
+        caminho = arquivo.name
+    try:
+        return ml_detector.detectar_imagem_real(caminho, settings.yolo_threshold)
+    finally:
+        Path(caminho).unlink(missing_ok=True)
 
+
+def bloco_pipeline(frames: list[tuple[str, bytes]], repeticoes: int) -> list[dict]:
+    """Frame da câmera até a lista de detecções: arquivo temporário + inferência."""
     def _validar(par):
         _, conteudo = par
-        servico.validate_frame(conteudo, "image/jpeg", uuid.uuid4().hex, settings.yolo_threshold)
+        _inferir_como_no_monitoramento(conteudo)
 
     _validar(frames[0])
     amostras = _cronometrar(_validar, frames, repeticoes)
-    return [_resumir("Validacao do frame (temp + inferencia + deduplicacao)", amostras, "latencia_ms da API")]
+    return [_resumir("Preparo do frame + inferencia (como no monitoramento)", amostras, "temp + YOLO")]
 
 
 def bloco_persistencia(frames: list[tuple[str, bytes]], repeticoes: int) -> list[dict]:
@@ -271,7 +279,7 @@ def bloco_persistencia(frames: list[tuple[str, bytes]], repeticoes: int) -> list
     from ml.detector import Deteccao
 
     Base.metadata.create_all(bind=engine)
-    deteccao = Deteccao(classe_id=8, nome="veiculo", confianca=0.87, severidade="baixa", tipo="observacao_visual", bbox=(10, 10, 120, 90), classe_modelo="car")
+    deteccao = Deteccao(classe_id=2, nome="transito", confianca=0.87, severidade="media", tipo="transito", bbox=(10, 10, 120, 90))
 
     amostras_persistencia: list[float] = []
     amostras_fusao: list[float] = []
@@ -317,75 +325,51 @@ def bloco_http(frames: list[tuple[str, bytes]], repeticoes: int) -> list[dict]:
         def _enviar(par):
             _, conteudo = par
             resposta = cliente.post(
-                "/deteccao/frame",
+                "/deteccao/imagem",
                 files={"file": ("frame.jpg", conteudo, "image/jpeg")},
-                data={"frame_id": uuid.uuid4().hex},
             )
             resposta.raise_for_status()
 
         _enviar(frames[0])
         amostras = _cronometrar(_enviar, frames, repeticoes)
-        linhas.append(_resumir("POST /deteccao/frame ponta a ponta (HTTP)", amostras, "127.0.0.1"))
+        linhas.append(_resumir("POST /deteccao/imagem (upload do testador YOLO)", amostras, "127.0.0.1"))
     return linhas
 
 
-async def _medir_ws_cv(frames: list[tuple[str, bytes]], repeticoes: int) -> list[float]:
-    """Canal de câmera do navegador: envia o frame em base64 e espera a resposta."""
-    intervalo = 1 / settings.yolo_max_fps + 0.05
-    amostras: list[float] = []
-    async with websockets.connect("ws://127.0.0.1:%d/ws/cv" % PORTA, max_size=None) as ws:
-        await ws.recv()  # {"tipo": "pronto"}
-        for _ in range(repeticoes):
-            for _, conteudo in frames:
-                await asyncio.sleep(intervalo)  # respeita o limitador de FPS do servidor
-                mensagem = json.dumps({
-                    "tipo": "frame",
-                    "conteudo": base64.b64encode(conteudo).decode(),
-                    "mime": "image/jpeg",
-                    "frame_id": uuid.uuid4().hex,
-                })
-                inicio = time.perf_counter()
-                await ws.send(mensagem)
-                resposta = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
-                decorrido = (time.perf_counter() - inicio) * 1000
-                if resposta.get("tipo") == "frame_resultado":
-                    amostras.append(decorrido)
-    return amostras
+def _frame_ate_evento(conteudo: bytes) -> bool:
+    """Caminho do monitoramento contínuo de trânsito, sem a rede: frame -> YOLO
+    -> contagem -> evento gravado e publicado. Fica de fora a decisão do gatilho
+    (contagem mínima / TomTom), que depende de rede e do cenário do frame."""
+    from app.database import SessionLocal
+
+    veiculos = [d for d in _inferir_como_no_monitoramento(conteudo) if d.nome in _CLASSES_VEICULO]
+    if not veiculos:
+        return False
+    transito = _detectar_congestionamento(veiculos, settings.gx_transito_min_veiculos)
+    with SessionLocal() as db:
+        registrar_deteccao(db, transito, conteudo, -23.5975, -46.6508, origem="benchmark", deteccoes_para_anotar=veiculos)
+    return True
 
 
 async def _medir_ponta_a_ponta(frames: list[tuple[str, bytes]], quantidade: int) -> tuple[list[float], list[float]]:
-    """Upload -> inferência -> evento gravado -> mensagem no painel via WebSocket."""
+    """Frame -> inferência -> evento gravado -> mensagem no painel via WebSocket."""
     totais: list[float] = []
     propagacoes: list[float] = []
-    with httpx.Client(base_url="http://127.0.0.1:%d" % PORTA, timeout=120.0) as cliente:
-        async with websockets.connect("ws://127.0.0.1:%d/ws" % PORTA, max_size=None) as ws:
-            await ws.recv()  # {"tipo": "pronto"}
-            for indice in range(quantidade):
-                _, conteudo = frames[indice % len(frames)]
-                inicio = time.perf_counter()
-                resposta = await asyncio.to_thread(
-                    cliente.post,
-                    "/deteccao/confirmar",
-                    files={"file": ("frame.jpg", conteudo, "image/jpeg")},
-                    data={
-                        "nome": "veiculo",
-                        "confianca": "0.9",
-                        "severidade": "baixa",
-                        "tipo": "observacao_visual",
-                        "latitude": "-23.5975",
-                        "longitude": "-46.6508",
-                    },
-                )
-                if resposta.status_code >= 400:
-                    continue
-                while True:
-                    mensagem = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
-                    if mensagem.get("tipo") == "evento_criado":
-                        break
-                chegada = time.perf_counter()
-                totais.append((chegada - inicio) * 1000)
-                emitido = datetime.fromisoformat(mensagem["timestamp"])
-                propagacoes.append(max(0.0, (datetime.now(UTC) - emitido).total_seconds() * 1000))
+    async with websockets.connect("ws://127.0.0.1:%d/ws" % PORTA, max_size=None) as ws:
+        await ws.recv()  # {"tipo": "pronto"}
+        for indice in range(quantidade):
+            _, conteudo = frames[indice % len(frames)]
+            inicio = time.perf_counter()
+            if not await asyncio.to_thread(_frame_ate_evento, conteudo):
+                continue
+            while True:
+                mensagem = json.loads(await asyncio.wait_for(ws.recv(), timeout=60))
+                if mensagem.get("tipo") == "evento_criado":
+                    break
+            chegada = time.perf_counter()
+            totais.append((chegada - inicio) * 1000)
+            emitido = datetime.fromisoformat(mensagem["timestamp"])
+            propagacoes.append(max(0.0, (datetime.now(UTC) - emitido).total_seconds() * 1000))
     return totais, propagacoes
 
 
@@ -439,7 +423,7 @@ def main() -> None:
     parser.add_argument("--cpu", action="store_true", help="inclui a comparacao CPU x GPU (lento)")
     parser.add_argument("--amostras-cpu", type=int, default=8, help="frames medidos em CPU (padrao: 8)")
     parser.add_argument("--rede", action="store_true", help="baixa snapshots reais da CET-SP (usa internet)")
-    parser.add_argument("--e2e", type=int, default=10, help="medicoes ponta a ponta upload->painel (padrao: 10)")
+    parser.add_argument("--e2e", type=int, default=10, help="medicoes ponta a ponta frame->painel (padrao: 10)")
     parser.add_argument("--json", type=str, default="", help="arquivo para gravar o resultado completo")
     argumentos = parser.parse_args()
 
@@ -462,14 +446,12 @@ def main() -> None:
     servidor = _subir_servidor()
     try:
         resultado["http"] = bloco_http(frames, argumentos.repeticoes)
-        amostras_ws = asyncio.run(_medir_ws_cv(frames[: min(len(frames), 10)], 1))
-        resultado["websocket"] = [_resumir("WS /ws/cv - frame do navegador e resposta", amostras_ws, "base64, limitado a %d FPS" % settings.yolo_max_fps)]
         totais, propagacoes = asyncio.run(_medir_ponta_a_ponta(frames, argumentos.e2e))
         resultado["ponta_a_ponta"] = []
         if propagacoes:
             resultado["ponta_a_ponta"].append(_resumir("Broadcast do evento ate o painel (WebSocket)", propagacoes, "so a propagacao"))
         if totais:
-            resultado["ponta_a_ponta"].append(_resumir("Upload -> inferencia -> evento no painel", totais, "caminho completo"))
+            resultado["ponta_a_ponta"].append(_resumir("Frame -> inferencia -> evento no painel", totais, "caminho completo"))
     finally:
         servidor.should_exit = True
         time.sleep(1.0)
@@ -481,10 +463,9 @@ def main() -> None:
         "partida": "PARTIDA A FRIO (uma vez por processo)",
         "inferencia": "INFERENCIA (regime permanente)",
         "hardware": "COMPARACAO DE HARDWARE",
-        "pipeline": "PIPELINE DE VALIDACAO",
+        "pipeline": "PIPELINE DE DETECCAO",
         "persistencia": "PERSISTENCIA E FUSAO",
         "http": "API HTTP",
-        "websocket": "WEBSOCKET",
         "ponta_a_ponta": "PONTA A PONTA",
         "rede": "REDE EXTERNA",
     }

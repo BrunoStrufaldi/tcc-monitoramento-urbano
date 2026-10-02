@@ -10,12 +10,39 @@ from fastapi.testclient import TestClient
 def test_pasta_de_arquivo_bate_com_a_pasta_onde_detection_events_grava():
     """Regressão: o router já serviu arquivo de uma pasta diferente de onde
     detection_events.py grava (parents[2] vs parents[1]) — toda evidência
-    criada por detecção real (câmera contínua, confirmação manual) resultava
+    criada por detecção real (câmera contínua) resultava
     em 404 ao tentar exibir a imagem, mesmo o arquivo existindo de verdade."""
     from app.routers import evidencias
     from app.services import detection_events
 
     assert evidencias._EVIDENCIAS_DIR == detection_events._EVIDENCIAS_DIR
+
+
+def test_registrar_deteccao_grava_evento_e_evidencia_auditavel(client: TestClient, db_session, tmp_path, monkeypatch):
+    """A detecção vira evento em análise com evidência anotada, original
+    preservado e SHA-256 do original para auditoria."""
+    import hashlib
+
+    from app.services import detection_events
+    from ml.detector import Deteccao
+
+    monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
+    monkeypatch.setattr(detection_events, "annotate_evidence", lambda content, _detections: (content, 30, 40))
+    deteccao = Deteccao(2, "transito", 0.91, "media", "transito", (1, 2, 30, 40))
+
+    evento = detection_events.registrar_deteccao(db_session, deteccao, b"imagem-de-teste", -23.55052, -46.633308)
+
+    assert evento.titulo == "Possível Trânsito detectado pelo YOLO"
+    assert evento.tipo == "transito"
+    assert evento.status == "em_analise"
+
+    evidencias = client.get(f"/evidencias?evento_id={evento.id}").json()
+    assert len(evidencias) == 1
+    metadados = evidencias[0]["metadados"]
+    assert (tmp_path / evidencias[0]["caminho_arquivo"]).is_file()
+    assert (tmp_path / metadados["arquivo_original"]).read_bytes() == b"imagem-de-teste"
+    assert metadados["sha256_original"] == hashlib.sha256(b"imagem-de-teste").hexdigest()
+    assert metadados["validado_no_servidor"] is True
 
 
 def test_obter_arquivo_de_evidencia(client: TestClient, tmp_path, monkeypatch):

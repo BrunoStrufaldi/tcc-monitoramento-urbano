@@ -30,7 +30,6 @@ class Evento(Base):
     fonte_id: Mapped[int | None] = mapped_column(ForeignKey("fontes_dados.id"))
     confianca: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
     detectado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    resolvido_em: Mapped[datetime | None] = mapped_column(DateTime)
     criado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     atualizado_em: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()

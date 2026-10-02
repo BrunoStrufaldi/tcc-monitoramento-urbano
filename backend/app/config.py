@@ -19,10 +19,6 @@ class Settings(BaseSettings):
     # com negativos, ele dispara caixa em cena seca com score baixo — 0.6 corta a
     # maior parte desses falsos positivos sem endurecer a contagem de trânsito.
     gx_yolo_incident_conf: float = 0.6
-    yolo_max_fps: int = 3
-    yolo_max_frame_bytes: int = 1_500_000
-    yolo_max_frame_width: int = 1280
-    yolo_cooldown_seconds: int = 20
     gx_camera_snapshot_url: str | None = None
     gx_camera_latitude: float | None = None
     gx_camera_longitude: float | None = None
