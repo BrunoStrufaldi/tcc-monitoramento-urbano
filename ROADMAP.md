@@ -44,9 +44,8 @@ Comandos de teste:
 - [x] Apagados (com permissão pontual em `.claude/settings.local.json`, removida depois):
       `runs/` da raiz (validações de 26/08 das tentativas v3/v4), `ml/models/gx-incident-v3-backup.pt`
       e `ml/models/gx-incident-v4-attempt.pt`.
-- [ ] **Movido para o 3a:** ramos mortos de `data_fusion/scores.py` (fontes `api/sensor/manual/
-      data_fusion`, chaves `precipitacao`/`congestionamento`) e as fontes "Painel manual" e
-      "Open-Meteo" do `backend/seed.py` — estão presos à dimensão "fonte oficial", que o 3a redesenha.
+- [x] (`9e12700`, `ed3f180`) Ramos mortos de `data_fusion/scores.py` e fontes "Painel manual"/
+      "Open-Meteo" do seed — resolvidos junto com o 3a.
 
 ### Observação encontrada no teste visual (não corrigida)
 - No celular (390px) o relógio do topo fica cortado na borda direita. Já acontecia antes da limpeza.
@@ -72,13 +71,17 @@ Comandos de teste:
 - [x] (`53b9744`) README: tabela "Números atuais" removida.
 
 Estado depois do item 2: 146 testes backend + 14 data_fusion + 2 frontend passando.
+Itens 0–2 publicados no Cloud Run em 02/10/2026 (revisão `motsp-00011-85j`, conferida).
 
 ## 3. Mais trabalhoso
-- [ ] **(a) Data Fusion honesto.** Todo evento tem fonte `yolo` → `fonte_oficial` sempre 0 → pesos
-      reais são IA 57% / contexto 43%. INMET (fonte oficial de verdade) está dentro de "clima", e
-      "clima" também guarda índice de trânsito.
-      Opção A (recomendada): IA / medição ao vivo (Open-Meteo, TomTom) / fonte oficial (INMET);
-      renomear "clima" → "contexto". Opção B: assumir 2 dimensões. Atualizar front (`PESO_BASE_FUSAO`) e README §12.
+- [x] **(a) Data Fusion honesto — opção B (2 dimensões), concluído em 02/10/2026.**
+      (`9e12700`) `PESOS` = IA 4/7 (57%) + contexto 3/7 (43%) — os pesos efetivos que já valiam;
+      sai a dimensão `fonte_oficial` (`FonteInfo`, `pontuar_fonte_oficial`); "clima" → "contexto"
+      no núcleo, na API e no painel; HTML/JS servidos com `no-cache`. Scores idênticos em 620
+      cenários (descoberta: 0,0 mm/h de chuva conta como "sem sinal" — mantido e comentado).
+      (`624e443`) `categoria` dos dados contextuais `clima` → `contexto`, com `UPDATE` idempotente
+      no startup + migração `007` para o MySQL. (`ed3f180`) seed e README §12.
+      Conferido ponta a ponta local: evento gravado com a categoria antiga dá o mesmo 0,7805.
 - [ ] **(b) Unificar `live_detection.py` + `flood_detection.py`:** uma thread por câmera, baixa o
       frame uma vez e roda os dois modelos (hoje 20 threads e download duplo).
 - [ ] **(c) Tempo real com 2 canais:** WebSocket + polling; remover SSE (`routers/tempo_real.py`,
