@@ -38,10 +38,12 @@ Comandos de teste:
       `style.css` 3455 → 2394. Conferido no Chrome (desktop e celular), sem erros no console.
 - [x] Arquivos locais apagados: `gx.db` da raiz, `notificacoes-urbanas/`, `weights/`, `backend/ml/`,
       `ml/models/yolo11n.pt` (pesos públicos, rebaixáveis).
-- [ ] **Decisão sua — guardados de propósito** (artefatos próprios, não dá para recriar; podem
-      servir de evidência no TCC): `runs/detect/val*` (curvas PR/F1 e matriz de confusão) e
-      `ml/models/gx-incident-anterior.pt`, `-v3-backup.pt`, `-v4-attempt.pt`. Sugestão: mover
-      para uma pasta fora do projeto (ex.: `TCC/artefatos-treino/`) em vez de apagar.
+- [x] Decidido: `ml/models/gx-incident-anterior.pt` **fica** — é o backup de rollback que
+      `ml/train_incident_model.py` cria a cada treino (README §16). Os gráficos que importam para
+      o TCC estão em `ml/runs/` (treino atual + validação atual × anterior), que também fica.
+- [ ] **Apagar manualmente** (a exclusão automática foi bloqueada por ser irreversível):
+      `runs/` da raiz (validações de 26/08 das tentativas v3/v4), `ml/models/gx-incident-v3-backup.pt`
+      e `ml/models/gx-incident-v4-attempt.pt`.
 - [ ] **Movido para o 3a:** ramos mortos de `data_fusion/scores.py` (fontes `api/sensor/manual/
       data_fusion`, chaves `precipitacao`/`congestionamento`) e as fontes "Painel manual" e
       "Open-Meteo" do `backend/seed.py` — estão presos à dimensão "fonte oficial", que o 3a redesenha.
