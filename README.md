@@ -78,7 +78,7 @@ alagamento da via) e publica no painel apenas o que sobrevive a esse cruzamento.
 | Item | Valor |
 |---|---|
 | Testes de backend (pytest) | **165 passando** |
-| Testes de frontend (node:test) | **8 passando** |
+| Testes de frontend (node:test) | **2 passando** |
 | Models SQLAlchemy | 8 |
 | Routers FastAPI | 11 (+ 2 endpoints WebSocket) |
 | Tabelas no banco | 7 |
@@ -205,17 +205,15 @@ TCC-Atualizado/
 │   └── migrations/               001…005 (ver §6)
 │
 └── frontend/
-    ├── index.html                SPA com ARIA, views, drawer de detalhe, overlays
+    ├── index.html                SPA com ARIA: painel de eventos, testador YOLO, overlays
     ├── css/style.css             design tokens, dark theme sólido
     ├── js/config.js              API_BASE_URL, centro/zoom do mapa (fora do git)
     ├── js/config.example.js      modelo do arquivo acima
     ├── src/                      TypeScript fonte
     │   ├── app.ts                aplicação inteira (mapa, tempo real, YOLO, fusão)
-    │   ├── fusion-format.ts      formatação e limiar de promoção (espelha o backend)
-    │   ├── event-detail-format.ts
-    │   └── event-actions-format.ts
+    │   └── fusion-format.ts      formatação e limiar de promoção (espelha o backend)
     ├── dist/                     saída do `tsc` (versionada)
-    └── tests/                    8 testes node:test dos módulos puros
+    └── tests/                    testes node:test do módulo puro de formatação
 ```
 
 ---
@@ -967,34 +965,18 @@ Leaflet 1.9.4 (via unpkg, com SRI) + camada WMS do **GeoSampa** (`MapaBase_Polit
 atribuição PMSP), zoom 10–19. Se o Leaflet não carregar, o painel degrada para uma tela de
 "Mapa indisponível" e **todo o resto continua funcionando**.
 
-Marcadores são coloridos por severidade, com escala e z-index por criticidade, agrupados em
+Marcadores são coloridos por status (verde = ativo, amarelo = em análise), agrupados em
 cluster conforme o zoom, e a seleção é preservada entre atualizações.
 
 ### Views
 
 | View | Estado |
 |---|---|
-| `dashboard` (Início) | **Ativa** — KPIs de status, evento selecionado com anel de confiança, explicação da fusão, filtros de severidade, doca de evidência |
-| `yolo-teste` | **Ativa** — testar uma imagem contra os dois modelos de uma vez |
-| `eventos`, `regioes`, `fontes`, `fusao`, `cv`, `config` | Presentes no HTML e com código funcional, mas **não alcançáveis** pela barra lateral no estado atual: `initRail()` está vazia com o comentário "a navegação será reconstruída". `switchView()` continua implementada e é o ponto de religação. |
+| `dashboard` (Início) | KPIs de status, evento selecionado com anel de confiança, explicação da fusão ("como o score foi calculado") e, no celular em retrato, a evidência visual |
+| `yolo-teste` | Testar uma imagem contra os dois modelos de uma vez |
 
-A barra de ícones (`rail`) hoje expõe dois destinos: **Início** e **Testar YOLO com imagem**.
-
-### Drawer de detalhe do evento
-
-Seis abas, cada uma consultando a API sob demanda:
-
-| Aba | Endpoint |
-|---|---|
-| Resumo | `/eventos/{id}` |
-| Linha do tempo | `/eventos/{id}` + `/logs?evento_id=` |
-| Evidências | `/evidencias?evento_id=` (com visualizador ampliado) |
-| Clima | `/dados-contextuais?evento_id=` + `/fontes/tempo-real/clima` |
-| Data Fusion | `/fusion/eventos/{id}/confiabilidade` — mostra cada componente como equação `pontuação × peso = contribuição` mais a justificativa em texto |
-| Histórico e logs | `/logs?evento_id=` |
-
-Ações disponíveis: **recalcular confiança**, **copiar coordenadas**, **abrir rota**. O texto
-do próprio painel diz: *"Consulta e atalhos; o painel não altera eventos."*
+A barra de ícones (`rail`) expõe exatamente esses dois destinos. O painel direito mostra a
+evidência visual (imagem anotada pelo YOLO) do evento selecionado, com visualizador ampliado.
 
 ### Testador de YOLO
 
@@ -1007,19 +989,11 @@ veredito legível:
 
 Desenha as caixas sobre a imagem e lista cada detecção indicando de qual modelo veio.
 
-### Câmera do navegador (view `cv`)
-
-`getUserMedia` com `facingMode: environment`. A câmera **nunca inicia sozinha**: o operador
-autoriza, pode pausar e encerrar (ao encerrar, tracks e timers são interrompidos). Frames vão
-por `/ws/cv` quando o socket sobe, ou por upload HTTP sob demanda quando não sobe. Nada é
-persistido sem `persistir=true` + consentimento explícito.
-
 ### Filtros e KPIs
 
-O filtro de status inicia forçado em **Ativo** (o navegador pode restaurar a seleção anterior
-do `<select>`, então o código sobrescreve no boot). Eventos `em_analise` ficam escondidos do
-mapa e da lista até o operador trocar para "Em análise" ou "Todos" e auditar o que ainda não
-foi confirmado.
+O filtro de status (Todos / Ativos / Em análise) inicia forçado em **Todos** — o navegador
+pode restaurar a seleção anterior do `<select>`, então o código sobrescreve no boot. No
+celular o mesmo filtro aparece como botões no painel lateral, sincronizados com o `<select>`.
 
 ### Design tokens (CSS)
 
@@ -1056,13 +1030,12 @@ foi confirmado.
 
 - `prefers-reduced-motion: reduce` desliga todas as animações
 - `:focus-visible` com outline laranja (foco só por teclado, não por clique)
-- Event cards com `tabindex="0"`, `role="button"` e handler de Enter/Space
-- Skip link "Pular para lista de eventos", `aria-label` em botões e seções, `aria-live` nas
+- Skip link "Pular para o painel de eventos", `aria-label` em botões e seções, `aria-live` nas
   regiões que atualizam sozinhas
 - Breakpoints: 1200px (painel direito vira drawer), 980px (sidebar oculta, mapa cheio),
   680px (layout mobile), 480px (KPIs em uma coluna)
 - Validado de 320×568 a 1920×1080 e em zoom de 80% a 150%
-- Estados vazios explícitos: lista sem eventos, evento sem confiança, sem fonte, sem
+- Estados vazios explícitos: nenhum evento selecionado, evento sem confiança, sem
   evidência, API indisponível, WebSocket caído
 
 ---
@@ -1128,7 +1101,7 @@ confirme que a caixa fantasma sumiu. Se ainda houver, suba `GX_YOLO_INCIDENT_CON
 cd backend
 venv\Scripts\python -m pytest tests -q
 
-# Frontend — 8 testes dos módulos puros
+# Frontend — testes do módulo puro de formatação
 npm run test:frontend
 
 # Data Fusion isolado
@@ -1211,11 +1184,9 @@ que aplicou `003_remove_auth.sql`.
 
 ### Pendências
 
-- Reconstruir a navegação do rail (`initRail()` está vazia; várias views existem mas estão
-  inalcançáveis)
 - Decidir se `frontend/dist/` deve continuar versionado
 - Em produção MySQL: aplicar todas as migrações de `database/migrations/`, inclusive as
-  destrutivas `003`, `004` e `005`
+  destrutivas `003`, `004`, `005` e `006`
 
 ---
 
@@ -1275,6 +1246,16 @@ porque tem cadastro gratuito self-service e responde com dado genuinamente ao vi
 para jogar o resultado fora. A câmera 23 fica a ~50 m e cobre o mesmo cruzamento. A checagem
 `frame_esta_desatualizado` continua valendo para todas — qualquer outra pode travar igual, e
 foi assim que esta foi descoberta.
+
+### Telas sem navegação e rotas de demonstração (02/10/2026)
+
+O painel tinha seis telas (`eventos`, `regioes`, `fontes`, `fusao`, `cv`, `config`), um drawer
+de detalhe do evento e os blocos "Alertas" e "Atividade da sessão" que nenhum botão abria —
+código funcional, mas invisível para quem usa o sistema. Saíram junto as rotas que só essas
+telas usavam (`/deteccao/frame`, `/deteccao/confirmar`, `/ws/cv`) e as de simulação
+(`/deteccao/simular`, `/deteccao/video`). Com isso nenhuma rota HTTP cria evento: o único
+caminho é a detecção contínua nas câmeras. A busca de eventos e o filtro por severidade
+(também escondidos) saíram pelo mesmo motivo.
 
 ### Histórico de etapas concluídas
 
