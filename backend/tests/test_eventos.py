@@ -60,16 +60,16 @@ def test_obter_evento_inexistente_retorna_404(client: TestClient):
 
 
 def test_filtrar_eventos_por_status(client: TestClient, criar_evento):
-    for status in ["ativo", "resolvido"]:
+    for status in ["ativo", "em_analise"]:
         criar_evento(titulo=f"Evento {status}", tipo="transito", status=status)
 
     ativos = client.get("/eventos?status=ativo")
     assert len(ativos.json()) == 1
     assert ativos.json()[0]["status"] == "ativo"
 
-    resolvidos = client.get("/eventos?status=resolvido")
-    assert len(resolvidos.json()) == 1
-    assert resolvidos.json()[0]["status"] == "resolvido"
+    em_analise = client.get("/eventos?status=em_analise")
+    assert len(em_analise.json()) == 1
+    assert em_analise.json()[0]["status"] == "em_analise"
 
 
 def test_filtrar_eventos_por_tipo(client: TestClient, criar_evento):
@@ -86,5 +86,5 @@ def test_escrita_em_eventos_nao_existe(client: TestClient, criar_evento):
     evento = criar_evento()
 
     assert client.post("/eventos", json={"titulo": "x", "tipo": "transito"}).status_code == 405
-    assert client.patch(f"/eventos/{evento.id}", json={"status": "resolvido"}).status_code == 405
+    assert client.patch(f"/eventos/{evento.id}", json={"status": "ativo"}).status_code == 405
     assert client.delete(f"/eventos/{evento.id}").status_code == 405

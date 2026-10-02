@@ -65,9 +65,8 @@ alagamento da via) e publica no painel apenas o que sobrevive a esse cruzamento.
 - **Não tem login.** Sem usuários, perfis, sessão ou trilha por operador (removido na
   migração `003`). Os eventos nascem de câmera, não de gente.
 - **Não aceita registro manual de ocorrência.** O painel é somente leitura: não existe rota
-  que crie, altere ou remova evento/evidência por requisição de operador. A única entrada
-  de evento por HTTP é `POST /deteccao/confirmar`, que repete a inferência YOLO no servidor
-  antes de gravar qualquer coisa.
+  que crie, altere ou remova evento/evidência por requisição de operador. Evento só nasce
+  da detecção contínua nas câmeras.
 - **Não detecta buraco, incêndio, lixo, árvore caída ou vazamento.** Todas essas classes
   saíram do escopo (ver [§19](#19-decisões-de-escopo-o-que-foi-removido-e-por-quê)).
 - **Não usa dado em lote.** Fontes que republicam ocorrências semanas ou anos depois
@@ -181,7 +180,6 @@ TCC-Atualizado/
 │   │   │   ├── tomtom_traffic_source.py velocidade atual × livre do trecho
 │   │   │   ├── weather_source.py        Open-Meteo (clima e qualidade do ar)
 │   │   │   ├── inmet_alert_source.py    avisos meteorológicos oficiais ativos
-│   │   │   ├── visual_validation.py     valida frame sem persistir (dedup + limites)
 │   │   │   └── evidence_annotation.py   desenha as caixas YOLO sobre a evidência
 │   │   └── data/evidencias/      JPEGs gravados em runtime (fora do git)
 │   └── tests/                    165 testes pytest (SQLite em memória)
@@ -319,15 +317,6 @@ Todas as variáveis são lidas por `backend/app/config.py` (pydantic-settings). 
 | `GX_YOLO_CLASS_MAPPING` | — | JSON opcional, ex.: `{"car":"veiculo","truck":"caminhao"}`. Destinos inválidos são ignorados para não converter classe desconhecida em ocorrência urbana. |
 | `GX_YOLO_MAX_CONCORRENCIA` | `2` | Quantas inferências rodam ao mesmo tempo no processo (semáforo em `ml/detector.py`). Com o catálogo ligado são 20 threads chamando o YOLO; em GPU tanto faz, em CPU com 4 GiB (Cloud Run) 20 inferências simultâneas a 1280 estouram a memória e o container é morto. As threads continuam existindo — só esperam a vez. O carregamento dos pesos também tem trava própria: sem ela cada thread carregava a sua cópia. Além do semáforo, cada modelo tem um lock de inferência (uma chamada por vez por modelo): o objeto YOLO não é seguro entre threads — duas `predict` simultâneas no mesmo modelo quebravam no fuse da primeira chamada (`'Conv' object has no attribute 'bn'`). Trânsito e alagamento seguem em paralelo por serem objetos distintos; na prática o teto útil deste knob é 2. |
 
-### Validação de frame (upload / câmera do navegador)
-
-| Variável | Padrão | O que faz |
-|---|---|---|
-| `YOLO_MAX_FPS` | `3` | Teto de frames por segundo aceitos no WebSocket `/ws/cv`. |
-| `YOLO_MAX_FRAME_BYTES` | `1500000` | Tamanho máximo de um frame. |
-| `YOLO_MAX_FRAME_WIDTH` | `1280` | Largura máxima esperada. |
-| `YOLO_COOLDOWN_SECONDS` | `20` | Janela de deduplicação: mesma classe + mesma bbox dentro disso é marcada `duplicada`. |
-
 ### Monitoramento contínuo
 
 | Variável | Padrão | O que faz |
@@ -401,12 +390,11 @@ erDiagram
 | `evidencias_visuais` | `EvidenciaVisual` | Imagem/frame + `modelo_ia`, `classe_detectada`, `confianca`, `bbox` e SHA-256 do original em `metadados`. |
 | `dados_contextuais` | `DadoContextual` | Pares chave/valor por evento. Categoria `clima` alimenta a dimensão de contexto da fusão. |
 | `logs_sistema` | `LogSistema` | Diagnóstico. Cada recálculo de fusão grava aqui os componentes e se houve promoção/rebaixamento. |
-| — | `OcorrenciaExterna` | Model remanescente do rastreio de datasets externos (tabela criada pela migração `002`; sem produtor ativo desde a remoção do GeoSampa como gatilho). |
 
 ### Enums do domínio
 
 - **Severidade**: `baixa` · `media` · `alta` · `critica`
-- **Status do evento**: `ativo` · `em_analise` · `resolvido`
+- **Status do evento**: `em_analise` · `ativo`
 - **Tipo de evidência**: `imagem` · `video` · `frame` · `thumbnail`
 - **Nível de log**: `DEBUG` · `INFO` · `WARN` · `ERROR` · `CRITICAL`
 
@@ -422,6 +410,7 @@ um valor fora da lista é rejeitado com 422 antes de chegar ao banco.
 | `003_remove_auth.sql` | **destrutiva** | Dropa `auditoria_acoes` e depois `usuarios` (nessa ordem — FK). Reverter = reaplicar a `001`; os dados não voltam. |
 | `004_painel_somente_leitura.sql` | **destrutiva** | Dropa `logs_sistema.ip_origem`, que existia para rastrear ação de usuário e nunca foi preenchida. |
 | `005_remove_notificacoes.sql` | **destrutiva** | Dropa `notificacoes`. Nada no sistema jamais a preencheu. |
+| `006_remove_legado_geosampa_e_resolvido.sql` | **destrutiva** | Dropa `ocorrencias_externas` (sem produtor desde a saída do GeoSampa) e `eventos.resolvido_em` (evento expira e é apagado, nunca é "resolvido"). |
 
 O `schema.sql` **não popula eventos, evidências nem dados contextuais** — só regiões, três
 fontes de dados e uma linha de log. Registros de ocorrência só entram por detecção real.
@@ -469,10 +458,6 @@ A resposta traz `confiabilidade`, `nivel`, `limiar_ativo` e a lista de `componen
 | GET | `/deteccao/status` | Disponibilidade dos **dois** modelos, caminho dos pesos, erro de carga e `min_veiculos_transito`. |
 | POST | `/deteccao/imagem` | Upload → inferência com o modelo de objetos. PNG/JPG/WEBP até 10 MB; arquivo temporário apagado ao final. |
 | POST | `/deteccao/incidente` | Upload → inferência com o modelo dedicado de alagamento. Isolado: não passa pelo pipeline de evento/evidência. |
-| POST | `/deteccao/frame` | Valida um frame (multipart: `file`, `frame_id`, `threshold`, `evento_id`, `persistir`). Só grava evidência com `persistir=true`, detecção não duplicada e `evento_id` informado. |
-| POST | `/deteccao/confirmar` | **Única rota HTTP que cria evento.** Repete a inferência no servidor; classe, confiança, severidade e tipo gravados vêm da nova inferência, não do que o cliente mandou. |
-| POST | `/deteccao/simular` | Detecções de demonstração. Não chama modelo nenhum. |
-| POST | `/deteccao/video` | Fluxo de demonstração de frames. |
 
 ### Consulta de apoio
 
@@ -506,15 +491,13 @@ Ambas aceitam `latitude`/`longitude` (padrão: centro de São Paulo).
 | Protocolo | Rota | Descrição |
 |---|---|---|
 | WS | `/ws` | Canal operacional de eventos. |
-| WS | `/ws/cv` | Canal de frames base64 para validação visual (nunca persiste imagem). |
 | GET | `/events/stream` | SSE — fallback do WebSocket. |
 | GET | `/events/connected` | Número de clientes SSE conectados. |
 
-> **Resumo de escrita:** as únicas rotas que gravam são `/deteccao/confirmar` e
-> `/deteccao/frame?persistir=true` (evento/evidência, sempre revalidando no servidor),
-> `/dados-contextuais` (ingestão de fonte) e os CRUDs de cadastro `/regioes`, `/fontes`,
-> `/localizacoes`. Não existe rota para editar título, status, severidade ou resolver
-> evento.
+> **Resumo de escrita:** nenhuma rota cria, edita ou remove evento/evidência — isso é
+> trabalho da detecção contínua. As rotas que ainda gravam são `/dados-contextuais`
+> (ingestão de fonte), os CRUDs de cadastro `/regioes`, `/fontes`, `/localizacoes` e o
+> recálculo da fusão.
 
 ---
 
@@ -539,18 +522,11 @@ Toda mensagem é JSON com três campos:
 |---|---|---|
 | `pronto` | — | Aceite da conexão. |
 | `evento_criado` | `EventoResponse` completo | `detection_events.registrar_deteccao` |
-| `evento_atualizado` | `EventoResponse` completo | `detection_events.publicar_evento` — refresco no mesmo ponto, `/deteccao/confirmar`, recálculo da fusão que muda o status |
+| `evento_atualizado` | `EventoResponse` completo | `detection_events.publicar_evento` — refresco no mesmo ponto, recálculo da fusão que muda o status |
 | `evento_removido` | `{"id": int}` | `event_retention.purgar_eventos_expirados` e `colapsar_eventos_duplicados` |
 | `pong` | `{}` | Resposta a `ping` |
 
 **Cliente → Servidor**: apenas `{"tipo":"ping"}`.
-
-### Protocolo do `/ws/cv`
-
-Anuncia `{"tipo":"pronto","max_fps":N}` ao conectar e depois aceita mensagens
-`{"tipo":"frame","conteudo":"<base64>","mime":"image/jpeg","frame_id":"…"}`. Acima de
-`YOLO_MAX_FPS` responde `frame_ignorado`. Resultado volta como `frame_resultado` com as
-detecções, latência e o modo do detector. **Nenhum frame é persistido nesse canal.**
 
 ### Como o broadcast atravessa threads
 
@@ -607,31 +583,18 @@ alagamento faria a contagem de veículos parar de funcionar.
 | 9 | `motocicleta` | baixa | observacao_visual |
 | 10 | `onibus` | baixa | observacao_visual |
 | 11 | `caminhao` | baixa | observacao_visual |
-| 12 | `hidrante` | baixa | observacao_visual |
 
 Os IDs 0, 3, 4, 5, 6 e 7 pertenciam a `buraco`, `lixo`, `incendio`, `construcao_irregular`,
 `arvore_caida` e `vazamento` — removidos do escopo e **não reaproveitados**.
 
 **`observacao_visual` é uma categoria de honestidade.** O peso COCO reconhece que existe um
-carro no quadro; isso não é um congestionamento. Detecções COCO viram eventos com título
-"Observação YOLO: …" e descrição explícita de que comprovam a presença do objeto, não um
-incidente urbano. Só o pipeline de contagem (§10) transforma N veículos em um evento
-`transito`.
+carro no quadro; isso não é um congestionamento. Veículo isolado nunca vira evento: só o
+pipeline de contagem (§10) transforma N veículos juntos em um evento `transito`.
 
 O mapeamento COCO→urbano é `car→veiculo`, `motorcycle→motocicleta`, `bus→onibus`,
-`truck→caminhao`, `fire hydrant→hidrante`, extensível por `GX_YOLO_CLASS_MAPPING`. Classes
+`truck→caminhao`, extensível por `GX_YOLO_CLASS_MAPPING`. Classes
 sem destino válido são **descartadas** — é assim que um peso antigo treinado também com
 `arvore_caida` continua funcionando sem gerar eventos dessa classe.
-
-### Validação de frame (`visual_validation.py`)
-
-Camada usada por `/deteccao/frame`, `/deteccao/confirmar` e `/ws/cv`:
-
-1. Valida MIME (`image/jpeg`, `image/png`, `image/webp`), tamanho e threshold
-2. Grava em arquivo temporário, roda o detector, **apaga o temporário**
-3. Marca como `duplicada` toda detecção com a mesma classe + bbox vista há menos de
-   `YOLO_COOLDOWN_SECONDS`
-4. Devolve `frame_id`, detecções, timestamp, `latencia_ms`, `relevante` e `modo`
 
 ### Evidência auditável
 
@@ -896,10 +859,9 @@ limiar alterado, dado de clima que chegou depois da criação.
 ## 13. Ciclo de vida de um evento
 
 ```text
-  detecção contínua              /deteccao/confirmar
-  (câmera CET, sem humano)       (upload revalidado no servidor)
-         │                                │
-         └────────────┬───────────────────┘
+            detecção contínua
+            (câmera CET, sem humano)
+                      │
                       ▼
               status = "em_analise"
               confianca = confiança da detecção
@@ -907,7 +869,7 @@ limiar alterado, dado de clima que chegou depois da criação.
                       │  Data Fusion (na criação e a cada 120 s)
                       ▼
         ┌─────────────────────────────┐
-        │ confiabilidade ≥ 0,80 ?     │
+        │ confiabilidade ≥ 0,77 ?     │
         └───────┬─────────────┬───────┘
              sim│             │não
                 ▼             ▼
@@ -935,8 +897,8 @@ limiar alterado, dado de clima que chegou depois da criação.
    reinícios seguidos do servidor zerando o cooldown em memória.
 3. **`promover_eventos_por_confiabilidade`** — ajusta status ao limiar.
 
-O status `resolvido` existe no domínio e nos schemas, mas nada no sistema atual o atribui:
-não há operador para resolver um evento, e a expiração o apaga antes.
+Não existe status `resolvido`: não há operador para resolver um evento, e a expiração o
+apaga antes (coluna `resolvido_em` removida na migração `006`).
 
 ---
 
@@ -1181,14 +1143,14 @@ python -m data_fusion.test_historico_alagamento
 | `test_live_detection.py` | 23 | Gatilho de três faixas, veto/corroboração TomTom, cooldowns, dedup |
 | `test_websocket.py` | 19 | Protocolo, broadcast, conexões mortas, ping/pong |
 | `test_flood_detection.py` | 13 | Loop de alagamento, contexto climático, prior histórico |
-| `test_deteccao.py` | 11 | Rotas YOLO, limites de upload, revalidação |
+| `test_deteccao.py` | 8 | Status e testador YOLO, limites de upload, rotas de escrita ausentes |
 | `test_localizacoes.py` | 11 | CRUD e conflito 409 |
 | `test_dados_contextuais.py` | 10 | Ingestão e consulta |
 | `test_eventos.py` · `test_evidencias.py` · `test_regioes.py` · `test_fontes.py` | 9 cada | Consulta e filtros |
 | `test_cet_camera_catalog.py` | 7 | Distância, câmera mais próxima, frame desatualizado |
 | `test_data_fusion_service.py` | 6 | Promoção, rebaixamento, arredondamento do limiar |
 | `test_e2e.py` | 5 | Fluxos ponta a ponta |
-| `test_inmet_alert_source.py` · `test_visual_validation.py` | 5 cada | Parsing de aviso; dedup e limites de frame |
+| `test_inmet_alert_source.py` | 5 | Parsing de aviso |
 | `test_broadcast.py` · `test_logs.py` | 4 cada | Agendamento entre threads; consulta de logs |
 | `test_event_retention.py` | 3 | Purga, colapso, propagação de remoção |
 | `test_tomtom_traffic_source.py` | 3 | Índice, indisponibilidade, via fechada |
@@ -1217,7 +1179,7 @@ A consequência é que **a proteção é de rede, não de aplicação**. Rode em
 de um proxy reverso que faça o controle de acesso. `CORS_ORIGINS` restringe apenas quais
 origens de navegador podem chamar a API e **não substitui isso**.
 
-Os WebSockets `/ws` e `/ws/cv` abrem na conexão e anunciam `{"tipo":"pronto"}` — não há
+O WebSocket `/ws` abre na conexão e anuncia `{"tipo":"pronto"}` — não há
 handshake de credencial.
 
 Se a operação um dia exigir identificar quem agiu, a camada removida está no histórico:
@@ -1241,9 +1203,10 @@ que aplicou `003_remove_auth.sql`.
 - **Coordenadas são aproximadas** — câmeras e pontos de alagamento estão em nível de
   cruzamento, não do poste.
 - **Latência e FPS dependem do hardware.** CPU tem latência maior; GPU exige CUDA/Ultralytics
-  compatíveis. Meça pela `latencia_ms` da API e pelo FPS no painel, não por estimativa.
-- **Privacidade:** não envie frames sem consentimento, não use a câmera em segundo plano e
-  não persista imagem a menos que a evidência seja relevante e o operador confirme.
+  compatíveis. Meça com `backend/benchmark_latencia.py` (frames reais da CET), não por
+  estimativa.
+- **Privacidade:** só imagens de câmeras públicas da CET são gravadas, e apenas quando viram
+  evidência de um evento; o testador YOLO do painel apaga o upload logo após a inferência.
 - **Fontes públicas não substituem validação operacional humana.**
 
 ### Pendências

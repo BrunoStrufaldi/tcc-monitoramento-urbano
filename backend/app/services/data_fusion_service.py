@@ -120,9 +120,9 @@ def aplicar_fusao_evento(
             and automatico
             and not atinge
         ):
-            # Evento YOLO só chega a "ativo" por promoção automática (a
-            # confirmação humana cria "em_analise"). Se a confiabilidade não
-            # bate mais o limiar, volta para análise em vez de ficar preso.
+            # Evento YOLO nasce "em_analise" e só chega a "ativo" por promoção
+            # automática. Se a confiabilidade não bate mais o limiar, volta
+            # para análise em vez de ficar preso.
             evento.status = "em_analise"
             rebaixado = True
         mudou_status = promovido or rebaixado

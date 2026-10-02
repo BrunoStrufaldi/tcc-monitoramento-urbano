@@ -1,4 +1,4 @@
-"""Detecção visual real com YOLO e simulação isolada para testes/demonstração.
+"""Detecção visual com YOLO: contagem de veículos (COCO) e modelo de alagamento.
 
 O detector real é carregado sob demanda para que a API continue utilizável em
 ambientes sem GPU ou sem os pesos treinados. O peso COCO padrão reconhece
@@ -8,7 +8,6 @@ permite trocar por outro peso urbano próprio.
 """
 
 import os
-import random
 import json
 import threading
 from dataclasses import dataclass, field
@@ -24,13 +23,12 @@ CLASSES_URBANAS = {
     # live_detection.py). Os IDs não foram reaproveitados.
     1: {"nome": "alagamento", "severidade": "critica", "tipo": "clima"},
     2: {"nome": "transito", "severidade": "media", "tipo": "mobilidade"},
-    # Classes COCO abaixo são observações visuais. A presença de um veículo ou
-    # hidrante não comprova congestionamento nem alagamento.
+    # Classes COCO abaixo são observações visuais: a presença de um veículo não
+    # comprova congestionamento — live_detection conta quantos aparecem juntos.
     8: {"nome": "veiculo", "severidade": "baixa", "tipo": "observacao_visual"},
     9: {"nome": "motocicleta", "severidade": "baixa", "tipo": "observacao_visual"},
     10: {"nome": "onibus", "severidade": "baixa", "tipo": "observacao_visual"},
     11: {"nome": "caminhao", "severidade": "baixa", "tipo": "observacao_visual"},
-    12: {"nome": "hidrante", "severidade": "baixa", "tipo": "observacao_visual"},
 }
 
 _URBANAS_POR_NOME = {meta["nome"]: (identificador, meta) for identificador, meta in CLASSES_URBANAS.items()}
@@ -39,14 +37,13 @@ _COCO_PARA_URBANO = {
     "motorcycle": "motocicleta",
     "bus": "onibus",
     "truck": "caminhao",
-    "fire hydrant": "hidrante",
 }
 _model: Any | None = None
 _model_error: str | None = None
 # yolo11m em vez de yolo11n/s: o nano/small perdiam carro pequeno/distante e à
 # noite, e o piso de confiança do índice de trânsito às vezes despencava. O `m`
 # recupera parte da contagem noturna nas câmeras ruins e nunca dá confiança
-# sintética abaixo de ~0.5. Custa ~2x o `s`, irrelevante com yolo_max_fps=3 em
+# sintética abaixo de ~0.5. Custa ~2x o `s`, irrelevante no poll de 5 s em
 # GPU. `GX_YOLO_MODEL` troca por outro peso.
 _DEFAULT_MODEL = Path(__file__).resolve().parent / "models" / "yolo11m.pt"
 
@@ -195,7 +192,7 @@ def status_detector() -> dict[str, Any]:
     model = _load_model()
     return {
         "disponivel": model is not None,
-        "modo": "yolo" if model is not None else "simulacao",
+        "modo": "yolo" if model is not None else "indisponivel",
         "modelo": _model_path(),
         "erro": _model_error,
         "mapeamento_padrao": class_mapping(),
@@ -311,38 +308,3 @@ def detectar_imagem_real(caminho_imagem: str, confianca_minima: float = 0.45) ->
                 classe_modelo=nome_modelo,
             ))
     return sorted(resultados, key=lambda deteccao: deteccao.confianca, reverse=True)
-
-
-def detectar_imagem(caminho_imagem: str = "simulacao", num_deteccoes: int | None = None) -> list[Deteccao]:
-    """Gera detecções de demonstração, usadas apenas pela rota ``/simular``."""
-    if num_deteccoes is None:
-        num_deteccoes = random.randint(1, 3)
-    resultados: list[Deteccao] = []
-    classes_disponiveis = list(CLASSES_URBANAS)
-    for _ in range(min(num_deteccoes, len(classes_disponiveis))):
-        classe_id = random.choice(classes_disponiveis)
-        classes_disponiveis.remove(classe_id)
-        meta = CLASSES_URBANAS[classe_id]
-        x1, y1 = random.randint(0, 400), random.randint(0, 300)
-        largura, altura = random.randint(50, 200), random.randint(50, 200)
-        resultados.append(Deteccao(
-            classe_id=classe_id, nome=meta["nome"], confianca=round(random.uniform(0.55, 0.98), 3),
-            severidade=meta["severidade"], tipo=meta["tipo"], bbox=(x1, y1, x1 + largura, y1 + altura),
-        ))
-    return sorted(resultados, key=lambda deteccao: deteccao.confianca, reverse=True)
-
-
-def detectar_video(frame_path: str = "simulacao_frame", frames_totais: int = 30) -> dict[str, Any]:
-    """Simula um fluxo de frames para a demonstração do pipeline."""
-    deteccoes_por_frame: list[list[dict[str, Any]]] = []
-    total_deteccoes = 0
-    for indice in range(frames_totais):
-        deteccoes = detectar_imagem(f"{frame_path}_{indice}", num_deteccoes=random.randint(0, 2))
-        frame_data = [{"classe_id": item.classe_id, "nome": item.nome, "confianca": item.confianca, "severidade": item.severidade} for item in deteccoes]
-        deteccoes_por_frame.append(frame_data)
-        total_deteccoes += len(frame_data)
-    resumo: dict[str, int] = {}
-    for frame in deteccoes_por_frame:
-        for item in frame:
-            resumo[item["nome"]] = resumo.get(item["nome"], 0) + 1
-    return {"total_frames": frames_totais, "total_deteccoes": total_deteccoes, "deteccoes_por_frame": deteccoes_por_frame, "resumo_classes": resumo}

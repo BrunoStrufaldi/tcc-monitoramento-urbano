@@ -4,7 +4,6 @@ from app.models.evidencia_visual import EvidenciaVisual
 from app.models.fonte_dados import FonteDados
 from app.models.localizacao import Localizacao
 from app.models.log_sistema import LogSistema
-from app.models.ocorrencia_externa import OcorrenciaExterna
 from app.models.regiao import Regiao
 
 __all__ = [
@@ -14,6 +13,5 @@ __all__ = [
     "FonteDados",
     "Localizacao",
     "LogSistema",
-    "OcorrenciaExterna",
     "Regiao",
 ]
