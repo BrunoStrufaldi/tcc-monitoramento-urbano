@@ -51,21 +51,27 @@ Comandos de teste:
 ### Observação encontrada no teste visual (não corrigida)
 - No celular (390px) o relógio do topo fica cortado na borda direita. Já acontecia antes da limpeza.
 
-## 2. Rápido, baixo risco
-- [ ] **Segurança:** remover POST/PATCH/DELETE públicos de `/regioes`, `/fontes`, `/localizacoes`,
-      `/dados-contextuais` e `POST /fusion/recalcular-todos` (sem login no Cloud Run, qualquer um
-      injeta dado "clima" e promove evento a ativo). Manter só GET.
-- [ ] `app/broadcast.py`: `coro.close()` quando não há loop (elimina 55 warnings "never awaited")
-- [ ] `data_fusion_service.aplicar_fusao_evento`: gravar `LogSistema` só quando o status mudar
-      (hoje grava 1 log por evento aberto a cada 2 min, e logs nunca são purgados)
-- [ ] `CLASSES_URBANAS`: `tipo` = `"alagamento"`/`"transito"` direto; remover os `replace(..., tipo=...)`
-      em `flood_detection.py` e o `tipo="transito"` forçado em `live_detection.py`
-- [ ] Nomes legados: título "Notificações Urbanas" (`main.py`), `aria-label="Mapa Google Maps"`
-      (é Leaflet/GeoSampa), User-Agent "GX-TCC", "notificações" na docstring de `event_retention.py`,
-      docstring após import em `routers/evidencias.py`
-- [ ] Dev em processo único: `GX_SERVE_FRONTEND=true` local, `config.js` = `window.location.origin`,
-      simplificar `start.ps1` (tirar `C:\Python314` fixo e o `http.server 5500`)
-- [ ] README: remover a tabela "Números atuais" (já desatualizada)
+## 2. Rápido, baixo risco — concluído em 02/10/2026
+- [x] (`204b97c`) **Segurança:** `/regioes`, `/fontes`, `/localizacoes` e `/dados-contextuais`
+      só com GET; `POST /fusion/recalcular-todos` removido; schemas `*Create/*Update` apagados.
+      Testes montam os dados direto no banco e checam o 405. Ficou `POST /fusion/eventos/{id}/
+      recalcular` (não injeta dado, só refaz o que o ciclo de 2 min já faz) e os uploads do
+      testador YOLO (`/deteccao/imagem|incidente`, isolados do pipeline de evento).
+- [x] (`faccaef`) `app/broadcast.py`: `coro.close()` sem loop — 55 warnings → 1 (do httpx/starlette).
+- [x] (`20a9c81`, `5bb3904`) `aplicar_fusao_evento` grava `LogSistema` só quando promove/rebaixa.
+- [x] (`8fd401a`) `CLASSES_URBANAS`: `tipo` = `"alagamento"`/`"transito"`; saíram o `replace` do
+      `flood_detection.py` e o `tipo="transito"` forçado do `live_detection.py`.
+- [x] (`24df76f`) Nomes legados → MotSP (título/descrição da API, User-Agent, docstrings,
+      docstring de `routers/evidencias.py` no topo). O `aria-label` do mapa já estava certo.
+- [x] (`7c493f6`) Dev em processo único: `GX_SERVE_FRONTEND` = `true` por padrão; `config.js`
+      versionado com `window.location.origin` (saíram `config.example.js` e `config.prod.js`, e
+      a exclusão dele em `.gitignore`/`.dockerignore`/`.gcloudignore`); `start.ps1` só sobe o
+      uvicorn em :8000; `CORS_ORIGINS` vazio por padrão; `serve:frontend` removido.
+      Efeito colateral: com o painel montado em `/`, POST em rota inexistente dá 405, não 404.
+      Seu `backend/.env` ainda tem `CORS_ORIGINS` com a porta 5500 — inofensivo, pode apagar.
+- [x] (`53b9744`) README: tabela "Números atuais" removida.
+
+Estado depois do item 2: 146 testes backend + 14 data_fusion + 2 frontend passando.
 
 ## 3. Mais trabalhoso
 - [ ] **(a) Data Fusion honesto.** Todo evento tem fonte `yolo` → `fonte_oficial` sempre 0 → pesos
