@@ -18,7 +18,7 @@ Comandos de teste:
 ---
 
 ## 0. Antes de tudo
-- [ ] Commitar as mudanças pendentes do Data Fusion (peso flexível por concordância:
+- [x] (`af9665b`) Commitar as mudanças pendentes do Data Fusion (peso flexível por concordância:
       `data_fusion/*`, `backend/app/routers/fusion.py`, `schemas/fusion.py`,
       `frontend/src/app.ts`, `fusion-format.ts`, `ml/detector.py` com TTA).
 
