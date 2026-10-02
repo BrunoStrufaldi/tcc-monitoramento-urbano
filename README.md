@@ -157,13 +157,11 @@ TCC-Atualizado/
 ├── deploy.ps1                    deploy manual no Cloud Run (build a partir da pasta local)
 ├── cloudbuild.yaml               deploy automático: gatilho a cada push na main do GitHub
 ├── .dockerignore / .gcloudignore o que fica fora da imagem (venv, datasets, .env, pesos extras)
-├── reset_mysql.ps1 / .bat        reset da senha root do MySQL local (utilitário de máquina)
 │
 ├── backend/
 │   ├── requirements.txt          FastAPI, SQLAlchemy, Pydantic, Pillow, pytest…
 │   ├── requirements-yolo.txt     + ultralytics (só na máquina que roda/treina o modelo)
 │   ├── .env.example              todas as variáveis, com o racional de cada uma
-│   ├── cleanup_demo_data.py      remove o seed demonstrativo legado do SQLite (com backup)
 │   ├── app/
 │   │   ├── main.py               app FastAPI, lifespan, loop de manutenção (120 s)
 │   │   ├── config.py             Settings (pydantic-settings) — fonte única de configuração

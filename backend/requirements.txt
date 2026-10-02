@@ -4,11 +4,9 @@ websockets>=13.0
 sqlalchemy>=2.0.36
 pymysql>=1.1.1
 cryptography>=44.0.0
-python-dotenv>=1.0.1
 pydantic-settings>=2.6.0
 python-multipart>=0.0.9
 Pillow>=10.0.0
-pyproj>=3.6.0
 
 # Testes
 pytest>=8.0.0
