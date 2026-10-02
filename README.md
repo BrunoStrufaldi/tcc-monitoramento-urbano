@@ -578,8 +578,8 @@ alagamento faria a contagem de veículos parar de funcionar.
 
 | ID | Nome | Severidade | Tipo |
 |---|---|---|---|
-| 1 | `alagamento` | critica | clima |
-| 2 | `transito` | media | mobilidade |
+| 1 | `alagamento` | critica | alagamento |
+| 2 | `transito` | media | transito |
 | 8 | `veiculo` | baixa | **observacao_visual** |
 | 9 | `motocicleta` | baixa | observacao_visual |
 | 10 | `onibus` | baixa | observacao_visual |

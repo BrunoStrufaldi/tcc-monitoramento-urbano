@@ -45,7 +45,6 @@ import logging
 import tempfile
 import threading
 import time
-from dataclasses import replace
 from pathlib import Path
 
 from app.config import settings
@@ -79,8 +78,8 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
         if caminho:
             Path(caminho).unlink(missing_ok=True)
 
-    bruto = next((item for item in deteccoes if item.nome == "alagamento"), None)
-    if bruto is None:
+    alagamento = next((item for item in deteccoes if item.nome == "alagamento"), None)
+    if alagamento is None:
         return
 
     agora = time.monotonic()
@@ -88,12 +87,6 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
     if agora - ultimo < settings.gx_alerta_cooldown_seconds:
         return
     cooldown["alagamento"] = agora
-
-    # CLASSES_URBANAS guarda a categoria ampla em Deteccao.tipo ("clima"),
-    # não o nome específico — registrar_deteccao usa tipo direto como
-    # Evento.tipo, então precisa virar "alagamento" (mesmo ajuste que
-    # live_detection.py faz pra "transito" não virar "mobilidade").
-    alagamento = replace(bruto, tipo="alagamento")
 
     with SessionLocal() as db:
         if refrescar_evento_no_ponto(

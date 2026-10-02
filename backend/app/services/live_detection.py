@@ -97,10 +97,7 @@ def _detectar_congestionamento(veiculos: list[Deteccao], limite: int) -> Detecca
         nome="transito",
         confianca=confianca,
         severidade=_TRANSITO_META["severidade"],
-        # Evento.tipo precisa ser o nome específico ("transito"), não a
-        # categoria ampla de CLASSES_URBANAS ("mobilidade") — é o que
-        # data_fusion.scores usa para escolher o cálculo de clima certo.
-        tipo="transito",
+        tipo=_TRANSITO_META["tipo"],
         bbox=(min(xs1), min(ys1), max(xs2), max(ys2)),
     )
 

@@ -27,9 +27,8 @@ def _sem_clima_por_padrao(monkeypatch):
 
 
 def _deteccao_alagamento(confianca: float = 0.8) -> list[Deteccao]:
-    # Deteccao.tipo vem como a categoria ampla ("clima"), não "alagamento" —
-    # mesmo formato que detectar_incidentes_imagem devolve de verdade.
-    return [Deteccao(1, "alagamento", confianca, "critica", "clima", (0, 0, 50, 50), "flood")]
+    # Mesmo formato que detectar_incidentes_imagem devolve de verdade.
+    return [Deteccao(1, "alagamento", confianca, "critica", "alagamento", (0, 0, 50, 50), "flood")]
 
 
 def test_processar_frame_ignora_quando_nao_detecta_alagamento(db_session: Session, monkeypatch):
@@ -54,8 +53,7 @@ def test_processar_frame_sinaliza_alagamento_com_tipo_corrigido(db_session: Sess
 
     eventos = db_session.query(Evento).all()
     assert len(eventos) == 1
-    # CLASSES_URBANAS guarda "clima" como categoria de alagamento — o evento
-    # tem que virar o tipo específico, senão data_fusion.scores não reconhece.
+    # Evento.tipo é o que data_fusion.scores usa para escolher o cálculo.
     assert eventos[0].tipo == "alagamento"
     # A confiança persistida é a da fusão, não a bruta do YOLO (0.81): sem chuva,
     # sem aviso INMET e fora de qualquer ponto com histórico de alagamento
