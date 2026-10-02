@@ -90,11 +90,14 @@ Itens 0–2 publicados no Cloud Run em 02/10/2026 (revisão `motsp-00011-85j`, c
 - [~] **(c) Removido em 02/10/2026** — era tirar o SSE. Ele é o plano B para redes que bloqueiam
       WebSocket; sem ele essas redes caem direto no polling de 30 s. ~150 linhas no total, e as
       chamadas `_broadcast` + `ws_manager.broadcast_evento` são uma por canal, não duplicação.
-- [ ] **(d) Config única — só a parte de config:** mover `GX_YOLO_MODEL`, `GX_YOLO_IMGSZ`,
+- [x] (`e634502`) **(d) Config única — só a parte de config:** mover `GX_YOLO_MODEL`, `GX_YOLO_IMGSZ`,
       `GX_YOLO_TTA`, `GX_YOLO_MAX_CONCORRENCIA`, `GX_YOLO_INCIDENT_MODEL` de `os.getenv`
       (`ml/detector.py`) para `Settings` — hoje o `backend/.env` não chega neles localmente (só
       funciona por coincidência com o caminho padrão); remover `GX_YOLO_CLASS_MAPPING`.
       **Não** unir `detectar_imagem_real` e `detectar_incidentes_imagem` (mesma área sensível do 3b).
+      Feito com caminho relativo resolvido a partir da raiz (o `.env` tem `ml/models/gx-incident.pt`
+      e o uvicorn sobe de `backend/` — sem isso o alagamento parava localmente). Resolução idêntica
+      à anterior com e sem `.env`; os dois pesos carregam e inferem numa imagem real.
 - [~] **(e) Removido em 02/10/2026** — MySQL × SQLite não é questão técnica: `schema.sql` e as
       migrações sustentam o MySQL se o TCC citar. Só corrigir no README (3h) que a produção no
       Cloud Run usa SQLite.
