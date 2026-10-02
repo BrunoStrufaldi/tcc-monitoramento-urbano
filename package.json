@@ -2,8 +2,7 @@
   "type": "module",
   "scripts": {
     "build:frontend": "tsc -p frontend/tsconfig.json",
-    "test:frontend": "node --test frontend/tests/fusion-format.test.mjs",
-    "serve:frontend": "python -m http.server 5500 -d frontend"
+    "test:frontend": "node --test frontend/tests/fusion-format.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.5.0"
