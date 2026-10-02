@@ -9,24 +9,29 @@ from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 
+from app.models.dado_contextual import DadoContextual
+from app.models.fonte_dados import FonteDados
+from app.models.regiao import Regiao
 
-def _criar_regiao(client: TestClient) -> int:
-    r = client.post("/regioes", json={"nome": "Centro", "descricao": "Região central"})
-    return r.json()["id"]
+
+def _criar_regiao(db_session) -> int:
+    regiao = Regiao(nome="Centro", descricao="Região central")
+    db_session.add(regiao)
+    db_session.commit()
+    return regiao.id
 
 
-def _criar_fonte(client: TestClient) -> int:
-    r = client.post(
-        "/fontes",
-        json={"nome": "Câmera Via App", "tipo": "camera", "url": "http://exemplo.com/cam"},
-    )
-    return r.json()["id"]
+def _criar_fonte(db_session) -> int:
+    fonte = FonteDados(nome="Câmera Via App", tipo="camera", endpoint="http://exemplo.com/cam")
+    db_session.add(fonte)
+    db_session.commit()
+    return fonte.id
 
 
 def test_fluxo_evento_detectado_ate_consulta(client: TestClient, db_session, criar_evento, criar_evidencia):
     """Evento detectado → evidência → dado contextual → consultas do painel."""
-    regiao_id = _criar_regiao(client)
-    fonte_id = _criar_fonte(client)
+    regiao_id = _criar_regiao(db_session)
+    fonte_id = _criar_fonte(db_session)
 
     evento = criar_evento(
         titulo="Alagamento na Av. Paulista",
@@ -55,17 +60,16 @@ def test_fluxo_evento_detectado_ate_consulta(client: TestClient, db_session, cri
     evid_list = client.get(f"/evidencias?evento_id={evento_id}")
     assert len(evid_list.json()) == 1
 
-    # 4. Dado contextual (clima) — essa rota de escrita continua, é ingestão de fonte
-    ctx = client.post(
-        "/dados-contextuais",
-        json={
-            "evento_id": evento_id,
-            "categoria": "clima",
-            "chave": "precipitacao",
-            "valor_texto": "Chuva de 45mm/h nas últimas 2 horas",
-        },
+    # 4. Dado contextual (clima) gravado pela coleta automática
+    db_session.add(
+        DadoContextual(
+            evento_id=evento_id,
+            categoria="clima",
+            chave="precipitacao",
+            valor_texto="Chuva de 45mm/h nas últimas 2 horas",
+        )
     )
-    assert ctx.status_code == 201
+    db_session.commit()
     assert len(client.get(f"/dados-contextuais?evento_id={evento_id}").json()) == 1
 
     # 5. Logs do evento respondem

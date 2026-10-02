@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.fonte_dados import FonteDados
-from app.schemas.fonte_dados import FonteDadosCreate, FonteDadosResponse, FonteDadosUpdate
+from app.schemas.fonte_dados import FonteDadosResponse
 from app.services.weather_source import obter_condicoes_atuais, obter_qualidade_do_ar
 
 router = APIRouter(prefix="/fontes", tags=["fontes"])
@@ -48,46 +48,3 @@ def obter_fonte(fonte_id: int, db: Session = Depends(get_db)) -> FonteDados:
     if not fonte:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fonte não encontrada")
     return fonte
-
-
-@router.post("", response_model=FonteDadosResponse, status_code=status.HTTP_201_CREATED)
-def criar_fonte(payload: FonteDadosCreate, db: Session = Depends(get_db)) -> FonteDados:
-    fonte = FonteDados(**payload.model_dump())
-    db.add(fonte)
-    db.commit()
-    db.refresh(fonte)
-    return fonte
-
-
-@router.patch("/{fonte_id}", response_model=FonteDadosResponse)
-def atualizar_fonte(
-    fonte_id: int,
-    payload: FonteDadosUpdate,
-    db: Session = Depends(get_db),
-) -> FonteDados:
-    fonte = db.get(FonteDados, fonte_id)
-    if not fonte:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fonte não encontrada")
-
-    dados = payload.model_dump(exclude_unset=True)
-    for campo, valor in dados.items():
-        setattr(fonte, campo, valor)
-
-    db.commit()
-    db.refresh(fonte)
-    return fonte
-
-
-@router.delete("/{fonte_id}", response_model=FonteDadosResponse)
-def remover_fonte(
-    fonte_id: int,
-    db: Session = Depends(get_db),
-) -> dict:
-    fonte = db.get(FonteDados, fonte_id)
-    if not fonte:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fonte não encontrada")
-
-    dados = FonteDadosResponse.model_validate(fonte, from_attributes=True).model_dump()
-    db.delete(fonte)
-    db.commit()
-    return dados

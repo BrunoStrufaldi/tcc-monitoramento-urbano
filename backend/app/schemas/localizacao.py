@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class LocalizacaoResponse(BaseModel):
@@ -18,27 +18,3 @@ class LocalizacaoResponse(BaseModel):
     referencia: str | None
     criado_em: datetime
     atualizado_em: datetime
-
-
-class LocalizacaoCreate(BaseModel):
-    latitude: float = Field(..., ge=-90, le=90)
-    longitude: float = Field(..., ge=-180, le=180)
-    regiao_id: int | None = None
-    endereco: str | None = None
-    bairro: str | None = None
-    cidade: str | None = "São Paulo"
-    cep: str | None = None
-    precisao_metros: float | None = None
-    referencia: str | None = None
-
-
-class LocalizacaoUpdate(BaseModel):
-    latitude: float | None = Field(None, ge=-90, le=90)
-    longitude: float | None = Field(None, ge=-180, le=180)
-    regiao_id: int | None = None
-    endereco: str | None = None
-    bairro: str | None = None
-    cidade: str | None = None
-    cep: str | None = None
-    precisao_metros: float | None = None
-    referencia: str | None = None

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.dado_contextual import DadoContextual
-from app.schemas.dado_contextual import DadoContextualCreate, DadoContextualResponse
+from app.schemas.dado_contextual import DadoContextualResponse
 
 router = APIRouter(prefix="/dados-contextuais", tags=["dados_contextuais"])
 
@@ -38,33 +38,3 @@ def obter_dado_contextual(
             detail="Dado contextual não encontrado",
         )
     return dado
-
-
-@router.post("", response_model=DadoContextualResponse, status_code=status.HTTP_201_CREATED)
-def criar_dado_contextual(
-    payload: DadoContextualCreate,
-    db: Session = Depends(get_db),
-) -> DadoContextual:
-    dado = DadoContextual(**payload.model_dump())
-    db.add(dado)
-    db.commit()
-    db.refresh(dado)
-    return dado
-
-
-@router.delete("/{dado_id}", response_model=DadoContextualResponse)
-def remover_dado_contextual(
-    dado_id: int,
-    db: Session = Depends(get_db),
-) -> dict:
-    dado = db.get(DadoContextual, dado_id)
-    if not dado:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dado contextual não encontrado",
-        )
-
-    dados = DadoContextualResponse.model_validate(dado, from_attributes=True).model_dump()
-    db.delete(dado)
-    db.commit()
-    return dados

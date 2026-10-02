@@ -1,30 +1,32 @@
-"""Testes de integração para fontes de dados."""
+"""Testes de integração para fontes de dados (somente leitura)."""
 
 from fastapi.testclient import TestClient
 
+from app.models.fonte_dados import FonteDados
 
-def test_listar_fontes(client: TestClient):
+
+def _criar_fonte(db_session, **campos) -> FonteDados:
+    campos.setdefault("nome", "Câmera YOLO")
+    campos.setdefault("tipo", "yolo")
+    fonte = FonteDados(**campos)
+    db_session.add(fonte)
+    db_session.commit()
+    db_session.refresh(fonte)
+    return fonte
+
+
+def test_listar_fontes(client: TestClient, db_session):
+    _criar_fonte(db_session)
     response = client.get("/fontes")
     assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    assert [f["tipo"] for f in response.json()] == ["yolo"]
 
 
-def test_criar_fonte(client: TestClient):
-    payload = {"nome": "Câmera YOLO", "tipo": "yolo", "descricao": "Detecção por câmera"}
-    response = client.post("/fontes", json=payload)
-    assert response.status_code == 201
-    data = response.json()
-    assert data["nome"] == "Câmera YOLO"
-    assert data["tipo"] == "yolo"
-    assert data["ativo"] is True
-
-
-def test_obter_fonte_por_id(client: TestClient):
-    criar = client.post("/fontes", json={"nome": "Sensor Teste", "tipo": "sensor"})
-    fonte_id = criar.json()["id"]
-    response = client.get(f"/fontes/{fonte_id}")
+def test_obter_fonte_por_id(client: TestClient, db_session):
+    fonte = _criar_fonte(db_session)
+    response = client.get(f"/fontes/{fonte.id}")
     assert response.status_code == 200
-    assert response.json()["id"] == fonte_id
+    assert response.json()["id"] == fonte.id
 
 
 def test_obter_fonte_inexistente(client: TestClient):
@@ -32,39 +34,17 @@ def test_obter_fonte_inexistente(client: TestClient):
     assert response.status_code == 404
 
 
-def test_patch_atualizar_fonte(client: TestClient):
-    criar = client.post("/fontes", json={"nome": "Original", "tipo": "api"})
-    fonte_id = criar.json()["id"]
-    response = client.patch(f"/fontes/{fonte_id}", json={"nome": "Atualizada"})
+def test_filtrar_por_tipo(client: TestClient, db_session):
+    _criar_fonte(db_session, nome="Câmera", tipo="yolo")
+    _criar_fonte(db_session, nome="INMET", tipo="clima")
+    response = client.get("/fontes?tipo=clima")
     assert response.status_code == 200
-    assert response.json()["nome"] == "Atualizada"
+    assert [f["nome"] for f in response.json()] == ["INMET"]
 
 
-def test_patch_desativar_fonte(client: TestClient):
-    criar = client.post("/fontes", json={"nome": "Para desativar", "tipo": "manual"})
-    fonte_id = criar.json()["id"]
-    response = client.patch(f"/fontes/{fonte_id}", json={"ativo": False})
-    assert response.status_code == 200
-    assert response.json()["ativo"] is False
+def test_escrita_em_fontes_nao_existe(client: TestClient, db_session):
+    fonte = _criar_fonte(db_session)
 
-
-def test_filtrar_por_tipo(client: TestClient):
-    response = client.get("/fontes?tipo=sensor")
-    assert response.status_code == 200
-
-
-def test_delete_fonte(client: TestClient):
-    criar = client.post("/fontes", json={"nome": "Para remover", "tipo": "manual"})
-    fonte_id = criar.json()["id"]
-
-    response = client.delete(f"/fontes/{fonte_id}")
-    assert response.status_code == 200
-    assert response.json()["id"] == fonte_id
-
-    get_after = client.get(f"/fontes/{fonte_id}")
-    assert get_after.status_code == 404
-
-
-def test_delete_fonte_inexistente(client: TestClient):
-    response = client.delete("/fontes/9999")
-    assert response.status_code == 404
+    assert client.post("/fontes", json={"nome": "X", "tipo": "api"}).status_code == 405
+    assert client.patch(f"/fontes/{fonte.id}", json={"ativo": False}).status_code == 405
+    assert client.delete(f"/fontes/{fonte.id}").status_code == 405
