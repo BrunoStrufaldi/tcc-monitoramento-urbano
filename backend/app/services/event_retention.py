@@ -3,7 +3,7 @@
 O painel do MotSP é um quadro operacional "ao vivo": um evento só faz sentido
 enquanto a detecção que o originou é recente. Este módulo apaga em definitivo
 tudo que passou da janela (``GX_EVENTO_JANELA_MINUTOS``) — evento, evidências,
-dados contextuais, notificações e a localização 1:1 criada para ele.
+dados contextuais e a localização 1:1 criada para ele.
 
 Toda remoção é propagada como ``evento_removido`` em WS/SSE: o painel só tira um
 evento da lista quando recebe essa mensagem, então apagar em silêncio deixava

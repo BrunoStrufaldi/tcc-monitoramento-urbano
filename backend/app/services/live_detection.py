@@ -248,7 +248,7 @@ def _loop(snapshot_url: str, latitude: float, longitude: float, interval: float,
 
     cooldown: dict[str, float] = {}
     ultimo_hash: str | None = None
-    with httpx.Client(timeout=10.0, headers={"User-Agent": "Mozilla/5.0 (GX-TCC live-detection)"}) as client:
+    with httpx.Client(timeout=10.0, headers={"User-Agent": "Mozilla/5.0 (MotSP live-detection)"}) as client:
         while not _stop_event.is_set():
             try:
                 response = client.get(snapshot_url)

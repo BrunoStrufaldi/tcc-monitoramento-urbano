@@ -1,7 +1,7 @@
-from pathlib import Path
-
 """Consulta de evidências. As evidências são gravadas pela detecção
 (``services/detection_events.py``), nunca por requisição do painel."""
+
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse

@@ -41,7 +41,7 @@ def _severidade_indice(rotulo: str | None) -> float:
 
 def obter_aviso_ativo(municipio_ibge: str = _IBGE_SAO_PAULO_CAPITAL) -> dict:
     """Aviso ativo mais severo do INMET que cobre o município informado, se houver."""
-    request = Request(_URL, headers={"User-Agent": "Mozilla/5.0 (GX-TCC inmet-alert-source)"})
+    request = Request(_URL, headers={"User-Agent": "Mozilla/5.0 (MotSP inmet-alert-source)"})
     try:
         with urlopen(request, timeout=8) as response:  # nosec B310 - URL fixa e pública
             payload = json.load(response)

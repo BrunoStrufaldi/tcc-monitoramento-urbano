@@ -107,7 +107,7 @@ def coletar(args: argparse.Namespace) -> None:
         + f" | {len(vistos)} frame(s) já na pasta"
     )
 
-    with httpx.Client(timeout=10.0, headers={"User-Agent": "Mozilla/5.0 (GX-TCC collect-negatives)"}) as client:
+    with httpx.Client(timeout=10.0, headers={"User-Agent": "Mozilla/5.0 (MotSP collect-negatives)"}) as client:
         while not _parar:
             rodadas += 1
             for cam in cameras:

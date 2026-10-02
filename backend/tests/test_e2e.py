@@ -1,4 +1,4 @@
-"""Testes end-to-end — fluxo completo do sistema de notificações urbanas.
+"""Testes end-to-end — fluxo completo do MotSP.
 
 O sistema não tem operador: o evento nasce da detecção automática e é o próprio
 backend que o promove, recalcula e purga. O painel só consulta. Estes fluxos
