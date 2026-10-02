@@ -1,16 +1,20 @@
-"""Motor de fusão: combina IA, clima e fonte oficial em um score único."""
+"""Motor de fusão: combina IA e contexto em um score único."""
 
 from data_fusion.models import (
     ComponenteConfiabilidade,
     EventoFusionInput,
     ResultadoFusao,
 )
-from data_fusion.scores import fator_peso_clima, pontuar_clima, pontuar_fonte_oficial, pontuar_ia
+from data_fusion.scores import fator_peso_contexto, pontuar_contexto, pontuar_ia
 
+# Duas dimensões, na proporção 4:3 (IA 57%, contexto 43%). Já foram três
+# (IA 40%, clima 30%, fonte oficial 30%), mas todo evento nasce do YOLO e
+# nenhuma fonte oficial independente chega a confirmar um evento: a terceira
+# ficava sempre vazia e o rateio dava exatamente estes 4:3. O aviso do INMET,
+# que é fonte oficial, entra como um dos sinais do contexto.
 PESOS = {
-    "ia": 0.40,
-    "clima": 0.30,
-    "fonte_oficial": 0.30,
+    "ia": 4 / 7,
+    "contexto": 3 / 7,
 }
 
 
@@ -23,18 +27,17 @@ def _nivel_confiabilidade(valor: float) -> str:
 
 
 def calcular_confiabilidade(entrada: EventoFusionInput) -> ResultadoFusao:
-    clima, detalhe_clima = pontuar_clima(entrada.tipo, entrada.dados_clima)
+    contexto, detalhe_contexto = pontuar_contexto(entrada.tipo, entrada.dados_contexto)
     # O peso do contexto não é fixo: flexiona com a concordância entre as
-    # fontes independentes (ver scores.fator_peso_clima).
-    fator_clima, nota_peso = fator_peso_clima(entrada.tipo, entrada.dados_clima)
-    if clima > 0 and nota_peso:
-        detalhe_clima += f" · {nota_peso}"
-    pesos_base = {**PESOS, "clima": PESOS["clima"] * fator_clima}
+    # fontes independentes (ver scores.fator_peso_contexto).
+    fator_contexto, nota_peso = fator_peso_contexto(entrada.tipo, entrada.dados_contexto)
+    if contexto > 0 and nota_peso:
+        detalhe_contexto += f" · {nota_peso}"
+    pesos_base = {**PESOS, "contexto": PESOS["contexto"] * fator_contexto}
 
     dimensoes = [
         ("ia", pontuar_ia(entrada.evidencias_ia)),
-        ("clima", (clima, detalhe_clima)),
-        ("fonte_oficial", pontuar_fonte_oficial(entrada.fonte)),
+        ("contexto", (contexto, detalhe_contexto)),
     ]
 
     componentes: list[ComponenteConfiabilidade] = []

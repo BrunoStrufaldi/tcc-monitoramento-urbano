@@ -16,11 +16,10 @@ export function formatFusionPercent(value: number, fractionDigits = 1): string {
 }
 
 export function fusionComponentLabel(name: string, eventoTipo?: string): string {
-  if (name === "clima" && eventoTipo === "transito") return "Fonte contextual";
+  if (name === "contexto" && eventoTipo === "transito") return "Fonte contextual";
   const labels: Record<string, string> = {
     ia: "IA / visão computacional",
-    clima: "Dado contextual",
-    fonte_oficial: "Fonte oficial",
+    contexto: "Dado contextual",
   };
   return labels[name] || name;
 }

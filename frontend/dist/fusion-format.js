@@ -6,12 +6,11 @@ export function formatFusionPercent(value, fractionDigits = 1) {
     }).format(value);
 }
 export function fusionComponentLabel(name, eventoTipo) {
-    if (name === "clima" && eventoTipo === "transito")
+    if (name === "contexto" && eventoTipo === "transito")
         return "Fonte contextual";
     const labels = {
         ia: "IA / visão computacional",
-        clima: "Dado contextual",
-        fonte_oficial: "Fonte oficial",
+        contexto: "Dado contextual",
     };
     return labels[name] || name;
 }
