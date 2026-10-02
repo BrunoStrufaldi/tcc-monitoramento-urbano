@@ -49,8 +49,8 @@ alagamento da via) e publica no painel apenas o que sobrevive a esse cruzamento.
   é arbitrado pela velocidade real do trecho (TomTom Traffic API); alagamento é corroborado
   por chuva medida (Open-Meteo), aviso oficial ativo (INMET) e o histórico de alagamento
   daquela via (CGE-SP/GeoSampa, camada estática).
-- **Pontua a confiabilidade.** O módulo Data Fusion combina IA (40%), contexto/clima (30%)
-  e fonte oficial (30%) num score 0–1. Um evento só é promovido a `ativo` no painel quando
+- **Pontua a confiabilidade.** O módulo Data Fusion combina duas dimensões, IA (57%) e
+  contexto (43%), num score 0–1. Um evento só é promovido a `ativo` no painel quando
   cruza o limiar (padrão 77%); abaixo disso fica `em_analise`.
 - **Publica em tempo real.** Toda criação, atualização e remoção de evento é transmitida
   por WebSocket, com fallback automático para SSE e depois polling.
@@ -101,14 +101,14 @@ alagamento da via) e publica no painel apenas o que sobrevive a esse cruzamento.
    │  · SHA-256 do original (auditoria)             │
    │  · cria Localizacao + Evento (em_analise)      │
    │  · cria EvidenciaVisual                        │
-   │  · grava DadoContextual (clima/índices)        │
+   │  · grava DadoContextual (contexto/índices)     │
    └───────────┬────────────────────────────────────┘
                │
                ▼
    ┌────────────────────────────────────────────────┐
    │ data_fusion/  ──►  confiabilidade 0..1         │
-   │  IA 40% · clima/contexto 30% · fonte oficial 30│
-   │  ≥ 0,80 → status vira "ativo"                  │
+   │  IA 57% · contexto 43%                         │
+   │  ≥ 0,77 → status vira "ativo"                  │
    └───────────┬────────────────────────────────────┘
                │
                ▼
@@ -362,10 +362,10 @@ erDiagram
 |---|---|---|
 | `regioes` | `Regiao` | Divisão geográfica da cidade (nome, código, polígono GeoJSON opcional). |
 | `localizacoes` | `Localizacao` | Coordenadas + endereço. A detecção cria uma localização 1:1 por evento; a retenção apaga as órfãs. |
-| `fontes_dados` | `FonteDados` | Origem do dado: `sensor`, `api`, `yolo`, `data_fusion`, `manual`. O **tipo** é o que o Data Fusion usa para pontuar a dimensão "fonte oficial". |
+| `fontes_dados` | `FonteDados` | Origem do evento — na prática, uma fonte `yolo` por câmera. O **tipo** `yolo` é o que permite rebaixar automaticamente um evento `ativo`. |
 | `eventos` | `Evento` | Ocorrência urbana. Campos-chave: `tipo`, `severidade`, `status`, `confianca` (score do Data Fusion), `detectado_em`. |
 | `evidencias_visuais` | `EvidenciaVisual` | Imagem/frame + `modelo_ia`, `classe_detectada`, `confianca`, `bbox` e SHA-256 do original em `metadados`. |
-| `dados_contextuais` | `DadoContextual` | Pares chave/valor por evento. Categoria `clima` alimenta a dimensão de contexto da fusão. |
+| `dados_contextuais` | `DadoContextual` | Pares chave/valor por evento. Categoria `contexto` alimenta a dimensão de contexto da fusão. |
 | `logs_sistema` | `LogSistema` | Diagnóstico. A fusão grava aqui (com os componentes) só quando promove ou rebaixa um evento. |
 
 ### Enums do domínio
@@ -685,7 +685,7 @@ silenciosamente — mesmo comportamento defensivo do resto do sistema quando fal
 treinado.
 
 Detectado um `alagamento`, o serviço busca três insumos e grava todos como
-`dados_contextuais` de categoria `clima`:
+`dados_contextuais` de categoria `contexto`:
 
 | Insumo | Chave | Natureza |
 |---|---|---|
@@ -706,18 +706,24 @@ a confiabilidade que decide se ele aparece como `ativo` ou fica `em_analise`.
 
 Módulo `data_fusion/`, Python puro e sem dependência do FastAPI — pode ser testado isolado.
 
-### As três dimensões
+### As duas dimensões
 
 | Dimensão | Peso | Fonte |
 |---|---|---|
-| **IA** | 40% | `evidencias_visuais` — a melhor confiança YOLO do evento, mais o fato de haver modelo registrado |
-| **Clima / contexto** | 30% | `dados_contextuais` com `categoria = clima` |
-| **Fonte oficial** | 30% | `fontes_dados.tipo` do evento |
+| **IA** | 4/7 ≈ 57% | `evidencias_visuais` — a melhor confiança YOLO do evento, mais o fato de haver modelo registrado |
+| **Contexto** | 3/7 ≈ 43% | `dados_contextuais` com `categoria = contexto`: chuva (Open-Meteo), aviso INMET e histórico da via para alagamento; índice de veículos do frame e TomTom para trânsito |
+
+Já foram três dimensões — IA 40%, clima 30% e **fonte oficial** 30% (pontuada pelo
+`fontes_dados.tipo` do evento). Como todo evento nasce de uma fonte `yolo`, que já está
+contada na IA, a fonte oficial pontuava sempre 0 e o rateio dava exatamente IA 57% /
+contexto 43%. A dimensão saiu e os pesos passaram a ser esses 4:3 explícitos — os scores
+continuaram idênticos (conferido em 620 cenários). O aviso do INMET, que é a fonte oficial
+de verdade, entra como um dos sinais do contexto.
 
 ### Normalização de peso
 
-Uma dimensão que pontua `0` significa "não utilizada", não "ruim". O peso dela é
-redistribuído entre as demais:
+Uma dimensão que pontua `0` significa "não utilizada", não "ruim". O peso dela vai para a
+outra:
 
 ```python
 peso_disponivel = soma dos pesos das dimensões com pontuação > 0
@@ -725,8 +731,15 @@ peso_efetivo(d) = PESO[d] / peso_disponivel
 confiabilidade  = Σ pontuacao(d) × peso_efetivo(d)
 ```
 
-Um evento com evidência YOLO e clima, mas sem fonte independente, pode chegar a 100% — o
-peso da fonte oficial é redistribuído entre IA (57%) e clima (43%).
+Sem nenhum dado de contexto, a confiabilidade é a própria nota da IA.
+
+### Peso do contexto conforme a concordância
+
+Quando há **duas** fontes de contexto ao vivo (chuva + INMET, ou contagem de veículos +
+TomTom), o peso-base do contexto é multiplicado por um fator entre **0,8×** (as fontes se
+contradizem) e **1,4×** (dizem a mesma coisa), proporcional à concordância entre as notas
+(divergência de 0,4 ou mais = contradição completa). Com uma fonte só, fica em 1,0×. O
+histórico de alagamento não entra nessa conta: é prior estático, não testemunha do agora.
 
 ### Níveis
 
@@ -736,31 +749,19 @@ peso da fonte oficial é redistribuído entre IA (57%) e clima (43%).
 | 0,55 – 0,79 | `media` |
 | < 0,55 | `baixa` |
 
-### Pontuação da dimensão "fonte oficial"
+### Pontuação do contexto, por tipo de evento
 
-| Tipo da fonte | Pontuação | Observação |
-|---|---|---|
-| `api` | 0,92 | ×0,85 se a fonte estiver inativa |
-| `data_fusion` | 0,88 | |
-| `sensor` | 0,85 | |
-| `manual` | 0,50 | "validação oficial pendente" |
-| `yolo` | **0,00** | Já contabilizado na dimensão IA — não pode contar duas vezes |
-| outro | 0,45 | |
-
-> Consequência prática: **todo evento autônomo tem fonte `yolo`**, então essa dimensão hoje
-> pontua 0 e seu peso é redistribuído. Foi exatamente essa lacuna que motivou trazer o INMET
-> — um julgamento institucional que se aproxima do papel que essa dimensão deveria cumprir.
-
-### Pontuação da dimensão "clima", por tipo de evento
+As notas são rampas lineares entre âncoras (cada décimo do sinal mexe na nota), saturando
+nas pontas.
 
 **Alagamento** — combina até três insumos:
 
 ```text
-chuva medida (Open-Meteo)          aviso INMET ativo
-  ≥ 30 mm/h → 0,95                   grande perigo → 0,93
-  ≥ 15 mm/h → 0,82                   perigo        → 0,80
-  ≥  5 mm/h → 0,62                   perigo pot.   → 0,60
-  <  5 mm/h → 0,35                   sem aviso     → 0,40
+chuva medida (Open-Meteo)               aviso INMET ativo (níveis categóricos)
+  âncoras (mm/h → nota):                  grande perigo → 0,93
+  0 → 0,30   5 → 0,55   15 → 0,78          perigo        → 0,80
+  30 → 0,93  50 → 0,97                     perigo pot.   → 0,60
+                                           sem aviso     → 0,40
         └──────────── média dos presentes ────────────┘
                           │
                           ▼
@@ -771,22 +772,21 @@ chuva medida (Open-Meteo)          aviso INMET ativo
           índice = 0 → × 0,90   (via sem histórico — leve cautela)
 ```
 
-Se **não houver** chuva nem aviso ativo (só o visual do modelo), o histórico decide sozinho:
+Chuva medida de **0,0 mm/h** conta como "sem sinal de chuva", não como leitura. Se não
+houver chuva nem aviso ativo (só o visual do modelo), o histórico decide sozinho:
 
 | Situação | Pontuação | Leitura |
 |---|---|---|
-| Histórico ausente da chave (evento não-autônomo) | 0,45 | genérico |
+| Histórico ausente da chave | 0,45 | genérico |
 | Via com histórico ≥ 4 | 0,45 | "costuma alagar, mas sem chuva nem aviso agora" |
 | Via com histórico < 4 | **0,25** | "provável falso positivo visual" |
 
-**Trânsito** — média dos índices disponíveis (`indice_congestionamento`,
-`indice_congestionamento_tomtom`, `congestionamento`):
+**Trânsito** — média dos índices disponíveis (`indice_congestionamento` do frame,
+`indice_congestionamento_tomtom`), em rampa:
 
-| Índice médio (0–10) | Pontuação |
-|---|---|
-| ≥ 7 | 0,92 |
-| ≥ 4 | 0,72 |
-| < 4 | 0,40 |
+| Índice médio (0–10) | 0 | 3 | 5,5 | 8 | 10 |
+|---|---|---|---|---|---|
+| Nota | 0,25 | 0,45 | 0,72 | 0,92 | 0,97 |
 
 Sem nenhum índice: 0,50. Tipo desconhecido: 0,58 ("contexto genérico").
 
@@ -832,7 +832,7 @@ veredito do painel contradiz o status do evento.
 
 `promover_eventos_por_confiabilidade` roda no startup e a cada 120 s sobre todos os eventos
 abertos, recalculando e ajustando o status. Cobre o que só mudaria num recálculo posterior:
-limiar alterado, dado de clima que chegou depois da criação.
+limiar alterado, dado de contexto que chegou depois da criação.
 
 ---
 

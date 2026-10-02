@@ -1,7 +1,7 @@
 """Inicializa apenas cadastros de referência; nunca cria eventos operacionais.
 
-Eventos devem entrar pela API, por uma integração real ou pelo fluxo YOLO com
-evidência. Este script é idempotente e não apaga dados existentes.
+Eventos só nascem da detecção contínua nas câmeras (fluxo YOLO com evidência).
+Este script é idempotente e não apaga dados existentes.
 """
 
 from app.database import Base, SessionLocal, engine
@@ -16,9 +16,7 @@ REGIOES = (
 )
 
 FONTES = (
-    ("Painel manual", "manual", "Ocorrências registradas por operador", True),
     ("MotSP YOLO", "yolo", "Observações visuais revalidadas pelo modelo no servidor", True),
-    ("Open-Meteo", "api", "Clima e qualidade do ar consultados em tempo real", True),
 )
 
 
