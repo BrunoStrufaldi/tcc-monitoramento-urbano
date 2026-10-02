@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     # mesma origem. Desligado, "/" vira o JSON de status.
     gx_serve_frontend: bool = True
     yolo_threshold: float = 0.45
+    # Pesos e ajustes do YOLO (lidos por ml/detector.py). Caminho relativo vale
+    # a partir da raiz do projeto, não do diretório de onde o uvicorn sobe.
+    gx_yolo_model: str = "ml/models/yolo11m.pt"
+    gx_yolo_incident_model: str = "ml/models/gx-incident.pt"
+    gx_yolo_imgsz: int = 1280
+    gx_yolo_tta: bool = True
+    gx_yolo_max_concorrencia: int = 2
     # Confiança mínima só para o modelo de incidentes (alagamento). Mais alta que
     # a de veículos de propósito: enquanto o peso de alagamento não é retreinado
     # com negativos, ele dispara caixa em cena seca com score baixo — 0.6 corta a

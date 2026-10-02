@@ -16,6 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from app.config import settings  # noqa: E402
 from ml import detector  # noqa: E402
 
 
@@ -120,10 +121,28 @@ def test_transito_e_alagamento_seguem_em_paralelo(detector_limpo, monkeypatch):
     assert modelo.pico <= 2
 
 
-def test_limite_de_concorrencia_vem_do_ambiente(monkeypatch):
-    monkeypatch.setenv("GX_YOLO_MAX_CONCORRENCIA", "3")
+def test_limite_de_concorrencia_vem_do_settings(monkeypatch):
+    monkeypatch.setattr(settings, "gx_yolo_max_concorrencia", 3)
     assert detector._max_inferencias_simultaneas() == 3
-    monkeypatch.setenv("GX_YOLO_MAX_CONCORRENCIA", "0")
+    monkeypatch.setattr(settings, "gx_yolo_max_concorrencia", 0)
     assert detector._max_inferencias_simultaneas() == 1  # nunca zero: travaria tudo
-    monkeypatch.setenv("GX_YOLO_MAX_CONCORRENCIA", "abc")
-    assert detector._max_inferencias_simultaneas() == 2
+
+
+def test_caminho_relativo_do_modelo_vale_a_partir_da_raiz(monkeypatch):
+    """O uvicorn sobe de backend/; "ml/models/x.pt" não pode virar backend/ml/..."""
+    monkeypatch.setattr(settings, "gx_yolo_incident_model", "ml/models/gx-incident.pt")
+    assert Path(detector._incident_model_path()) == PROJECT_ROOT / "ml" / "models" / "gx-incident.pt"
+    absoluto = str(PROJECT_ROOT / "outro.pt")
+    monkeypatch.setattr(settings, "gx_yolo_model", absoluto)
+    assert detector._model_path() == absoluto
+
+
+def test_config_do_yolo_vem_do_env_via_settings(monkeypatch):
+    """Antes era os.getenv, que não enxerga o .env (pydantic não exporta)."""
+    from app.config import Settings
+
+    monkeypatch.setenv("GX_YOLO_IMGSZ", "960")
+    monkeypatch.setenv("GX_YOLO_TTA", "false")
+    lido = Settings()
+    assert lido.gx_yolo_imgsz == 960
+    assert lido.gx_yolo_tta is False
