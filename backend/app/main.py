@@ -68,8 +68,8 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="Notificações Urbanas",
-    description="Sistema de notificações urbanas em tempo real para TCC",
+    title="MotSP",
+    description="Monitoramento Urbano de São Paulo: alagamento e trânsito detectados em câmeras públicas, em tempo real.",
     version="0.1.0",
     lifespan=lifespan,
 )
