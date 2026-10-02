@@ -21,8 +21,10 @@ CLASSES_URBANAS = {
     # escopo do TCC só em alagamento e trânsito, os dois tipos com detector
     # de verdade rodando contínuo (ver flood_detection.py e
     # live_detection.py). Os IDs não foram reaproveitados.
-    1: {"nome": "alagamento", "severidade": "critica", "tipo": "clima"},
-    2: {"nome": "transito", "severidade": "media", "tipo": "mobilidade"},
+    # "tipo" vira Evento.tipo direto (registrar_deteccao) e é o que
+    # data_fusion.scores usa para escolher o cálculo de contexto.
+    1: {"nome": "alagamento", "severidade": "critica", "tipo": "alagamento"},
+    2: {"nome": "transito", "severidade": "media", "tipo": "transito"},
     # Classes COCO abaixo são observações visuais: a presença de um veículo não
     # comprova congestionamento — live_detection conta quantos aparecem juntos.
     8: {"nome": "veiculo", "severidade": "baixa", "tipo": "observacao_visual"},
