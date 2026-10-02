@@ -41,7 +41,7 @@ Comandos de teste:
 - [x] Decidido: `ml/models/gx-incident-anterior.pt` **fica** — é o backup de rollback que
       `ml/train_incident_model.py` cria a cada treino (README §16). Os gráficos que importam para
       o TCC estão em `ml/runs/` (treino atual + validação atual × anterior), que também fica.
-- [ ] **Apagar manualmente** (a exclusão automática foi bloqueada por ser irreversível):
+- [x] Apagados (com permissão pontual em `.claude/settings.local.json`, removida depois):
       `runs/` da raiz (validações de 26/08 das tentativas v3/v4), `ml/models/gx-incident-v3-backup.pt`
       e `ml/models/gx-incident-v4-attempt.pt`.
 - [ ] **Movido para o 3a:** ramos mortos de `data_fusion/scores.py` (fontes `api/sensor/manual/

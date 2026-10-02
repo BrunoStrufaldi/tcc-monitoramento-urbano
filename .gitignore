@@ -43,3 +43,6 @@ Thumbs.db
 
 # Ferramentas locais
 .codex/
+
+# Claude Code (configuração pessoal)
+.claude/settings.local.json
