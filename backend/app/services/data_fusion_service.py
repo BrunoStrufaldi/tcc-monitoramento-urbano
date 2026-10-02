@@ -126,31 +126,35 @@ def aplicar_fusao_evento(
             evento.status = "em_analise"
             rebaixado = True
         mudou_status = promovido or rebaixado
-        log = LogSistema(
-            nivel="INFO",
-            modulo="data_fusion",
-            mensagem=(
-                f"Confiabilidade recalculada: {resultado.confiabilidade:.2%} ({resultado.nivel})"
-                + (" — evento promovido para ativo" if promovido else "")
-                + (" — evento rebaixado para em análise" if rebaixado else "")
-            ),
-            evento_id=evento.id,
-            contexto={
-                "confiabilidade": resultado.confiabilidade,
-                "nivel": resultado.nivel,
-                "promovido_para_ativo": promovido,
-                "rebaixado_para_analise": rebaixado,
-                "componentes": [
-                    {
-                        "nome": c.nome,
-                        "pontuacao": c.pontuacao,
-                        "contribuicao": c.contribuicao,
-                    }
-                    for c in resultado.componentes
-                ],
-            },
-        )
-        db.add(log)
+        if mudou_status:
+            # O recálculo roda a cada ciclo para todo evento aberto; logar só a
+            # mudança de status evita uma linha por evento a cada 2 minutos.
+            db.add(
+                LogSistema(
+                    nivel="INFO",
+                    modulo="data_fusion",
+                    mensagem=(
+                        f"Confiabilidade {resultado.confiabilidade:.2%} ({resultado.nivel})"
+                        + (" — evento promovido para ativo" if promovido else "")
+                        + (" — evento rebaixado para em análise" if rebaixado else "")
+                    ),
+                    evento_id=evento.id,
+                    contexto={
+                        "confiabilidade": resultado.confiabilidade,
+                        "nivel": resultado.nivel,
+                        "promovido_para_ativo": promovido,
+                        "rebaixado_para_analise": rebaixado,
+                        "componentes": [
+                            {
+                                "nome": c.nome,
+                                "pontuacao": c.pontuacao,
+                                "contribuicao": c.contribuicao,
+                            }
+                            for c in resultado.componentes
+                        ],
+                    },
+                )
+            )
         db.commit()
         db.refresh(evento)
         if mudou_status:
