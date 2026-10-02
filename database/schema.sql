@@ -153,9 +153,7 @@ INSERT INTO regioes (nome, codigo, descricao) VALUES
   ('Zona Sul', 'ZS', 'Bairros da zona sul');
 
 INSERT INTO fontes_dados (nome, tipo, descricao, ativo) VALUES
-  ('Painel manual', 'manual', 'Cadastro manual via API', 1),
-  ('MotSP YOLO', 'yolo', 'Observações visuais revalidadas no servidor', 1),
-  ('Open-Meteo', 'api', 'Clima e qualidade do ar em tempo real', 1);
+  ('MotSP YOLO', 'yolo', 'Observações visuais revalidadas no servidor', 1);
 
 -- O schema não popula eventos, evidências, contexto ou notificações. Esses
 -- registros só podem entrar por uma integração real ou por uma ação auditada.
