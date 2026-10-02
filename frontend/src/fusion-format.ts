@@ -15,11 +15,6 @@ export function formatFusionPercent(value: number, fractionDigits = 1): string {
   }).format(value);
 }
 
-/** Utilitária de auditoria para teste visual; a interface exibe a contribuição retornada pela API. */
-export function calculateVisualContribution(score: number, weight: number): number {
-  return score * weight;
-}
-
 export function fusionComponentLabel(name: string, eventoTipo?: string): string {
   if (name === "clima" && eventoTipo === "transito") return "Fonte contextual";
   const labels: Record<string, string> = {
@@ -28,13 +23,6 @@ export function fusionComponentLabel(name: string, eventoTipo?: string): string 
     fonte_oficial: "Fonte oficial",
   };
   return labels[name] || name;
-}
-
-export function formatFusionEquation(component: FusionDisplayComponent, eventoTipo?: string): string {
-  return fusionComponentLabel(component.nome, eventoTipo) + " " +
-    formatFusionPercent(component.pontuacao) + " × peso " +
-    formatFusionPercent(component.peso) + " = " +
-    formatFusionPercent(component.contribuicao);
 }
 
 /**

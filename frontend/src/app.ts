@@ -1,6 +1,4 @@
-import { atingeLimiarAtivo, formatFusionEquation, formatFusionPercent, fusionComponentLabel, type FusionDisplayComponent } from "./fusion-format.js";
-import { detailEmptyMessage, detailValue } from "./event-detail-format.js";
-import { buildRouteUrl, isResolvedStatus } from "./event-actions-format.js";
+import { atingeLimiarAtivo, formatFusionPercent, fusionComponentLabel, type FusionDisplayComponent } from "./fusion-format.js";
 
 type SeverityKey = "baixa" | "media" | "alta" | "critica";
 
@@ -38,26 +36,7 @@ type UrbanEvent = {
   fonte?: EventFonte | null;
 };
 
-type UrbanRegion = {
-  id: number;
-  nome: string;
-  codigo?: string | null;
-  descricao?: string | null;
-  ativo: boolean;
-};
-
-type DataSource = {
-  id: number;
-  nome: string;
-  tipo: string;
-  endpoint?: string | null;
-  descricao?: string | null;
-  ativo: boolean;
-};
-
 type FusionResult = { evento_id: number; confiabilidade: number; nivel: string; componentes: FusionDisplayComponent[]; calculado_em: string; limiar_ativo?: number };
-type ContextData = { categoria: string; chave: string; valor_texto?: string | null; valor_numerico?: number | null; unidade?: string | null; coletado_em: string };
-type SystemLog = { nivel: string; modulo: string; mensagem: string; contexto?: Record<string, unknown> | null; criado_em: string };
 
 type EvidenciaVisual = {
   id: number;
@@ -75,16 +54,6 @@ type EvidenciaVisual = {
   capturado_em: string;
   criado_em: string;
 };
-
-type SessionActivity = {
-  kind: "evento_criado" | "evento_atualizado" | "sincronizacao";
-  message: string;
-  timestamp: number;
-  eventId?: number;
-  severity?: string;
-};
-
-type ViewKey = "dashboard" | "eventos" | "regioes" | "fontes" | "fusao" | "cv" | "config";
 
 
 declare global {
@@ -105,27 +74,14 @@ let map: any = null;
 let openInfoWindow: any = null;
 let popupReturnFocusToMarker = true;
 let loadedEvents: UrbanEvent[] = [];
-let trainingRegions: UrbanRegion[] = [];
 let selectedMarkerId: number | null = null;
-let dataSources: DataSource[] = [];
-let searchTerm = "";
 let selectedEventId: number | null = null;
-let detailEventId: number | null = null;
-let detailActiveTab = "resumo";
-let detailActionInFlight = false;
-let lastUpdateLabel = "";
-let searchRenderTimer: ReturnType<typeof setTimeout> | null = null;
 let markerRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 const markersById = new Map<number, any>();
 const transientMarkerLayers = new Set<any>();
-const activeSeverities = new Set<SeverityKey>(Object.keys(SEVERITIES) as SeverityKey[]);
-let activeView: ViewKey = "dashboard";
 let rightPanelOpen = false;
 let leftPanelOpen = false;
-const sessionActivity: SessionActivity[] = [];
-const MAX_SESSION_ACTIVITY = 50;
 const MARKER_CLUSTER_THRESHOLD = 120;
-const MAX_RENDERED_EVENT_CARDS = 180;
 
 // Real-time connection state
 type ConnectionMode = "ws" | "sse" | "polling" | "disconnected";
@@ -143,16 +99,6 @@ const POLLING_INTERVAL_MS = 15000;
 const RESYNC_INTERVAL_MS = 120000;
 let pingTimer: ReturnType<typeof setInterval> | null = null;
 let resyncTimer: ReturnType<typeof setInterval> | null = null;
-let cvSelectedFile: File | null = null;
-let cvPreviewUrl: string | null = null;
-let cvCameraStream: MediaStream | null = null;
-let cvLastDetections: CvDetection[] = [];
-let cvMonitorTimer: ReturnType<typeof setInterval> | null = null;
-let cvMonitoring = false;
-let cvAnalyzing = false;
-let cvDetectorAvailable = false;
-let cvLastLatencyMs: number | null = null;
-let cvFrameSocket: WebSocket | null = null;
 let appInitialized = false;
 const evidenceObjectUrls = new Set<string>();
 
@@ -236,8 +182,6 @@ function connectWebSocket(): void {
     connectionMode = "ws";
     reconnectAttempt = 0;
     updateConnectionStatus();
-    logSessionActivity("sincronizacao", "Canal WebSocket conectado");
-    if (loadedEvents.length) void loadRightPanelAlerts();
     // Reconecta ≠ continua de onde parou: enquanto o canal esteve fora, eventos
     // podem ter sido criados e removidos sem a tela saber.
     void resyncEvents();
@@ -342,7 +286,6 @@ async function resyncEvents(): Promise<void> {
     loadedEvents = remotos;
     updateMetrics(loadedEvents);
     applyMarkers(false);
-    renderEventList(loadedEvents);
     if (selectedEventId != null && !idsRemotos.has(selectedEventId)) {
       selectedEventId = null;
       clearEventEvidence();
@@ -374,10 +317,8 @@ function handleRealtimeMessage(tipo: string, dados: Record<string, unknown>): vo
       if (!loadedEvents.some((e) => e.id === evento.id)) {
         loadedEvents.unshift(evento);
       }
-      renderEventList(loadedEvents);
       updateMetrics(loadedEvents);
       updateMarker(evento);
-      logSessionActivity("evento_criado", "Evento criado: " + evento.titulo, evento.id, evento.severidade);
       break;
     }
     case "evento_atualizado": {
@@ -388,10 +329,8 @@ function handleRealtimeMessage(tipo: string, dados: Record<string, unknown>): vo
       } else {
         loadedEvents.unshift(atualizado);
       }
-      renderEventList(loadedEvents);
       updateMetrics(loadedEvents);
       updateMarker(atualizado);
-      logSessionActivity("evento_atualizado", "Evento atualizado: " + (atualizado.titulo || "#" + atualizado.id), atualizado.id, atualizado.severidade);
       if (selectedEventId === atualizado.id) {
         renderSelectedEvent(atualizado);
       }
@@ -400,7 +339,6 @@ function handleRealtimeMessage(tipo: string, dados: Record<string, unknown>): vo
     case "evento_removido": {
       const id = Number(dados.id);
       loadedEvents = loadedEvents.filter((ev) => ev.id !== id);
-      renderEventList(loadedEvents);
       updateMetrics(loadedEvents);
       removeMarker(id);
       if (selectedEventId === id) {
@@ -461,7 +399,6 @@ function statusColor(status: string | null | undefined): string {
   switch (String(status || "").toLowerCase()) {
     case "ativo": return "#2EAA5A";      // verde
     case "em_analise": return "#E6A817"; // amarelo
-    case "resolvido": return "#7A8794";  // cinza
     default: return "#E6A817";
   }
 }
@@ -480,323 +417,6 @@ function setApiStatus(ok: boolean, message: string): void {
   element.textContent = message;
   element.classList.toggle("ok", ok);
   element.classList.toggle("erro", !ok);
-}
-
-type CvDetection = { nome: string; confianca: number; severidade: string; tipo: string; bbox: [number, number, number, number]; classe_modelo?: string | null; duplicada?: boolean };
-type CvDetectorStatus = { disponivel: boolean; modo: string; modelo: string; erro?: string | null };
-type CvFrameResponse = { frame_id: string; deteccoes: CvDetection[]; timestamp: string; latencia_ms: number; relevante: boolean; modo: string };
-
-function cvSetFeedback(message: string, tone: "" | "error" | "success" = ""): void {
-  const feedback = byId("cv-feedback");
-  feedback.textContent = message;
-  feedback.className = "cv-feedback" + (tone ? " " + tone : "");
-}
-
-function cvSetMetrics(connection: string, fps = 0, latency: number | null = null): void {
-  byId("cv-connection-status").textContent = connection;
-  byId("cv-fps").textContent = String(fps);
-  byId("cv-latency").textContent = latency == null ? "--" : latency + " ms";
-}
-
-function cvConnectFrames(): void {
-  if (cvFrameSocket?.readyState === WebSocket.OPEN || cvFrameSocket?.readyState === WebSocket.CONNECTING) {
-    return;
-  }
-  const url = window.CONFIG.API_BASE_URL.replace(/^http/, "ws") + "/ws/cv";
-  cvFrameSocket = new WebSocket(url);
-  cvFrameSocket.onmessage = (event) => {
-    const message = JSON.parse(event.data);
-    if (message.tipo === "pronto") cvSetMetrics("WebSocket", 0, cvLastLatencyMs);
-    if (message.tipo === "frame_resultado") {
-      const data = message.dados as CvFrameResponse;
-      cvLastDetections = data.deteccoes;
-      cvLastLatencyMs = data.latencia_ms;
-      cvRenderResults(data.deteccoes); cvDrawBoxes(data.deteccoes);
-      byId<HTMLButtonElement>("cv-confirm").disabled = !data.deteccoes.length;
-      cvSetMetrics("WebSocket", 1, data.latencia_ms);
-      cvSetFeedback(data.deteccoes.length + " detecção(ões) retornada(s) pelo canal ao vivo.", "success");
-    }
-  };
-  cvFrameSocket.onerror = () => cvSetMetrics("Falha; upload", 0, cvLastLatencyMs);
-  cvFrameSocket.onclose = () => { cvFrameSocket = null; if (cvMonitoring) cvSetMetrics("Upload fallback", 1, cvLastLatencyMs); };
-}
-
-async function cvSendFrame(file: File): Promise<boolean> {
-  if (cvFrameSocket?.readyState !== WebSocket.OPEN || cvAnalyzing) return false;
-  cvAnalyzing = true;
-  try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    let binary = "";
-    bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
-    cvFrameSocket.send(JSON.stringify({ tipo: "frame", frame_id: "cv-" + Date.now(), mime: file.type, conteudo: btoa(binary), threshold: Number(byId<HTMLInputElement>("cv-threshold").value) / 100 }));
-    return true;
-  } finally { cvAnalyzing = false; }
-}
-
-function cvDrawBoxes(detections: CvDetection[]): void {
-  const video = byId<HTMLVideoElement>("cv-video");
-  const canvas = byId<HTMLCanvasElement>("cv-overlay");
-  if (!video.videoWidth || !video.videoHeight) { canvas.hidden = true; return; }
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  const context = canvas.getContext("2d");
-  if (!context) return;
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  detections.forEach((item) => {
-    const [x1, y1, x2, y2] = item.bbox;
-    const color = severityStyle(item.severidade).color;
-    context.strokeStyle = color; context.lineWidth = Math.max(2, canvas.width / 420);
-    context.strokeRect(x1, y1, Math.max(1, x2 - x1), Math.max(1, y2 - y1));
-    context.fillStyle = color; context.font = Math.max(12, canvas.width / 48) + "px Inter";
-    context.fillText(item.nome + " " + Math.round(item.confianca * 100) + "%", x1 + 3, Math.max(14, y1 - 5));
-  });
-  canvas.hidden = !detections.length;
-}
-
-function cvClearFile(): void {
-  cvSelectedFile = null;
-  const input = byId<HTMLInputElement>("cv-file");
-  input.value = "";
-  const preview = byId("cv-preview");
-  preview.hidden = true;
-  if (cvPreviewUrl) URL.revokeObjectURL(cvPreviewUrl);
-  cvPreviewUrl = null;
-  byId<HTMLImageElement>("cv-preview-image").removeAttribute("src");
-  byId("cv-file-label").textContent = "Selecionar imagem de evidência";
-  byId<HTMLButtonElement>("cv-analyze").disabled = true;
-  byId<HTMLButtonElement>("cv-confirm").disabled = true;
-  cvLastDetections = [];
-  byId<HTMLCanvasElement>("cv-overlay").hidden = true;
-  byId("cv-results").innerHTML = "";
-  cvSetFeedback("Selecione uma imagem para iniciar a análise.");
-}
-
-function cvSetFile(file: File, sourceLabel: string): void {
-  if (file.size > 10 * 1024 * 1024) {
-    cvSetFeedback("A imagem ultrapassa o limite de 10 MB.", "error");
-    return;
-  }
-  cvSelectedFile = file;
-  if (cvPreviewUrl) URL.revokeObjectURL(cvPreviewUrl);
-  cvPreviewUrl = URL.createObjectURL(file);
-  byId<HTMLImageElement>("cv-preview-image").src = cvPreviewUrl;
-  byId("cv-preview").hidden = false;
-  byId("cv-file-label").textContent = sourceLabel;
-  byId<HTMLButtonElement>("cv-analyze").disabled = false;
-  byId<HTMLButtonElement>("cv-confirm").disabled = true;
-  cvLastDetections = [];
-  byId("cv-results").innerHTML = "";
-  cvSetFeedback("Quadro real pronto para análise por YOLO.");
-}
-
-function cvStopMonitoring(): void {
-  if (cvMonitorTimer) window.clearInterval(cvMonitorTimer);
-  cvMonitorTimer = null;
-  cvMonitoring = false;
-  const monitor = byId<HTMLButtonElement>("cv-camera-monitor");
-  monitor.textContent = "Iniciar monitoramento (1 FPS)";
-}
-
-function cvStopCamera(): void {
-  cvStopMonitoring();
-  cvCameraStream?.getTracks().forEach((track) => track.stop());
-  cvCameraStream = null;
-  cvFrameSocket?.close();
-  cvFrameSocket = null;
-  const video = byId<HTMLVideoElement>("cv-video");
-  video.srcObject = null;
-  byId("cv-video-empty").hidden = false;
-  byId("cv-camera-status").textContent = "Câmera encerrada. Nenhuma imagem é transmitida sem ação do operador.";
-  byId<HTMLButtonElement>("cv-camera-start").disabled = false;
-  byId<HTMLButtonElement>("cv-camera-capture").disabled = true;
-  const monitor = byId<HTMLButtonElement>("cv-camera-monitor");
-  monitor.disabled = true;
-  byId<HTMLButtonElement>("cv-camera-stop").disabled = true;
-  byId<HTMLCanvasElement>("cv-overlay").hidden = true;
-  cvSetMetrics("Encerrada");
-}
-
-function cvCaptureFrame(): Promise<File | null> {
-  const video = byId<HTMLVideoElement>("cv-video");
-  if (!cvCameraStream || !video.videoWidth || !video.videoHeight) return Promise.resolve(null);
-  const canvas = document.createElement("canvas");
-  const scale = Math.min(1, 1280 / video.videoWidth);
-  canvas.width = Math.round(video.videoWidth * scale);
-  canvas.height = Math.round(video.videoHeight * scale);
-  canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
-  return new Promise((resolve) => canvas.toBlob((blob) => {
-    resolve(blob ? new File([blob], "gx-camera-" + Date.now() + ".jpg", { type: "image/jpeg" }) : null);
-  }, "image/jpeg", 0.9));
-}
-
-async function cvAnalyzeCurrent(auto = false): Promise<void> {
-  const analyze = byId<HTMLButtonElement>("cv-analyze");
-  const confirm = byId<HTMLButtonElement>("cv-confirm");
-  if (!cvSelectedFile || cvAnalyzing) return;
-  cvAnalyzing = true;
-  analyze.disabled = true;
-  if (!auto) cvSetFeedback("Executando inferência YOLO…");
-  try {
-    const form = new FormData();
-    form.append("file", cvSelectedFile);
-    form.append("frame_id", "cv-" + Date.now());
-    const threshold = byId<HTMLInputElement>("cv-threshold");
-    form.append("threshold", String(Number(threshold.value) / 100));
-    const response = await apiFetch("/deteccao/frame", { method: "POST", body: form });
-    const payload = await response.json() as CvFrameResponse | { detail?: string };
-    if (!response.ok) throw new Error("detail" in payload ? payload.detail : "Não foi possível analisar a imagem");
-    const frame = payload as CvFrameResponse;
-    const detections = frame.deteccoes;
-    cvLastDetections = detections;
-    cvRenderResults(detections);
-    cvLastLatencyMs = frame.latencia_ms;
-    cvSetMetrics("Upload sob demanda", auto ? 1 : 0, frame.latencia_ms);
-    cvDrawBoxes(detections);
-    confirm.disabled = !detections.length;
-    cvSetFeedback(auto
-      ? "Monitoramento ao vivo: " + detections.length + " detecção(ões) no último quadro."
-      : detections.length + " detecção(ões) retornada(s) pelo modelo.", "success");
-  } catch (error) {
-    cvSetFeedback(error instanceof Error ? error.message : "Falha ao analisar a imagem.", "error");
-  } finally {
-    cvAnalyzing = false;
-    analyze.disabled = false;
-  }
-}
-
-function cvRenderResults(detections: CvDetection[]): void {
-  const results = byId("cv-results");
-  if (!detections.length) {
-    results.innerHTML = '<div class="empty-state">Nenhum objeto compatível foi reconhecido acima do limiar selecionado.</div>';
-    return;
-  }
-  results.innerHTML = detections.map((item) => {
-    const severity = normalizeSeverity(item.severidade);
-    const style = severityStyle(severity);
-    const bbox = item.bbox.join(", ");
-    return '<article class="cv-result" style="border-left-color:' + style.color + '">' +
-      '<span class="cv-result-icon" style="background:' + style.color + '">' + escapeHtml(item.nome.slice(0, 1).toUpperCase()) + '</span>' +
-      '<span><strong>' + escapeHtml(item.nome.replace(/_/g, " ")) + '</strong><small>' +
-      (item.classe_modelo ? 'classe YOLO: ' + escapeHtml(item.classe_modelo) + ' · ' : '') +
-      escapeHtml(item.tipo) + ' · caixa: ' + bbox + '</small></span>' +
-      '<span class="cv-result-confidence">' + Math.round(item.confianca * 100) + '%</span></article>';
-  }).join("");
-}
-
-async function cvLoadStatus(): Promise<void> {
-  const badge = byId("cv-model-status");
-  try {
-    const response = await apiFetch("/deteccao/status");
-    if (!response.ok) throw new Error("status indisponível");
-    const status = await response.json() as CvDetectorStatus;
-    cvDetectorAvailable = status.disponivel;
-    badge.textContent = status.disponivel ? "YOLO pronto" : "Modelo não configurado";
-    badge.className = "cv-status " + (status.disponivel ? "ready" : "unavailable");
-    if (status.disponivel) logSessionActivity("sincronizacao", "YOLO pronto para inferência real");
-    if (loadedEvents.length) void loadRightPanelAlerts();
-    if (!status.disponivel) cvSetFeedback(status.erro || "Configure os pesos YOLO para ativar a análise real.");
-  } catch {
-    badge.textContent = "API indisponível";
-    badge.className = "cv-status unavailable";
-  }
-}
-
-function initComputerVision(): void {
-  const input = byId<HTMLInputElement>("cv-file");
-  const analyze = byId<HTMLButtonElement>("cv-analyze");
-  const confirm = byId<HTMLButtonElement>("cv-confirm");
-  const threshold = byId<HTMLInputElement>("cv-threshold");
-  const thresholdValue = byId("cv-threshold-value");
-  input.addEventListener("change", () => {
-    const file = input.files?.[0] || null;
-    if (!file) return;
-    cvSetFile(file, file.name);
-  });
-  byId("cv-remove-file").addEventListener("click", cvClearFile);
-  byId<HTMLButtonElement>("cv-camera-start").addEventListener("click", async () => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      cvSetFeedback("Este navegador não disponibiliza acesso à câmera.", "error");
-      return;
-    }
-    try {
-      cvSetFeedback("Solicitando autorização da câmera…");
-      cvCameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
-      const video = byId<HTMLVideoElement>("cv-video");
-      video.srcObject = cvCameraStream;
-      await video.play();
-      byId("cv-video-empty").hidden = true;
-      byId("cv-camera-status").textContent = "Câmera ao vivo local — captura somente quando você solicitar.";
-      byId<HTMLButtonElement>("cv-camera-start").disabled = true;
-      byId<HTMLButtonElement>("cv-camera-capture").disabled = false;
-      byId<HTMLButtonElement>("cv-camera-monitor").disabled = false;
-      byId<HTMLButtonElement>("cv-camera-stop").disabled = false;
-      cvSetMetrics("Câmera local", 0, cvLastLatencyMs);
-      cvConnectFrames();
-      cvSetFeedback("Prévia ao vivo pronta. Capture um quadro para analisar.", "success");
-    } catch (error) {
-      const message = error instanceof Error && error.name === "NotAllowedError"
-        ? "Permissão da câmera não concedida."
-        : "Não foi possível iniciar a câmera selecionada.";
-      cvSetFeedback(message, "error");
-    }
-  });
-  byId<HTMLButtonElement>("cv-camera-stop").addEventListener("click", cvStopCamera);
-  byId<HTMLButtonElement>("cv-camera-capture").addEventListener("click", async () => {
-    const frame = await cvCaptureFrame();
-    if (!frame) {
-      cvSetFeedback("Aguarde a prévia da câmera ficar disponível.", "error");
-      return;
-    }
-    cvSetFile(frame, "Quadro capturado da câmera ao vivo");
-  });
-  byId<HTMLButtonElement>("cv-camera-monitor").addEventListener("click", async () => {
-    const monitor = byId<HTMLButtonElement>("cv-camera-monitor");
-    if (cvMonitoring) { cvStopMonitoring(); cvSetFeedback("Monitoramento pausado. A câmera continua disponível."); return; }
-    const processFrame = async () => {
-      const frame = await cvCaptureFrame();
-      if (!frame) return;
-      if (await cvSendFrame(frame)) return;
-      cvSetFile(frame, "Quadro do monitoramento ao vivo");
-      await cvAnalyzeCurrent(true);
-    };
-    cvMonitoring = true;
-    monitor.textContent = "Parar monitoramento";
-    cvSetFeedback("Monitoramento iniciado: no máximo 1 quadro por segundo.", "success");
-    await processFrame();
-    cvMonitorTimer = window.setInterval(() => { void processFrame(); }, 1000);
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden && cvCameraStream) cvStopCamera();
-  });
-  threshold.addEventListener("input", () => { thresholdValue.textContent = threshold.value + "%"; });
-  analyze.addEventListener("click", () => { void cvAnalyzeCurrent(); });
-  confirm.addEventListener("click", async () => {
-    const detection = cvLastDetections[0];
-    if (!cvSelectedFile || !detection) return;
-    confirm.disabled = true;
-    cvSetFeedback("Revalidando no servidor e registrando a observação…");
-    try {
-      const form = new FormData();
-      form.append("file", cvSelectedFile);
-      form.append("nome", detection.nome);
-      form.append("confianca", String(detection.confianca));
-      form.append("severidade", detection.severidade);
-      form.append("tipo", detection.tipo);
-      form.append("latitude", String(window.CONFIG.MAP_CENTER.lat));
-      form.append("longitude", String(window.CONFIG.MAP_CENTER.lng));
-      const response = await apiFetch("/deteccao/confirmar", { method: "POST", body: form });
-      const evento = await response.json() as UrbanEvent | { detail?: string };
-      if (!response.ok) throw new Error("detail" in evento ? evento.detail : "Não foi possível confirmar a ocorrência");
-      const item = evento as UrbanEvent;
-      if (!loadedEvents.some((entry) => entry.id === item.id)) loadedEvents.unshift(item);
-      updateMetrics(loadedEvents); applyMarkers(); renderEventList(loadedEvents); selectEvent(item.id);
-      logSessionActivity("evento_criado", "Evidência YOLO confirmada: " + item.titulo, item.id, item.severidade);
-      cvSetFeedback("Observação YOLO revalidada e adicionada ao mapa.", "success");
-    } catch (error) {
-      cvSetFeedback(error instanceof Error ? error.message : "Falha ao confirmar ocorrência.", "error");
-    } finally { confirm.disabled = false; }
-  });
-  void cvLoadStatus();
 }
 
 /* ============================================================
@@ -1040,13 +660,7 @@ async function fetchEvents(): Promise<UrbanEvent[]> {
   return response.json() as Promise<UrbanEvent[]>;
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await apiFetch(url);
-  if (!response.ok) throw new Error("API retornou " + response.status);
-  return response.json() as Promise<T>;
-}
-
-/** Dados do painel operacional sempre vêm da API, inclusive em modo demonstração. */
+/** GET na API que lança erro em resposta não-2xx. */
 async function fetchOperationalData<T>(url: string): Promise<T> {
   const response = await apiFetch(url);
   if (!response.ok) throw new Error("API retornou " + response.status);
@@ -1125,23 +739,7 @@ function initStatusFilter(): void {
 }
 
 function isEventVisible(event: UrbanEvent): boolean {
-  if (!activeSeverities.has(normalizeSeverity(event.severidade))) return false;
-  if (!matchesStatusFilter(event)) return false;
-  if (!searchTerm) return true;
-  const haystack = [
-    event.titulo,
-    event.descricao,
-    event.tipo,
-    event.status,
-    event.regiao?.nome,
-    event.localizacao?.endereco,
-    event.localizacao?.bairro,
-    event.fonte?.nome,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(searchTerm);
+  return matchesStatusFilter(event);
 }
 
 function clearMarkers(): void {
@@ -1153,7 +751,6 @@ function clearMarkers(): void {
 
 function markerGlyph(event: UrbanEvent): string {
   const value = (event.tipo + " " + event.titulo).toLowerCase();
-  if (event.tipo === "observacao_visual") return "◎";
   if (isEventoTransito(event)) return GLYPH_CARRO;
   if (value.includes("alag") || value.includes("chuva")) return "≋";
   if (value.includes("câmera") || value.includes("camera")) return "◉";
@@ -1181,11 +778,6 @@ function markerIcon(event: UrbanEvent, style: SeverityStyle, selected = false): 
 function formatDate(value?: string | null): string {
   if (!value) return "";
   return parseApiDate(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
-}
-
-function formatTime(value?: string | null): string {
-  if (!value) return "";
-  return parseApiDate(value).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
 function parseApiDate(value: string): Date {
@@ -1293,12 +885,7 @@ function fitMapBounds(events: UrbanEvent[]): void {
 function formatStatus(value: string): string {
   const labels: Record<string, string> = {
     em_analise: "Em análise",
-    observacao_visual: "Observação visual",
-    veiculo: "Veículo",
-    onibus: "Ônibus",
-    caminhao: "Caminhão",
     transito: "Trânsito",
-    incendio: "Incêndio",
   };
   return labels[value.toLocaleLowerCase("pt-BR")] || value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
@@ -1328,11 +915,10 @@ function deselectCurrentMarker(): void {
   selectedMarkerId = null;
 }
 
-function selectEvent(id: number, openDetails = false, openPopup = false): void {
+function selectEvent(id: number, openPopup = false): void {
   selectedEventId = id;
   const event = loadedEvents.find((e) => e.id === id);
   renderSelectedEvent(event || null);
-  highlightListItem(id);
 
   if (event) {
     loadEventEvidence(event.id);
@@ -1347,213 +933,6 @@ function selectEvent(id: number, openDetails = false, openPopup = false): void {
       marker.openPopup();
     }
   }
-  if (event && openDetails) openEventDetail(event.id);
-}
-
-function detailLoading(): string {
-  return '<div class="detail-state detail-loading"><span class="skeleton skeleton-line w60"></span><span class="skeleton skeleton-line"></span><span class="skeleton skeleton-line w40"></span></div>';
-}
-
-function detailError(): string {
-  return '<div class="detail-state detail-error"><strong>Não foi possível carregar esta seção.</strong><button type="button" data-action="retry-detail">Tentar novamente</button></div>';
-}
-
-function detailEmpty(section: string): string {
-  return '<div class="detail-state"><span>' + escapeHtml(detailEmptyMessage(section)) + '</span></div>';
-}
-
-function detailRows(rows: Array<[string, string]>): string {
-  return '<dl class="detail-rows">' + rows.map(([label, value]) => '<div><dt>' + escapeHtml(label) + '</dt><dd>' + escapeHtml(value) + '</dd></div>').join("") + '</dl>';
-}
-
-function evidenceImageSource(evidence: EvidenciaVisual): string {
-  return evidence.url_externa || (evidence.caminho_arquivo ? window.CONFIG.API_BASE_URL + "/evidencias/arquivo/" + encodeURIComponent(evidence.caminho_arquivo) : "");
-}
-
-function setDetailOperationFeedback(message = "", state: "success" | "error" | "progress" | "" = ""): void {
-  const feedback = byId<HTMLElement>("detail-operation-feedback");
-  feedback.textContent = message;
-  feedback.className = "detail-operation-feedback" + (state ? " is-" + state : "");
-}
-
-function setDetailActionPending(pending: boolean): void {
-  detailActionInFlight = pending;
-  document.querySelectorAll<HTMLButtonElement>("[data-detail-action]").forEach((button) => {
-    button.disabled = pending;
-    button.setAttribute("aria-busy", String(pending));
-  });
-}
-
-async function requestOperationalAction<T>(path: string, method: "POST" | "PATCH", body?: Record<string, unknown>): Promise<T> {
-  const response = await apiFetch(path, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (response.ok) return response.json() as Promise<T>;
-
-  let detail = "API retornou " + response.status;
-  try {
-    const payload = await response.json() as { detail?: string | Array<{ msg?: string }> };
-    if (typeof payload.detail === "string") detail = payload.detail;
-    else if (Array.isArray(payload.detail)) detail = payload.detail.map((item) => item.msg || "Dados inválidos").join(" · ");
-  } catch { /* resposta sem JSON: mantém o status HTTP */ }
-  throw new Error(detail);
-}
-
-async function refreshAfterDetailAction(eventId: number): Promise<void> {
-  await loadEvents();
-  if (detailEventId === eventId) await loadDetailSection();
-}
-
-async function runDetailMutation(successMessage: string, operation: (eventId: number) => Promise<unknown>): Promise<void> {
-  const eventId = detailEventId;
-  if (eventId == null || detailActionInFlight) return;
-  setDetailActionPending(true);
-  setDetailOperationFeedback("Processando operação…", "progress");
-  try {
-    await operation(eventId);
-    await refreshAfterDetailAction(eventId);
-    setDetailOperationFeedback(successMessage, "success");
-  } catch (error) {
-    setDetailOperationFeedback("A operação não foi concluída: " + (error instanceof Error ? error.message : "erro desconhecido"), "error");
-  } finally {
-    setDetailActionPending(false);
-  }
-}
-
-function syncDetailActionFields(event: UrbanEvent | undefined): void {
-  const route = byId<HTMLAnchorElement>("detail-route-link");
-  if (event) {
-    route.href = buildRouteUrl(event.latitude, event.longitude);
-    route.removeAttribute("aria-disabled");
-  } else {
-    route.removeAttribute("href");
-    route.setAttribute("aria-disabled", "true");
-  }
-  setDetailOperationFeedback();
-}
-
-function openEventDetail(eventId: number): void {
-  detailEventId = eventId;
-  detailActiveTab = "resumo";
-  const drawer = byId<HTMLElement>("event-detail-drawer");
-  const event = loadedEvents.find((item) => item.id === eventId);
-  byId("event-detail-title").textContent = event?.titulo || "Detalhes do evento";
-  syncDetailActionFields(event);
-  drawer.hidden = false;
-  drawer.classList.add("open");
-  updateDetailTabs();
-  void loadDetailSection();
-  window.requestAnimationFrame(() => byId<HTMLButtonElement>("event-detail-close").focus());
-}
-
-function closeEventDetail(): void {
-  const drawer = byId<HTMLElement>("event-detail-drawer");
-  drawer.classList.remove("open");
-  drawer.hidden = true;
-  detailEventId = null;
-}
-
-function updateDetailTabs(): void {
-  document.querySelectorAll<HTMLButtonElement>("[data-detail-tab]").forEach((button) => {
-    const active = button.dataset.detailTab === detailActiveTab;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-selected", String(active));
-  });
-}
-
-async function loadDetailSection(): Promise<void> {
-  const eventId = detailEventId;
-  const content = byId("event-detail-content");
-  if (eventId == null) return;
-  content.innerHTML = detailLoading();
-  try {
-    if (detailActiveTab === "resumo") {
-      const event = await fetchOperationalData<UrbanEvent>("/eventos/" + eventId);
-      content.innerHTML = '<article class="detail-summary"><p>' + escapeHtml(detailValue(event.descricao, "Sem resumo registrado.")) + '</p>' +
-        detailRows([
-          ["Localização", [event.localizacao?.endereco, event.localizacao?.bairro, event.regiao?.nome].filter(Boolean).join(" · ") || "Não informada"],
-          ["Coordenadas", event.latitude.toFixed(5) + ", " + event.longitude.toFixed(5)],
-          ["Fonte", event.fonte ? event.fonte.nome + " · " + event.fonte.tipo : "Não informada"],
-          ["Detectado", formatDetectadoEm(event.detectado_em)],
-          ["Status", formatStatus(event.status)],
-        ]) + '</article>';
-    } else if (detailActiveTab === "linha-do-tempo") {
-      const [event, logs] = await Promise.all([
-        fetchOperationalData<UrbanEvent>("/eventos/" + eventId),
-        fetchOperationalData<SystemLog[]>("/logs?evento_id=" + eventId + "&limite=50"),
-      ]);
-      const entries = [
-        { at: event.detectado_em || "", title: "Evento detectado", detail: event.titulo },
-        ...logs.map((item) => ({ at: item.criado_em, title: item.modulo, detail: item.mensagem })),
-      ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-      content.innerHTML = entries.length ? '<ol class="detail-timeline">' + entries.map((entry) => '<li><time>' + escapeHtml(formatDate(entry.at)) + '</time><strong>' + escapeHtml(entry.title) + '</strong><span>' + escapeHtml(entry.detail) + '</span></li>').join("") + '</ol>' : detailEmpty("linha do tempo");
-    } else if (detailActiveTab === "evidencias") {
-      const evidence = await fetchOperationalData<EvidenciaVisual[]>("/evidencias?evento_id=" + eventId + "&limite=100");
-      content.innerHTML = evidence.length ? evidence.map((item) => {
-        const source = evidenceImageSource(item);
-        return '<article class="detail-evidence">' +
-          (source ? '<button type="button" class="detail-evidence-thumb" data-detail-image="' + escapeHtml(source) + '" data-detail-alt="Evidência ' + escapeHtml(item.tipo) + '"><img src="' + escapeHtml(source) + '" alt="Evidência visual" loading="lazy"></button>' : '<div class="detail-evidence-thumb detail-no-image">Sem imagem disponível</div>') +
-          detailRows([["Tipo", formatStatus(item.tipo)], ["Modelo", detailValue(item.modelo_ia)], ["Classe", detailValue(item.classe_detectada)], ["Confiança", item.confianca == null ? "Não informada" : formatFusionPercent(Number(item.confianca))], ["Captura", formatDate(item.capturado_em)]]) +
-          '</article>';
-      }).join("") : detailEmpty("evidências");
-      content.querySelectorAll<HTMLButtonElement>("[data-detail-image]").forEach((button) => button.addEventListener("click", () => openEvidenceViewer(button.dataset.detailImage || "", button.dataset.detailAlt || "Evidência visual")));
-    } else if (detailActiveTab === "clima") {
-      const [context, climate] = await Promise.all([
-        fetchOperationalData<ContextData[]>("/dados-contextuais?evento_id=" + eventId + "&limite=100"),
-        fetchOperationalData<LiveWeather>("/fontes/tempo-real/clima"),
-      ]);
-      const contextRows = context.filter((item) => item.categoria.toLowerCase().includes("clima")).map((item) => [item.chave, detailValue(item.valor_texto ?? item.valor_numerico, "Não informado") + (item.unidade ? " " + item.unidade : "")] as [string, string]);
-      const liveRows: Array<[string, string]> = climate.disponivel ? [["Fonte atual", detailValue(climate.fonte)], ["Temperatura", climate.temperatura_c == null ? "Não informada" : climate.temperatura_c + " °C"], ["Precipitação", climate.precipitacao_mm == null ? "Não informada" : climate.precipitacao_mm + " mm"], ["Vento", climate.vento_kmh == null ? "Não informado" : climate.vento_kmh + " km/h"]] : [];
-      content.innerHTML = (contextRows.length || liveRows.length) ? '<section class="detail-subsection"><h3>Contexto vinculado ao evento</h3>' + (contextRows.length ? detailRows(contextRows) : detailEmpty("contexto climático vinculado")) + '</section><section class="detail-subsection"><h3>Clima atual da fonte pública</h3>' + (liveRows.length ? detailRows(liveRows) : detailEmpty("clima atual")) + '</section>' : detailEmpty("clima");
-    } else if (detailActiveTab === "fusion") {
-      const fusion = await fetchOperationalData<FusionResult>("/fusion/eventos/" + eventId + "/confiabilidade");
-      const eventoTipo = loadedEvents.find((e) => e.id === eventId)?.tipo;
-      content.innerHTML = '<section class="detail-fusion"><div class="detail-fusion-score"><strong>' + formatFusionPercent(fusion.confiabilidade) + '</strong><span>' + escapeHtml(formatFusionLevel(fusion.nivel)) + '</span><small>Calculado em ' + escapeHtml(formatDate(fusion.calculado_em)) + '</small></div>' +
-        fusion.componentes.map((component) => '<article><strong>' + escapeHtml(fusionComponentLabel(component.nome, eventoTipo)) + '</strong><p>' + escapeHtml(formatFusionEquation(component, eventoTipo)) + '</p><span>Justificativa: ' + escapeHtml(detailValue(component.detalhe)) + '</span></article>').join("") +
-        '<p class="detail-note">YOLO produz evidência; a decisão final vem da Fusão de Dados.</p></section>';
-    } else {
-      const logs = await fetchOperationalData<SystemLog[]>("/logs?evento_id=" + eventId + "&limite=100");
-      content.innerHTML = logs.length ? '<ul class="detail-list">' + logs.map((item) => '<li><strong>' + escapeHtml(item.modulo + " · " + item.nivel) + '</strong><span>' + escapeHtml(formatDate(item.criado_em)) + '</span><p>' + escapeHtml(item.mensagem) + '</p></li>').join("") + '</ul>' : detailEmpty("histórico e logs");
-    }
-  } catch {
-    content.innerHTML = detailError();
-    content.querySelector<HTMLButtonElement>("[data-action='retry-detail']")?.addEventListener("click", () => void loadDetailSection());
-  }
-}
-
-function initEventDetailDrawer(): void {
-  const drawer = byId<HTMLElement>("event-detail-drawer");
-  byId<HTMLButtonElement>("event-detail-close").addEventListener("click", closeEventDetail);
-  drawer.addEventListener("click", (event) => { if (event.target === drawer) closeEventDetail(); });
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !drawer.hidden) closeEventDetail(); });
-  document.querySelectorAll<HTMLButtonElement>("[data-detail-tab]").forEach((button) => button.addEventListener("click", () => {
-    detailActiveTab = button.dataset.detailTab || "resumo";
-    updateDetailTabs();
-    void loadDetailSection();
-  }));
-  document.querySelector<HTMLButtonElement>("[data-detail-action='recalculate']")?.addEventListener("click", () => {
-    void runDetailMutation("Confiança recalculada com os componentes retornados pela API.", (eventId) => requestOperationalAction<FusionResult>("/fusion/eventos/" + eventId + "/recalcular", "POST"));
-  });
-  document.querySelector<HTMLButtonElement>("[data-detail-action='copy-coordinates']")?.addEventListener("click", () => {
-    const event = loadedEvents.find((item) => item.id === detailEventId);
-    if (!event) return;
-    const coordinates = event.latitude.toFixed(6) + ", " + event.longitude.toFixed(6);
-    setDetailActionPending(true);
-    setDetailOperationFeedback("Copiando coordenadas…", "progress");
-    void (async () => {
-      try {
-        if (!navigator.clipboard?.writeText) throw new Error("Clipboard API indisponível");
-        await navigator.clipboard.writeText(coordinates);
-        setDetailOperationFeedback("Coordenadas copiadas para a área de transferência.", "success");
-      } catch {
-        setDetailOperationFeedback("Não foi possível acessar a área de transferência.", "error");
-      } finally {
-        setDetailActionPending(false);
-      }
-    })();
-  });
 }
 
 function renderSelectedEvent(event: UrbanEvent | null): void {
@@ -1566,7 +945,6 @@ function renderSelectedEvent(event: UrbanEvent | null): void {
   const confidenceWrap = byId("confidence-circle-wrap");
   const confidenceValue = byId("confidence-circle-value");
   const confidenceRing = byId("confidence-fill-ring") as unknown as SVGCircleElement;
-  const breakdowns = document.querySelectorAll<HTMLElement>("#fusion-breakdown, #fusion-breakdown-panel");
 
   deselectCurrentMarker();
 
@@ -1577,9 +955,7 @@ function renderSelectedEvent(event: UrbanEvent | null): void {
     statusPill.className = "status-pill";
     meta.hidden = true;
     confidenceWrap.hidden = true;
-    setFusionSummary(null);
-    breakdowns.forEach((b) => { b.innerHTML = ""; });
-    { const explain = document.getElementById("fusion-explain"); if (explain) explain.hidden = true; }
+    hideFusionExplain();
     return;
   }
 
@@ -1611,78 +987,16 @@ function renderSelectedEvent(event: UrbanEvent | null): void {
     confidenceWrap.hidden = true;
   }
 
-  setFusionLoadingState();
-  breakdowns.forEach((b) => { b.innerHTML = ""; });
   loadFusionBreakdown(event.id);
 
   highlightMarker(event.id);
 }
 
-function renderSeverityFilters(): void {
-  const container = byId("legenda-criticidade");
-  const allActive = activeSeverities.size === Object.keys(SEVERITIES).length;
-
-  const byStatus = loadedEvents.filter(matchesStatusFilter);
-  const countFor = (key: SeverityKey): number =>
-    byStatus.filter((e) => normalizeSeverity(e.severidade) === key).length;
-
-  const items = [
-    '<button class="sev-btn sev-all' + (allActive ? " active" : "") + '" data-criticidade="__all__" role="tab" aria-selected="' + allActive + '">' +
-      '<span class="sev-dot" style="background:var(--text-secondary)"></span>' +
-      '<span class="sev-label">Todos</span>' +
-      '<span class="sev-count">' + byStatus.length + '</span>' +
-    '</button>',
-    ...Object.entries(SEVERITIES).map(([key, style]) => {
-      const active = activeSeverities.has(key as SeverityKey);
-      const count = countFor(key as SeverityKey);
-      return '<button class="sev-btn ' + (active ? " active" : "") +
-        '" style="--sev-color:' + style.color + ';--sev-dim:' + style.color + '16" data-criticidade="' + key + '" role="tab" aria-selected="' + active + '">' +
-        '<span class="sev-dot" style="background:' + style.color + '"></span>' +
-        '<span class="sev-label">' + style.label + '</span>' +
-        (count > 0 ? '<span class="sev-count">' + count + '</span>' : '') +
-        '</button>';
-    }),
-  ];
-  container.innerHTML = '<div role="tablist" aria-label="Filtrar por severidade">' + items.join("") + '</div>';
-
-  container.querySelectorAll<HTMLButtonElement>("button[data-criticidade]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const raw = btn.dataset.criticidade as string;
-      if (raw === "__all__") {
-        activeSeverities.clear();
-        Object.keys(SEVERITIES).forEach((k) => activeSeverities.add(k as SeverityKey));
-      } else {
-        const key = raw as SeverityKey;
-        if (activeSeverities.has(key)) {
-          activeSeverities.delete(key);
-        } else {
-          activeSeverities.add(key);
-        }
-      }
-      renderSeverityFilters();
-      applyMarkers();
-      renderEventList(loadedEvents);
-    });
-  });
-}
-
-function seedActivityFromEvents(events: UrbanEvent[]): void {
-  const unseen = events.filter((event) => !sessionActivity.some((entry) => entry.eventId === event.id)).slice(0, 6);
-  sessionActivity.push(...unseen.map((event) => ({
-    kind: "evento_criado" as const,
-    message: event.titulo,
-    timestamp: event.detectado_em ? parseApiDate(event.detectado_em).getTime() : Date.now(),
-    eventId: event.id,
-    severity: event.severidade,
-  })));
-}
-
 function updateMetrics(events: UrbanEvent[]): void {
-  const noMapa = events.filter((e) => e.status !== "resolvido" && matchesStatusFilter(e));
+  const noMapa = events.filter(matchesStatusFilter);
   animateKpi(byId("kpi-ativos"), String(noMapa.length));
   animateKpi(byId("kpi-status-ativos"), String(events.filter((e) => e.status === "ativo").length));
   animateKpi(byId("kpi-status-analise"), String(events.filter((e) => e.status === "em_analise").length));
-  renderSeverityFilters();
 }
 
 function animateKpi(element: HTMLElement, newValue: string): void {
@@ -1700,13 +1014,6 @@ function animateKpi(element: HTMLElement, newValue: string): void {
   });
 }
 
-function updateCount(visible: number, total: number): void {
-  const label = visible === total ? String(total) : String(visible) + "/" + String(total);
-  byId("contagem-eventos").textContent = label;
-  const strip = byId("contagem-strip");
-  if (strip) strip.textContent = String(visible);
-}
-
 function applyMarkers(shouldFitBounds = false): void {
   clearMarkers();
   const visible = loadedEvents.filter(isEventVisible);
@@ -1715,126 +1022,11 @@ function applyMarkers(shouldFitBounds = false): void {
   else visible.forEach(createMarker);
   if (shouldFitBounds) fitMapBounds(visible);
   if (selectedEventId != null && visible.some((event) => event.id === selectedEventId)) highlightMarker(selectedEventId);
-  updateCount(visible.length, loadedEvents.length);
 }
 
 function scheduleMarkerRefresh(): void {
   if (markerRefreshTimer) clearTimeout(markerRefreshTimer);
   markerRefreshTimer = setTimeout(() => applyMarkers(false), 80);
-}
-
-function renderEventList(events: UrbanEvent[]): void {
-  const list = byId("lista-eventos");
-  const visible = events.filter(isEventVisible);
-  list.innerHTML = "";
-
-  if (!visible.length) {
-    list.innerHTML = '<li class="empty-state">Nenhum evento encontrado.</li>';
-    return;
-  }
-
-  const sorted = [...visible]
-    .sort((a, b) => severityStyle(b.severidade).zIndex - severityStyle(a.severidade).zIndex)
-    .slice(0, MAX_RENDERED_EVENT_CARDS);
-  const fragment = document.createDocumentFragment();
-  sorted.forEach((event, index) => {
-      const style = severityStyle(event.severidade);
-      const percent = event.confianca != null && !Number.isNaN(Number(event.confianca))
-        ? Math.round(Number(event.confianca) * 100)
-        : null;
-      const confidence = percent == null ? "--" : percent + "%";
-      const time = formatTime(event.detectado_em);
-      const location = [event.regiao?.nome, event.localizacao?.bairro].filter(Boolean).join(" · ");
-      const statusText = formatStatus(event.status);
-      const critical = normalizeSeverity(event.severidade) === "critica";
-      const item = document.createElement("li");
-      item.className = "event-card" + (event.id === selectedEventId ? " active" : "");
-      item.dataset.id = String(event.id);
-      item.style.setProperty("--card-color", style.color);
-      item.style.animationDelay = (index * 30) + "ms";
-      item.classList.add("animate-in");
-      item.setAttribute("tabindex", "0");
-      item.setAttribute("role", "button");
-
-      let meta = '<div class="event-meta">' +
-        (time ? '<span class="meta-time">' + time + '</span>' : '') +
-        '<span class="status-pill">' + escapeHtml(statusText) + '</span>' +
-        '</div>';
-
-      let confidenceMarkup = '';
-      if (percent != null) {
-        confidenceMarkup = '<div class="confidence-block">' +
-          '<div class="confidence-head"><span class="confidence-label">CONFIABILIDADE</span>' +
-            '<span class="confidence-num">' + confidence + '</span></div>' +
-          '<div class="confidence-track"><div class="confidence-fill" style="width:' + percent + '%"></div></div>' +
-          '</div>';
-      }
-
-      let footerMarkup = '';
-      if (event.fonte) {
-        footerMarkup =
-          '<div class="event-divider"></div>' +
-          '<div class="intel-footer">' +
-            '<span class="intel-chip" title="Fonte da evidência">' +
-              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v14c0 1.66 3.13 3 7 3s7-1.34 7-3V5M5 12c0 1.66 3.13 3 7 3s7-1.34 7-3"/></svg>' +
-              '<span class="intel-label">Fonte</span>' +
-              '<span class="intel-value" title="' + escapeHtml(event.fonte.nome || event.fonte.tipo) + '">' + escapeHtml(event.fonte.nome || event.fonte.tipo) + '</span>' +
-            '</span>' +
-            (event.fonte.tipo ? '<span class="intel-chip intel-muted"><span class="intel-value" title="' + escapeHtml(formatStatus(event.fonte.tipo)) + '">' + escapeHtml(formatStatus(event.fonte.tipo)) + '</span></span>' : '') +
-          '</div>';
-      }
-
-      item.innerHTML =
-        '<div class="event-card-top">' +
-          '<span class="severity-badge' + (critical ? ' severity-critical' : '') + '" style="--sev-bg:' + style.color + '">' +
-            '<i class="sev-dot-mini" style="background:' + style.color + '"></i>' + escapeHtml(style.label) +
-          '</span>' +
-          (confidence ? '<span class="confidence-badge">' + confidence + '</span>' : '') +
-        '</div>' +
-        '<h3 class="event-title">' + escapeHtml(event.titulo) + '</h3>' +
-        (location ? '<div class="event-location"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-6-5.2-6-10a6 6 0 1112 0c0 4.8-6 10-6 10z"/><circle cx="12" cy="11" r="2"/></svg><span>' + escapeHtml(location) + '</span></div>' : '') +
-        (event.descricao ? '<p class="event-description">' + escapeHtml(event.descricao) + '</p>' : '') +
-        meta +
-        confidenceMarkup +
-        footerMarkup;
-
-      item.addEventListener("click", () => selectEvent(event.id));
-      item.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectEvent(event.id); }
-      });
-      fragment.appendChild(item);
-    });
-  list.appendChild(fragment);
-  if (visible.length > sorted.length) {
-    const summary = document.createElement("li");
-    summary.className = "list-limit-state";
-    summary.textContent = "Mostrando os primeiros " + sorted.length + " de " + visible.length + " eventos. Use busca ou filtros para refinar.";
-    list.appendChild(summary);
-  }
-}
-
-function highlightListItem(id: number): void {
-  document.querySelectorAll<HTMLElement>(".event-card").forEach((element) => {
-    element.classList.toggle("active", Number(element.dataset.id) === id);
-  });
-}
-
-function showLoading(listId: string, message?: string): void {
-  const msg = message || "Carregando...";
-  byId(listId).innerHTML = '<li class="loading-state">' + escapeHtml(msg) + '</li>';
-}
-
-function showError(message: string): void {
-  byId("lista-eventos").innerHTML = '<li class="error-state"><strong>Dados Indisponíveis</strong><span>' + escapeHtml(message) + '</span></li>';
-}
-
-function setFusionLoadingState(): void {
-  document.querySelectorAll<HTMLElement>(".data-fusion-level").forEach((element) => { element.textContent = "calculando..."; });
-  document.querySelectorAll<HTMLElement>(".data-fusion-confidence").forEach((element) => { element.textContent = "--"; });
-  document.querySelectorAll<HTMLElement>(".data-fusion-calculated-at").forEach((element) => { element.textContent = "Calculando pela API..."; });
-  document.querySelectorAll<HTMLButtonElement>("[data-action='recalculate-fusion']").forEach((button) => { button.disabled = true; });
-  const explain = document.getElementById("fusion-explain");
-  if (explain) explain.hidden = true;
 }
 
 // Pesos-base das dimensões da fusão — espelham data_fusion/fusion.py (PESOS).
@@ -1928,52 +1120,18 @@ function renderFusionExplain(result: FusionResult, eventoTipo?: string): void {
   body.innerHTML = conta + decisao + decisivo;
 }
 
-function setFusionSummary(result: FusionResult | null): void {
-  const confidence = result ? formatFusionPercent(result.confiabilidade) : "--";
-  const level = result ? formatFusionLevel(result.nivel) : "--";
-  const calculatedAt = result?.calculado_em ? "Calculado em " + formatDate(result.calculado_em) : "Cálculo indisponível";
-  document.querySelectorAll<HTMLElement>(".data-fusion-confidence").forEach((element) => { element.textContent = confidence; });
-  document.querySelectorAll<HTMLElement>(".data-fusion-level").forEach((element) => { element.textContent = result ? level + " · " + confidence : level; });
-  document.querySelectorAll<HTMLElement>(".data-fusion-calculated-at").forEach((element) => { element.textContent = calculatedAt; });
-  document.querySelectorAll<HTMLButtonElement>("[data-action='recalculate-fusion']").forEach((button) => { button.disabled = !result || selectedEventId == null; });
-}
-
-function renderFusionResult(result: FusionResult, eventoTipo?: string): void {
-  const containers = document.querySelectorAll<HTMLElement>("#fusion-breakdown, #fusion-breakdown-panel");
-  setFusionSummary(result);
-  const html = result.componentes.map((component) => {
-    const pct = Math.round(component.pontuacao * 100);
-    const equation = formatFusionEquation(component, eventoTipo);
-    const detail = component.detalhe || "Não informada pela API";
-    return '<article class="fusion-item">' +
-      '<div class="fusion-row"><span class="fusion-component-icon" data-component="' + escapeHtml(component.nome) + '"></span>' +
-        '<span class="fusion-name">' + escapeHtml(fusionComponentLabel(component.nome, eventoTipo)) + '</span>' +
-        '<span class="fusion-score">' + formatFusionPercent(component.pontuacao, 0) + '</span>' +
-        '<span class="fusion-weight">Peso ' + formatFusionPercent(component.peso, 0) + '</span>' +
-        '<span class="fusion-value">' + formatFusionPercent(component.contribuicao) + '</span></div>' +
-      '<p class="fusion-equation" title="' + escapeHtml(equation) + '">' + escapeHtml(equation) + '</p>' +
-      '<div class="fusion-track"><div class="fusion-fill" style="width:' + pct + '%"></div></div>' +
-      '<p class="fusion-detail" title="' + escapeHtml(detail) + '"><strong>Justificativa:</strong> ' + escapeHtml(detail) + '</p>' +
-      '</article>';
-  }).join("");
-  containers.forEach((container) => { container.innerHTML = html || '<p class="fusion-empty">A API não retornou componentes para este evento.</p>'; });
-  document.querySelectorAll<HTMLElement>(".fusion-final-track i").forEach((bar) => {
-    bar.style.width = Math.max(0, Math.min(100, Math.round(result.confiabilidade * 100))) + "%";
-  });
-  renderFusionExplain(result, eventoTipo);
+function hideFusionExplain(): void {
+  const explain = document.getElementById("fusion-explain");
+  if (explain) explain.hidden = true;
 }
 
 async function loadFusionBreakdown(eventId: number): Promise<void> {
-  const containers = document.querySelectorAll<HTMLElement>("#fusion-breakdown, #fusion-breakdown-panel");
-  setFusionLoadingState();
+  hideFusionExplain();
   try {
     const eventoTipo = loadedEvents.find((e) => e.id === eventId)?.tipo;
-    renderFusionResult(await fetchOperationalData<FusionResult>("/fusion/eventos/" + eventId + "/confiabilidade"), eventoTipo);
+    renderFusionExplain(await fetchOperationalData<FusionResult>("/fusion/eventos/" + eventId + "/confiabilidade"), eventoTipo);
   } catch {
-    setFusionSummary(null);
-    containers.forEach((container) => { container.innerHTML = '<p class="fusion-empty">Não foi possível carregar o cálculo da API.</p>'; });
-    const explain = document.getElementById("fusion-explain");
-    if (explain) explain.hidden = true;
+    hideFusionExplain();
   }
 }
 
@@ -1982,33 +1140,9 @@ function formatFusionLevel(level: string): string {
   return map[level] || level;
 }
 
-async function recalculateFusion(eventId: number): Promise<void> {
-  setFusionLoadingState();
-  try {
-    const response = await apiFetch("/fusion/eventos/" + eventId + "/recalcular", { method: "POST" });
-    if (!response.ok) throw new Error("API retornou " + response.status);
-    const eventoTipo = loadedEvents.find((e) => e.id === eventId)?.tipo;
-    renderFusionResult(await response.json() as FusionResult, eventoTipo);
-  } catch {
-    setFusionSummary(null);
-    document.querySelectorAll<HTMLElement>("#fusion-breakdown, #fusion-breakdown-panel").forEach((container) => { container.innerHTML = '<p class="fusion-empty">Não foi possível recalcular pela API.</p>'; });
-    const explain = document.getElementById("fusion-explain");
-    if (explain) explain.hidden = true;
-  }
-}
-
-function initFusionControls(): void {
-  document.querySelectorAll<HTMLButtonElement>("[data-action='recalculate-fusion']").forEach((button) => {
-    button.addEventListener("click", () => { if (selectedEventId != null) void recalculateFusion(selectedEventId); });
-    button.disabled = true;
-  });
-}
-
 function updateLastUpdate(): void {
   const element = byId("ultima-atualizacao");
-  const now = formatClock(new Date());
-  lastUpdateLabel = now;
-  element.textContent = "Sinc. " + now;
+  element.textContent = "Sinc. " + formatClock(new Date());
 }
 
 function toggleRightPanel(): void {
@@ -2048,74 +1182,6 @@ function updateClock(): void {
   }
 }
 
-function logSessionActivity(kind: SessionActivity["kind"], message: string, eventId?: number, severity?: string): void {
-  const duplicate = sessionActivity.find((entry) => entry.kind === kind && entry.message === message && Date.now() - entry.timestamp < 60000);
-  if (duplicate) {
-    duplicate.timestamp = Date.now();
-    sessionActivity.sort((a, b) => b.timestamp - a.timestamp);
-    renderRightPanelActivity();
-    return;
-  }
-  sessionActivity.unshift({ kind, message, timestamp: Date.now(), eventId, severity });
-  if (sessionActivity.length > MAX_SESSION_ACTIVITY) sessionActivity.length = MAX_SESSION_ACTIVITY;
-  renderRightPanelActivity();
-}
-
-/* ============================================================
-   RIGHT PANEL — Alerts
-   ============================================================ */
-function bindRightPanelEventCards(container: HTMLElement): void {
-  container.querySelectorAll<HTMLElement>(".rp-alert-card[data-event-id]").forEach((card) => {
-    card.addEventListener("click", () => {
-      const id = Number(card.dataset.eventId);
-      if (!id) return;
-      if (loadedEvents.some((event) => event.id === id)) {
-        selectEvent(id);
-        return;
-      }
-      void loadEvents().then(() => {
-        if (loadedEvents.some((event) => event.id === id)) selectEvent(id);
-      });
-    });
-  });
-}
-
-async function loadRightPanelAlerts(): Promise<void> {
-  const container = byId("right-panel-alerts");
-  if (!container) return;
-  container.innerHTML = '<div class="rp-loading"><div class="skeleton skeleton-block"></div><div class="skeleton skeleton-block"></div></div>';
-  try {
-      const observations = loadedEvents.filter((event) => event.tipo === "observacao_visual" && event.status === "em_analise");
-      if (!observations.length) {
-        container.innerHTML = '<div class="right-panel-empty"><span>Nenhum alerta confirmado</span><p class="rp-empty-hint">Detecções YOLO aparecem como observações até validação operacional.</p></div>';
-        return;
-      }
-      container.innerHTML = observations.slice(0, 3).map((event) => {
-        const sevStyle = severityStyle(event.severidade);
-        const location = [event.localizacao?.endereco || event.localizacao?.bairro, event.regiao?.nome].filter(Boolean).join(" · ") || "Localização não informada";
-        return '<button type="button" class="rp-alert-card rp-observation-card" data-event-id="' + event.id + '" style="--alert-color:#f59e0b">' +
-          '<span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2"/></svg></span>' +
-          '<span class="rp-alert-body"><span class="rp-alert-kicker">OBSERVAÇÃO YOLO · NÃO É INCIDENTE CONFIRMADO</span>' +
-          '<span class="rp-alert-head"><span class="rp-alert-title">' + escapeHtml(event.titulo) + '</span><span class="rp-alert-sev" style="background:' + sevStyle.color + '">' + escapeHtml(sevStyle.label) + '</span></span>' +
-          '<span class="rp-alert-location">' + escapeHtml(location) + '</span>' +
-          '<span class="rp-alert-meta"><span class="rp-alert-category">Observação visual</span><span class="rp-alert-status rp-status-analysis">Em análise</span></span></span></button>';
-      }).join("") +
-      (connectionMode === "ws" || connectionMode === "sse" ?
-        '<div class="rp-alert-card rp-system-card" style="--alert-color:#20c8e5"><span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12.5a10 10 0 0114 0M8 15.5a6 6 0 018 0M11 18.5a2 2 0 012 0"/></svg></span><span class="rp-alert-body"><span class="rp-alert-kicker rp-system-kicker">SISTEMA EM TEMPO REAL</span><span class="rp-alert-head"><span class="rp-alert-title">Canal operacional conectado</span></span><span class="rp-alert-location">' + escapeHtml(connectionMode === "ws" ? "WebSocket autenticado" : "SSE conectado") + '</span><span class="rp-alert-meta"><span class="rp-alert-category">Telemetria</span><span class="rp-alert-status">Online</span></span></span></div>' : '') +
-      (cvDetectorAvailable ?
-        '<div class="rp-alert-card rp-system-card" style="--alert-color:#25d77d"><span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h16v10H4zM8 4v4m8-4v4M8 13h.01M12 13h.01M16 13h.01"/></svg></span><span class="rp-alert-body"><span class="rp-alert-kicker rp-system-kicker">VISÃO COMPUTACIONAL</span><span class="rp-alert-head"><span class="rp-alert-title">YOLO pronto para inferência</span></span><span class="rp-alert-location">Modelo validado pelo backend</span><span class="rp-alert-meta"><span class="rp-alert-category">Motor de IA</span><span class="rp-alert-status">Disponível</span></span></span></div>' : '') +
-      '<div class="rp-alert-card rp-system-card" style="--alert-color:#2eaa5a"><span class="rp-alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/><path d="M16 16l2 2 3-4"/></svg></span><span class="rp-alert-body"><span class="rp-alert-kicker rp-system-kicker">FONTE OPERACIONAL</span><span class="rp-alert-head"><span class="rp-alert-title">API de eventos operacional</span></span><span class="rp-alert-location">Dados autenticados recebidos</span><span class="rp-alert-meta"><span class="rp-alert-category">Backend MotSP</span><span class="rp-alert-status">Online</span></span></span></div>';
-      bindRightPanelEventCards(container);
-  } catch {
-    container.innerHTML = '<div class="right-panel-empty rp-error">' +
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>' +
-      '<span>Erro ao carregar alertas</span>' +
-      '<button class="rp-retry" data-action="retry-alerts">Tentar novamente</button>' +
-      '</div>';
-    container.querySelector<HTMLElement>("[data-action='retry-alerts']")?.addEventListener("click", () => loadRightPanelAlerts());
-  }
-}
-
 /* ============================================================
    RIGHT PANEL — Evidence
    ============================================================ */
@@ -2124,8 +1190,7 @@ async function loadEventEvidence(eventId: number): Promise<void> {
   if (!container) return;
   container.innerHTML = '<div class="rp-loading"><div class="skeleton skeleton-block"></div><div class="skeleton skeleton-circle"></div></div>';
   try {
-    const all = await fetchOperationalData<EvidenciaVisual[]>("/evidencias?limite=200");
-    const eventEvidences = all.filter((e) => e.evento_id === eventId);
+    const eventEvidences = await fetchOperationalData<EvidenciaVisual[]>("/evidencias?evento_id=" + eventId);
     if (!eventEvidences.length) {
       byId("evidence-live-confidence").textContent = "--";
       container.innerHTML = '<div class="right-panel-empty">' +
@@ -2156,7 +1221,6 @@ async function loadEventEvidence(eventId: number): Promise<void> {
       const cameraLocal = typeof ev.metadados?.camera_local === "string" ? ev.metadados.camera_local : "";
       const cameraLabel = [cameraId ? "Câmera CET-SP " + cameraId : "", cameraLocal].filter(Boolean).join(" · ");
       const verified = ev.metadados?.validado_no_servidor === true;
-      if (verified) logSessionActivity("sincronizacao", "Evidência da câmera CET-SP validada", eventId);
       return '<div class="rp-evidence-card">' +
         (cameraLabel || verified ? '<div class="rp-camera-head"><span>' + escapeHtml(cameraLabel || "Evidência visual") + '</span>' + (verified ? '<strong>VERIFICADO</strong>' : '') + '</div>' : '') +
         (hasImage ? '<button type="button" class="rp-evidence-img rp-evidence-expand" data-evidence-image="' + escapeHtml(imageSrc) + '" data-evidence-alt="Evidência ' + escapeHtml(ev.tipo) + '" aria-label="Ampliar evidência visual"><img src="' + escapeHtml(imageSrc) + '" alt="Evidência visual" loading="lazy" onerror="this.parentElement.innerHTML=\'<span class=rp-img-fallback>Imagem indisponível</span>\'"></button>' : '<div class="rp-evidence-img"><span class="rp-img-fallback">Sem imagem disponível</span></div>') +
@@ -2220,182 +1284,42 @@ function clearEventEvidence(): void {
     '</div>';
 }
 
-/* ============================================================
-   RIGHT PANEL — Session Activity
-   ============================================================ */
-function renderRightPanelActivity(): void {
-  const container = byId("right-panel-activity");
-  if (!container) return;
-  if (!sessionActivity.length) {
-    container.innerHTML = '<div class="right-panel-empty">' +
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' +
-      '<span>Sem atividade registrada</span></div>';
-    return;
-  }
-  container.innerHTML = sessionActivity.slice(0, 15).map((entry) => {
-    const time = formatTime(new Date(entry.timestamp).toISOString());
-    const icons: Record<string, string> = {
-      evento_criado: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 5v14M5 12h14"/></svg>',
-      evento_atualizado: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/></svg>',
-      sincronizacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/></svg>',
-    };
-    const icon = icons[entry.kind] || icons.sincronizacao;
-    return '<div class="rp-activity-item">' +
-      '<span class="rp-activity-icon">' + icon + '</span>' +
-      '<span class="rp-activity-msg" title="' + escapeHtml(entry.message) + '">' + escapeHtml(entry.message) + '</span>' +
-      '<span class="rp-activity-time">' + time + '</span>' +
-      '</div>';
-  }).join("");
-}
-
-function initRail(): void {
-  // A barra de ícones foi esvaziada; a navegação será reconstruída.
-}
-
-function switchView(key: ViewKey): void {
-  activeView = key;
-  document.querySelectorAll<HTMLElement>(".view").forEach((view) => {
-    view.hidden = view.id !== "view-" + key;
-    view.classList.toggle("view-active", view.id === "view-" + key);
-  });
-  if (key === "regioes") void loadRegions();
-  if (key === "fontes") void loadSources();
-  if (key === "fusao") {
-    const active = loadedEvents.find((e) => e.id === selectedEventId) || loadedEvents[0];
-    if (active) void loadFusionBreakdown(active.id);
-  }
-}
-
-async function loadRegions(): Promise<void> {
-  const list = byId("lista-regioes");
-  try {
-    trainingRegions = await fetchJson<UrbanRegion[]>("/regioes?ativo=true&limite=200");
-    byId("contagem-regioes").textContent = String(trainingRegions.length);
-    if (!trainingRegions.length) {
-      list.innerHTML = '<li class="empty-state">Nenhuma região monitorada.</li>';
-      return;
-    }
-    list.innerHTML = trainingRegions.map((region) =>
-      '<li class="info-card"><div class="info-card-head"><h3>' + escapeHtml(region.nome) + '</h3>' +
-      (region.codigo ? '<span class="code-pill">' + escapeHtml(region.codigo) + '</span>' : '') + '</div>' +
-      (region.descricao ? '<p class="event-description">' + escapeHtml(region.descricao) + '</p>' : '') +
-      '</li>'
-    ).join("");
-  } catch {
-    list.innerHTML = '<li class="error-state">Não foi possível carregar as regiões.</li>';
-  }
-}
-
-async function loadSources(): Promise<void> {
-  const list = byId("lista-fontes");
-  try {
-    dataSources = await fetchJson<DataSource[]>("/fontes?ativo=true&limite=200");
-    byId("contagem-fontes").textContent = String(dataSources.length);
-    if (!dataSources.length) {
-      list.innerHTML = '<li class="empty-state">Nenhuma fonte cadastrada.</li>';
-      return;
-    }
-    list.innerHTML = dataSources.map((source) =>
-      '<li class="info-card"><div class="info-card-head"><h3>' + escapeHtml(source.nome) + '</h3>' +
-      '<span class="source-type">' + escapeHtml(source.tipo) + '</span></div>' +
-      (source.descricao ? '<p class="event-description">' + escapeHtml(source.descricao) + '</p>' : '') +
-      (source.endpoint ? '<p class="event-meta"><span>' + escapeHtml(source.endpoint) + '</span></p>' : '') +
-      '</li>'
-    ).join("");
-  } catch {
-    list.innerHTML = '<li class="error-state">Não foi possível carregar as fontes.</li>';
-  }
-}
-
 async function loadEvents(): Promise<void> {
   try {
     setApiStatus(true, "Sincronizando");
-    showLoading("lista-eventos", "Carregando eventos...");
     loadedEvents = await fetchEvents();
-    seedActivityFromEvents(loadedEvents);
     updateMetrics(loadedEvents);
     applyMarkers(!selectedEventId);
-    renderEventList(loadedEvents);
     const ongoingId = selectedEventId && !loadedEvents.some((e) => e.id === selectedEventId) ? null : selectedEventId;
     const target = loadedEvents.find((e) => e.id === ongoingId) || (ongoingId ? null : (loadedEvents.find(isEventVisible) || loadedEvents[0] || null));
     selectedEventId = target?.id || null;
     renderSelectedEvent(target || null);
-    if (target) highlightListItem(target.id);
     updateLastUpdate();
     setApiStatus(true, "Conectado");
-    refreshFeeds();
-    logSessionActivity("sincronizacao", "API operacional");
-    logSessionActivity("sincronizacao", "Sincronização concluída — " + loadedEvents.length + (loadedEvents.length === 1 ? " evento" : " eventos"));
-    if (!cvDetectorAvailable) void cvLoadStatus();
-    void loadRightPanelAlerts();
     if (selectedEventId) {
       loadEventEvidence(selectedEventId);
     } else {
       clearEventEvidence();
     }
-    renderRightPanelActivity();
   } catch (error) {
     console.error(error);
     setApiStatus(false, "API indisponível");
     loadedEvents = [];
     updateMetrics([]);
     applyMarkers(false);
-    renderEventList([]);
     renderSelectedEvent(null);
-    showError("Não foi possível carregar eventos da API. Verifique se o backend está rodando em " + window.CONFIG.API_BASE_URL);
   }
 }
 
-function refreshFeeds(): void {
-  void loadRegions();
-  void loadSources();
+function mostrarMapaIndisponivel(): void {
+  byId("mapa").innerHTML = '<div class="map-fallback">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s-6-5.2-6-10a6 6 0 1112 0c0 4.8-6 10-6 10z"/><circle cx="12" cy="11" r="2"/></svg>' +
+    '<span class="map-fallback-text">Mapa indisponível</span>' +
+    '<span class="map-fallback-sub">O painel continua disponível sem a camada cartográfica.</span>' +
+    '</div>';
 }
 
-function initMapa(): void {
-  if (appInitialized) return;
-  appInitialized = true;
-  // Ao iniciar o sistema o mapa mostra todos os status; o navegador pode
-  // restaurar a seleção anterior do <select>, então forçamos o padrão.
-  const filtroStatusInicial = byId<HTMLSelectElement>("filtro-status");
-  if (filtroStatusInicial) filtroStatusInicial.value = "";
-  const toggleLeftBtn = byId<HTMLButtonElement>("btn-toggle-left");
-  if (toggleLeftBtn) {
-    toggleLeftBtn.hidden = false;
-    toggleLeftBtn.addEventListener("click", toggleLeftPanel);
-  }
-  initEvidencePanelDock();
-  if (!window.L) {
-    const mapaDiv = byId("mapa");
-    mapaDiv.innerHTML = '<div class="map-fallback">' +
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s-6-5.2-6-10a6 6 0 1112 0c0 4.8-6 10-6 10z"/><circle cx="12" cy="11" r="2"/></svg>' +
-      '<span class="map-fallback-text">Mapa indisponível</span>' +
-      '<span class="map-fallback-sub">O painel continua disponível sem a camada cartográfica.</span>' +
-      '</div>';
-    renderSeverityFilters();
-    initRail();
-    initComputerVision();
-    initYoloTester();
-    initEvidenceViewer();
-    initFusionControls();
-    initEventDetailDrawer();
-    byId("btn-atualizar").addEventListener("click", loadEvents);
-    initStatusFilter();
-    const toggleRightBtn = byId("btn-toggle-right");
-    if (toggleRightBtn) { toggleRightBtn.hidden = false; toggleRightBtn.addEventListener("click", toggleRightPanel); }
-    const closeRightBtn = byId("btn-close-right");
-    if (closeRightBtn) { closeRightBtn.addEventListener("click", toggleRightPanel); }
-    const configBtn = byId("btn-config");
-    if (configBtn) { configBtn.addEventListener("click", () => switchView("config")); }
-    updateClock();
-    window.setInterval(updateClock, 1000);
-    void loadLiveWeather();
-    void loadLiveAirQuality();
-    window.setInterval(() => { void loadLiveWeather(); void loadLiveAirQuality(); }, 300000);
-    loadEvents();
-    connectWebSocket();
-    return;
-  }
-
+function criarMapa(): void {
   map = window.L.map("mapa", {
     zoomControl: false,
     attributionControl: true,
@@ -2440,30 +1364,32 @@ function initMapa(): void {
   byId<HTMLButtonElement>("map-recenter")?.addEventListener("click", () => {
     map?.setView([window.CONFIG.MAP_CENTER.lat, window.CONFIG.MAP_CENTER.lng], Math.max(window.CONFIG.MAP_ZOOM, 12));
   });
+}
 
-  renderSeverityFilters();
-  initRail();
-  initComputerVision();
+function initMapa(): void {
+  if (appInitialized) return;
+  appInitialized = true;
+  // Ao iniciar o sistema o mapa mostra todos os status; o navegador pode
+  // restaurar a seleção anterior do <select>, então forçamos o padrão.
+  const filtroStatusInicial = byId<HTMLSelectElement>("filtro-status");
+  if (filtroStatusInicial) filtroStatusInicial.value = "";
+  const toggleLeftBtn = byId<HTMLButtonElement>("btn-toggle-left");
+  if (toggleLeftBtn) {
+    toggleLeftBtn.hidden = false;
+    toggleLeftBtn.addEventListener("click", toggleLeftPanel);
+  }
+  initEvidencePanelDock();
+  if (window.L) criarMapa();
+  else mostrarMapaIndisponivel();
+
   initYoloTester();
   initEvidenceViewer();
-  initFusionControls();
-  initEventDetailDrawer();
   byId("btn-atualizar").addEventListener("click", loadEvents);
   initStatusFilter();
 
-  const toggleRightBtn = byId("btn-toggle-right");
-  if (toggleRightBtn) {
-    toggleRightBtn.hidden = false;
-    toggleRightBtn.addEventListener("click", toggleRightPanel);
-  }
   const closeRightBtn = byId("btn-close-right");
   if (closeRightBtn) {
     closeRightBtn.addEventListener("click", toggleRightPanel);
-  }
-
-  const configBtn = byId("btn-config");
-  if (configBtn) {
-    configBtn.addEventListener("click", () => switchView("config"));
   }
 
   updateClock();
@@ -2471,30 +1397,6 @@ function initMapa(): void {
   void loadLiveWeather();
   void loadLiveAirQuality();
   window.setInterval(() => { void loadLiveWeather(); void loadLiveAirQuality(); }, 300000);
-  const searchInput = byId<HTMLInputElement>("busca-eventos");
-  const clearButton = byId<HTMLButtonElement>("busca-limpar");
-  const applySearch = (): void => {
-    searchTerm = searchInput.value.trim().toLowerCase();
-    clearButton.hidden = !searchInput.value;
-    if (searchRenderTimer) clearTimeout(searchRenderTimer);
-    searchRenderTimer = setTimeout(() => {
-      applyMarkers(false);
-      renderEventList(loadedEvents);
-    }, 120);
-  };
-  searchInput.addEventListener("input", applySearch);
-  searchInput.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      searchInput.value = "";
-      applySearch();
-      searchInput.blur();
-    }
-  });
-  clearButton.addEventListener("click", () => {
-    searchInput.value = "";
-    applySearch();
-    searchInput.focus();
-  });
 
   loadEvents();
   connectWebSocket();
