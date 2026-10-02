@@ -5,14 +5,20 @@ ambientes sem GPU ou sem os pesos treinados. O peso COCO padrão reconhece
 objetos (por exemplo, carro e ônibus), não incidentes como congestionamento,
 alagamento ou incêndio. O peso padrão é ``yolo11m.pt`` (COCO); ``GX_YOLO_MODEL``
 permite trocar por outro peso urbano próprio.
+
+Toda a configuração vem de ``app.config.settings`` (``.env`` local ou variáveis
+de ambiente no Cloud Run) — antes era ``os.getenv`` direto, que não enxerga o
+``.env``.
 """
 
-import os
-import json
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from app.config import settings
+
+_RAIZ_PROJETO = Path(__file__).resolve().parents[1]
 
 
 CLASSES_URBANAS = {
@@ -47,7 +53,6 @@ _model_error: str | None = None
 # recupera parte da contagem noturna nas câmeras ruins e nunca dá confiança
 # sintética abaixo de ~0.5. Custa ~2x o `s`, irrelevante no poll de 5 s em
 # GPU. `GX_YOLO_MODEL` troca por outro peso.
-_DEFAULT_MODEL = Path(__file__).resolve().parent / "models" / "yolo11m.pt"
 
 # Modelo dedicado a alagamento — pesos próprios (não vêm do COCO), carregado
 # separado do modelo padrão para não perder a detecção de veículos usada pela
@@ -59,7 +64,6 @@ _DEFAULT_MODEL = Path(__file__).resolve().parent / "models" / "yolo11m.pt"
 
 _incident_model: Any | None = None
 _incident_model_error: str | None = None
-_DEFAULT_INCIDENT_MODEL = Path(__file__).resolve().parent / "models" / "gx-incident.pt"
 
 
 @dataclass
@@ -75,9 +79,16 @@ class Deteccao:
     classe_modelo: str | None = None
 
 
+def _caminho_do_projeto(caminho: str) -> str:
+    """Relativo vale a partir da raiz do projeto: o uvicorn sobe de backend/,
+    e "ml/models/x.pt" resolvido ali apontaria para um lugar que não existe."""
+    p = Path(caminho)
+    return str(p if p.is_absolute() else _RAIZ_PROJETO / p)
+
+
 def _model_path() -> str:
     """Resolve o peso padrão sem depender do diretório de execução da API."""
-    return os.getenv("GX_YOLO_MODEL", str(_DEFAULT_MODEL))
+    return _caminho_do_projeto(settings.gx_yolo_model)
 
 
 def _max_inferencias_simultaneas() -> int:
@@ -91,13 +102,9 @@ def _max_inferencias_simultaneas() -> int:
     OOM 19 s depois de carregar o modelo — levando o SQLite junto. O semáforo
     faz as threads esperarem a vez em vez de alocarem todas de uma vez; o
     ciclo completo das 10 câmeras fica mais longo, mas nenhuma decisão muda.
-    ``GX_YOLO_MAX_CONCORRENCIA`` ajusta (lido em os.environ, como os outros
-    knobs deste módulo — no .env local não chega, e não precisa: lá tem GPU).
+    ``GX_YOLO_MAX_CONCORRENCIA`` ajusta; nunca abaixo de 1 (zero travaria tudo).
     """
-    try:
-        return max(1, int(os.getenv("GX_YOLO_MAX_CONCORRENCIA", "2")))
-    except ValueError:
-        return 2
+    return max(1, settings.gx_yolo_max_concorrencia)
 
 
 _inferencia_semaforo = threading.BoundedSemaphore(_max_inferencias_simultaneas())
@@ -124,11 +131,8 @@ def _imgsz() -> int:
     """Resolução de inferência. 1280 (não o padrão 640 do Ultralytics) porque
     as câmeras da CET acumulam fila de carro pequeno ao fundo — em 640 o YOLO
     subconta ~35%. Custo em GPU é de dezenas de ms, irrelevante no poll de 5s.
-    ``GX_YOLO_IMGSZ`` ajusta (múltiplo de 32)."""
-    try:
-        return max(320, int(os.getenv("GX_YOLO_IMGSZ", "1280")))
-    except ValueError:
-        return 1280
+    ``GX_YOLO_IMGSZ`` ajusta (múltiplo de 32; nunca abaixo de 320)."""
+    return max(320, settings.gx_yolo_imgsz)
 
 
 def _tta() -> bool:
@@ -138,27 +142,7 @@ def _tta() -> bool:
     melhores veículos 0,725 -> 0,761 e ~1 veículo a mais por frame, sem trocar
     de peso. Custa ~2x a inferência — irrelevante em GPU; em CPU (Cloud Run)
     ``GX_YOLO_TTA=false`` desliga se o ciclo das câmeras ficar apertado."""
-    return os.getenv("GX_YOLO_TTA", "true").strip().lower() not in ("0", "false", "no", "off")
-
-
-def class_mapping() -> dict[str, str]:
-    """Mapeamento configurável de classes do peso para tipos urbanos GX.
-
-    ``GX_YOLO_CLASS_MAPPING`` recebe JSON, por exemplo
-    ``{"car":"veiculo","truck":"caminhao"}``. Destinos inválidos são
-    ignorados para não converter uma classe desconhecida em ocorrência urbana.
-    """
-    mapping = dict(_COCO_PARA_URBANO)
-    raw = os.getenv("GX_YOLO_CLASS_MAPPING")
-    if not raw:
-        return mapping
-    try:
-        custom = json.loads(raw)
-        if isinstance(custom, dict):
-            mapping.update({str(key).lower().strip(): str(value).lower().strip() for key, value in custom.items() if str(value).lower().strip() in _URBANAS_POR_NOME})
-    except json.JSONDecodeError:
-        pass
-    return mapping
+    return settings.gx_yolo_tta
 
 
 def _load_model() -> Any | None:
@@ -197,13 +181,13 @@ def status_detector() -> dict[str, Any]:
         "modo": "yolo" if model is not None else "indisponivel",
         "modelo": _model_path(),
         "erro": _model_error,
-        "mapeamento_padrao": class_mapping(),
+        "mapeamento_padrao": dict(_COCO_PARA_URBANO),
         "aviso": "Pesos COCO padrão geram apenas observações de objetos. Alagamento, fumaça, incêndio e outros incidentes exigem pesos urbanos treinados e validação operacional.",
     }
 
 
 def _incident_model_path() -> str:
-    return os.getenv("GX_YOLO_INCIDENT_MODEL", str(_DEFAULT_INCIDENT_MODEL))
+    return _caminho_do_projeto(settings.gx_yolo_incident_model)
 
 
 def _load_incident_model() -> Any | None:
@@ -277,7 +261,7 @@ def detectar_incidentes_imagem(caminho_imagem: str, confianca_minima: float = 0.
 
 def _normalizar_classe(nome_modelo: str) -> tuple[int, dict[str, str]] | None:
     nome = nome_modelo.lower().strip().replace(" ", "_")
-    nome = class_mapping().get(nome_modelo.lower().strip(), nome)
+    nome = _COCO_PARA_URBANO.get(nome_modelo.lower().strip(), nome)
     return _URBANAS_POR_NOME.get(nome)
 
 

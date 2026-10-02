@@ -284,6 +284,9 @@ Todas as variáveis são lidas por `backend/app/config.py` (pydantic-settings). 
 
 ### Modelos YOLO
 
+Todas passam por `config.py` (valem no `.env` e nas variáveis do Cloud Run). Caminho de
+peso relativo é resolvido a partir da **raiz do projeto**, não de `backend/`.
+
 | Variável | Padrão | O que faz |
 |---|---|---|
 | `GX_YOLO_MODEL` | `ml/models/yolo11m.pt` | Peso COCO para contagem de veículos. `m` e não `n`/`s`: o nano/small perdiam carro pequeno, distante e noturno. |
@@ -291,7 +294,7 @@ Todas as variáveis são lidas por `backend/app/config.py` (pydantic-settings). 
 | `YOLO_THRESHOLD` | `0.45` | Confiança mínima do modelo de objetos. |
 | `GX_YOLO_INCIDENT_MODEL` | `ml/models/gx-incident.pt` | Peso dedicado a alagamento, carregado **separado** do modelo padrão (trocar o global quebraria a contagem de veículos). |
 | `GX_YOLO_INCIDENT_CONF` | `0.6` | Confiança mínima só do modelo de alagamento. Mais alta de propósito: enquanto o peso não é retreinado com negativos, ele crava caixa em cena seca com score baixo. |
-| `GX_YOLO_CLASS_MAPPING` | — | JSON opcional, ex.: `{"car":"veiculo","truck":"caminhao"}`. Destinos inválidos são ignorados para não converter classe desconhecida em ocorrência urbana. |
+| `GX_YOLO_TTA` | `true` | Test-time augmentation na contagem de veículos (frame espelhado e em escalas menores): ~1 veículo a mais por frame nas câmeras CET, ao custo de ~2x a inferência. `false` desliga se o ciclo em CPU apertar. |
 | `GX_YOLO_MAX_CONCORRENCIA` | `2` | Quantas inferências rodam ao mesmo tempo no processo (semáforo em `ml/detector.py`). Com o catálogo ligado são 20 threads chamando o YOLO; em GPU tanto faz, em CPU com 4 GiB (Cloud Run) 20 inferências simultâneas a 1280 estouram a memória e o container é morto. As threads continuam existindo — só esperam a vez. O carregamento dos pesos também tem trava própria: sem ela cada thread carregava a sua cópia. Além do semáforo, cada modelo tem um lock de inferência (uma chamada por vez por modelo): o objeto YOLO não é seguro entre threads — duas `predict` simultâneas no mesmo modelo quebravam no fuse da primeira chamada (`'Conv' object has no attribute 'bn'`). Trânsito e alagamento seguem em paralelo por serem objetos distintos; na prática o teto útil deste knob é 2. |
 
 ### Monitoramento contínuo
@@ -572,7 +575,7 @@ carro no quadro; isso não é um congestionamento. Veículo isolado nunca vira e
 pipeline de contagem (§10) transforma N veículos juntos em um evento `transito`.
 
 O mapeamento COCO→urbano é `car→veiculo`, `motorcycle→motocicleta`, `bus→onibus`,
-`truck→caminhao`, extensível por `GX_YOLO_CLASS_MAPPING`. Classes
+`truck→caminhao` (fixo em `ml/detector.py`). Classes
 sem destino válido são **descartadas** — é assim que um peso antigo treinado também com
 `arvore_caida` continua funcionando sem gerar eventos dessa classe.
 
@@ -1432,11 +1435,6 @@ Proteções recomendadas:
 - **Evidências ocupam memória.** Os JPEGs anotados são gravados em
   `backend/app/data/evidencias/`, que no Cloud Run é um tmpfs contado dentro dos
   4 GiB de RAM da instância.
-- **`GX_YOLO_MODEL`, `GX_YOLO_IMGSZ` e `GX_YOLO_CLASS_MAPPING` são lidos com
-  `os.getenv`** direto em `ml/detector.py`, não via `config.py`. No Cloud Run
-  isso funciona (são variáveis de ambiente reais do processo), ao contrário do
-  ambiente local, onde só o `.env` é lido — ver a nota sobre `TOMTOM_API_KEY`
-  em [§5](#5-configuração-env).
 
 ### 21.6 Diferenças de execução entre local e container
 
