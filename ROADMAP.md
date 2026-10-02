@@ -87,16 +87,24 @@ Itens 0–2 publicados no Cloud Run em 02/10/2026 (revisão `motsp-00011-85j`, c
       inferência, que continuaria igual (2 modelos por frame); 10 downloads/min a mais e 20 threads
       dormindo são irrelevantes. Risco alto: mexe nas únicas peças que criam evento, os testes
       simulam câmera/YOLO/TomTom, e uma falha deixaria o painel vazio em silêncio. Não refazer.
-- [ ] **(c) Tempo real com 2 canais:** WebSocket + polling; remover SSE (`routers/tempo_real.py`,
-      chamadas `_broadcast` duplicadas, `fallbackToSSE` no front).
-- [ ] **(d) Config única:** mover `GX_YOLO_MODEL`, `GX_YOLO_IMGSZ`, `GX_YOLO_TTA`,
-      `GX_YOLO_MAX_CONCORRENCIA`, `GX_YOLO_INCIDENT_MODEL` de `os.getenv` (`ml/detector.py`) para
-      `Settings`; remover `GX_YOLO_CLASS_MAPPING`; unir `detectar_imagem_real` e `detectar_incidentes_imagem`.
-- [ ] **(e) MySQL × SQLite:** produção usa SQLite. Se MySQL não for exigência, manter `schema.sql`
-      só como documentação e remover migrações/pymysql.
-- [ ] **(f) Regiões:** `regiao_id` nunca é preenchido. Associar câmera→região ou remover tabela/rota/seed.
-- [ ] **(g) Quebrar `frontend/src/app.ts`** em módulos (realtime, map, detail-drawer, yolo-tester, fusion-panel).
-- [ ] **(h) README em duas camadas:** README curto + `docs/` com detalhes; §19 vira apêndice.
+- [~] **(c) Removido em 02/10/2026** — era tirar o SSE. Ele é o plano B para redes que bloqueiam
+      WebSocket; sem ele essas redes caem direto no polling de 30 s. ~150 linhas no total, e as
+      chamadas `_broadcast` + `ws_manager.broadcast_evento` são uma por canal, não duplicação.
+- [ ] **(d) Config única — só a parte de config:** mover `GX_YOLO_MODEL`, `GX_YOLO_IMGSZ`,
+      `GX_YOLO_TTA`, `GX_YOLO_MAX_CONCORRENCIA`, `GX_YOLO_INCIDENT_MODEL` de `os.getenv`
+      (`ml/detector.py`) para `Settings` — hoje o `backend/.env` não chega neles localmente (só
+      funciona por coincidência com o caminho padrão); remover `GX_YOLO_CLASS_MAPPING`.
+      **Não** unir `detectar_imagem_real` e `detectar_incidentes_imagem` (mesma área sensível do 3b).
+- [~] **(e) Removido em 02/10/2026** — MySQL × SQLite não é questão técnica: `schema.sql` e as
+      migrações sustentam o MySQL se o TCC citar. Só corrigir no README (3h) que a produção no
+      Cloud Run usa SQLite.
+- [~] **(f) Removido em 02/10/2026** — regiões: remover mexe em tabela/FKs/testes só por limpeza;
+      associar câmera→região seria funcionalidade nova. A tabela parada não atrapalha.
+- [~] **(g) Removido em 02/10/2026** — quebrar `app.ts` (1407 linhas, quase sem teste de UI) arrisca
+      quebrar a tela sem aviso por ganho só de organização. Reavaliar só se a banca for ler o front.
+- [ ] **(h) README em duas camadas:** README curto + `docs/` com detalhes; §19 vira apêndice. Corrigir
+      no caminho: "MySQL em produção" (é SQLite no Cloud Run) e a nota sobre `os.getenv` (§21.5).
+- [ ] **Relógio do topo cortado no celular (390px)** — ver observação no item 1.
 
 ## Ordem sugerida
-0 → 1 + itens 2 → 3a → 3c → resto (3b removido).
+0 → 1 + itens 2 → 3a → 3d → 3h → relógio. (3b, 3c, 3e, 3f e 3g removidos — ver motivos.)
