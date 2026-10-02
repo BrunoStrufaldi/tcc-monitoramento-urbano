@@ -18,7 +18,6 @@ node_modules/
 
 # Segredos e config local — as variáveis vêm do Cloud Run, não de arquivo
 backend/.env
-frontend/js/config.js
 
 # Dados de runtime da máquina local: o deploy sobe com banco vazio
 **/*.db

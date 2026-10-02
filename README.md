@@ -151,7 +151,7 @@ mostrar um evento como real vem sempre do cruzamento no Data Fusion.
 TCC-Atualizado/
 ├── README.md                     ← este arquivo (documentação única)
 ├── package.json                  build/test do frontend (tsc + node:test)
-├── start.ps1                     sobe backend (8000) e frontend (5500) em janelas separadas
+├── start.ps1                     sobe a API, que também serve o painel, em http://localhost:8000
 ├── Dockerfile                    imagem única API + painel + YOLO (CPU) para o Cloud Run — §21
 ├── deploy.ps1                    deploy manual no Cloud Run (build a partir da pasta local)
 ├── cloudbuild.yaml               deploy automático: gatilho a cada push na main do GitHub
@@ -207,8 +207,7 @@ TCC-Atualizado/
 └── frontend/
     ├── index.html                SPA com ARIA: painel de eventos, testador YOLO, overlays
     ├── css/style.css             design tokens, dark theme sólido
-    ├── js/config.js              API_BASE_URL, centro/zoom do mapa (fora do git)
-    ├── js/config.example.js      modelo do arquivo acima
+    ├── js/config.js              API_BASE_URL (= window.location.origin), centro/zoom do mapa
     ├── src/                      TypeScript fonte
     │   ├── app.ts                aplicação inteira (mapa, tempo real, YOLO, fusão)
     │   └── fusion-format.ts      formatação e limiar de promoção (espelha o backend)
@@ -235,8 +234,9 @@ TCC-Atualizado/
 .\start.ps1
 ```
 
-Sobe o backend em `http://localhost:8000` e o frontend em `http://localhost:5500`, cada um
-na sua janela do PowerShell, e abre o navegador.
+Sobe o uvicorn numa janela do PowerShell e abre o navegador em `http://localhost:8000`.
+Um processo só: o FastAPI serve a API e o painel (`frontend/`) na mesma origem, igual ao
+container.
 
 > `start.ps1` chama o uvicorn direto, **sem exportar variável de ambiente nenhuma**. Toda
 > configuração precisa estar em `backend/.env` — é por isso que `config.py` é a única
@@ -255,15 +255,8 @@ python -m venv venv
 venv\Scripts\activate           # Windows
 pip install -r requirements.txt
 copy .env.example .env          # e edite
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# 3) Servir o frontend
-cd ..
-npm run serve:frontend          # http://localhost:5500
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000   # painel em http://localhost:8000
 ```
-
-Copie também `frontend/js/config.example.js` para `frontend/js/config.js` e ajuste
-`API_BASE_URL` se o backend não estiver em `http://127.0.0.1:8000`.
 
 ### Inferência YOLO real
 
@@ -301,7 +294,7 @@ Todas as variáveis são lidas por `backend/app/config.py` (pydantic-settings). 
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./gx.db` | Conexão SQLAlchemy. Se contiver as credenciais de exemplo (`usuario:senha@` / `root:senha@`), um validador força SQLite — evita que um `.env` copiado sem editar deixe a API inutilizável. |
 | `API_HOST` / `API_PORT` | `0.0.0.0` / `8000` | Bind do uvicorn. |
-| `CORS_ORIGINS` | `localhost:5500,127.0.0.1:5500,localhost:8080` | Lista separada por vírgula. **Não é autenticação** — só restringe origens de navegador. |
+| `CORS_ORIGINS` | vazio | Lista separada por vírgula. Só importa se o painel for aberto de outra origem — servido pela API, é mesma origem. **Não é autenticação.** |
 
 ### Modelos YOLO
 
@@ -1461,19 +1454,14 @@ Proteções recomendadas:
 
 ### 21.6 Diferenças de execução entre local e container
 
-| | Local (`start.ps1`) | Container (Cloud Run) |
-|---|---|---|
-| Painel | `http.server` na porta 5500, origem separada | servido pelo próprio FastAPI, mesma origem |
-| `GET /` | JSON de status | `index.html` do painel |
-| Status da API | `GET /` | `GET /api/status` |
-| CORS | necessário (origens diferentes) | irrelevante (origem única) |
-| `API_BASE_URL` | fixo em `frontend/js/config.js` | `window.location.origin`, via `config.prod.js` |
-| Configuração | `backend/.env` | variáveis de ambiente do serviço |
+Nenhuma no painel: nos dois casos o FastAPI serve `frontend/` em `/` (flag
+`GX_SERVE_FRONTEND`, padrão `true`), `GET /api/status` responde o status da API e
+`frontend/js/config.js` usa `window.location.origin` como `API_BASE_URL` — mesma origem,
+sem CORS. O mount é registrado **depois** de todos os routers, senão engoliria
+`/eventos`, `/ws` e `/docs`. Com a flag desligada, `/` volta a ser o JSON de status.
 
-O chaveamento é a flag `GX_SERVE_FRONTEND` (padrão `false`), lida em
-`config.py`. Ligada, `app/main.py` monta `frontend/` como estático em `/` — o
-mount é registrado **depois** de todos os routers, senão engoliria `/eventos`,
-`/ws` e `/docs`.
+O que muda é só a configuração: local lê `backend/.env`; no Cloud Run vêm das variáveis
+de ambiente do serviço.
 
 ### 21.7 Deploy automático a cada push (Cloud Build)
 

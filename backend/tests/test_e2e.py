@@ -109,9 +109,14 @@ def test_fluxo_retencao_remove_evento_expirado(client: TestClient, db_session, c
 
 def test_health_e_raiz(client: TestClient):
     """Verifica endpoints de saúde do sistema."""
+    status_api = client.get("/api/status")
+    assert status_api.status_code == 200
+    assert status_api.json()["status"] == "online"
+
+    # "/" é o painel: a API serve o frontend na mesma origem.
     raiz = client.get("/")
     assert raiz.status_code == 200
-    assert raiz.json()["status"] == "online"
+    assert "text/html" in raiz.headers["content-type"]
 
     health = client.get("/health")
     assert health.status_code == 200

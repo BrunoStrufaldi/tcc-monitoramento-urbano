@@ -8,8 +8,8 @@ montados direto no banco pelas fábricas do ``conftest`` — o mesmo caminho que
 from fastapi.testclient import TestClient
 
 
-def test_raiz_retorna_status_online(client: TestClient):
-    response = client.get("/")
+def test_api_status_online(client: TestClient):
+    response = client.get("/api/status")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "online"

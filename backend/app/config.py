@@ -8,11 +8,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./gx.db"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    cors_origins: str = "http://localhost:5500,http://127.0.0.1:5500,http://localhost:8080"
-    # Em desenvolvimento o painel é servido à parte (python -m http.server 5500)
-    # e a API só fala JSON. Num deploy de container os dois moram na mesma
-    # origem: um link só, e CORS deixa de existir. Ligado pelo Dockerfile.
-    gx_serve_frontend: bool = False
+    # Só importa se o painel for aberto de outra origem; servido pela própria
+    # API (padrão) é mesma origem e CORS nem entra em jogo.
+    cors_origins: str = ""
+    # A API serve o painel em "/" — local e no container, mesmo processo e
+    # mesma origem. Desligado, "/" vira o JSON de status.
+    gx_serve_frontend: bool = True
     yolo_threshold: float = 0.45
     # Confiança mínima só para o modelo de incidentes (alagamento). Mais alta que
     # a de veículos de propósito: enquanto o peso de alagamento não é retreinado

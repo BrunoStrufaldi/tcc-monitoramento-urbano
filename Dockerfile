@@ -28,9 +28,7 @@ ENV PYTHONUNBUFFERED=1 \
     MPLCONFIGDIR=/tmp/matplotlib \
     # O container roda com 2 vCPU. Sem isso o torch abre uma thread por core do
     # host e as inferências das câmeras brigam entre si.
-    OMP_NUM_THREADS=2 \
-    # Faz o próprio FastAPI servir o painel (ver app/main.py).
-    GX_SERVE_FRONTEND=true
+    OMP_NUM_THREADS=2
 
 # libGL/libglib: dependências nativas do opencv, que vem junto com o ultralytics.
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -57,11 +55,9 @@ COPY backend ./backend
 COPY ml ./ml
 COPY data_fusion ./data_fusion
 COPY database ./database
+# O próprio FastAPI serve o painel (GX_SERVE_FRONTEND, ligado por padrão), e
+# js/config.js resolve a URL da API pelo window.location.
 COPY --from=frontend /build/frontend ./frontend
-
-# Painel e API na mesma origem: o config de produção resolve a URL da API pelo
-# window.location, então o mesmo build funciona em qualquer domínio.
-COPY frontend/js/config.prod.js ./frontend/js/config.js
 
 # O Cloud Run injeta $PORT (8080). O uvicorn sobe a partir de backend/, igual
 # ao start.ps1 local, para o sqlite e os caminhos relativos baterem.

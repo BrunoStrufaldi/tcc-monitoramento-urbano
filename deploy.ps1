@@ -106,7 +106,6 @@ if ($Monitoramento -and $DesligarMonitoramento) {
 # Variaveis que este script sempre garante (idempotentes: mesmo valor a cada
 # deploy). Tudo que NAO esta aqui e preservado como esta na nuvem.
 $pares = @(
-    "GX_SERVE_FRONTEND=true",
     "DATABASE_URL=sqlite:///./gx.db",
     # 15s (valor local, com GPU) viraria fila infinita em CPU: cada inferencia
     # do yolo11m a 1280 leva alguns segundos por camera.
