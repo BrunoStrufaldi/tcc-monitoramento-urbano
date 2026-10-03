@@ -22,7 +22,7 @@ peso relativo é resolvido a partir da **raiz do projeto**, não de `backend/`.
 
 | Variável | Padrão | O que faz |
 |---|---|---|
-| `GX_YOLO_MODEL` | `ml/models/yolo11m.pt` | Peso COCO para contagem de veículos. `m` e não `n`/`s`: o nano/small perdiam carro pequeno, distante e noturno. |
+| `GX_YOLO_MODEL` | `ml/models/gx-veiculos.pt` | Peso de contagem de veículos: o `yolo11m` (COCO) ajustado nas câmeras CET por `ml/train_vehicle_model.py`. Nos 79 frames de teste: confiança média 0,71 → 0,87, precisão 0,81 → 0,88, 10,1 → 11,6 veículos/frame, mesma velocidade. `ml/models/yolo11m.pt` continua no repositório como volta atrás. `m` e não `n`/`s`: o nano/small perdiam carro pequeno, distante e noturno. |
 | `GX_YOLO_IMGSZ` | `1280` | Resolução de inferência do modelo de trânsito. Em 640 (padrão do Ultralytics) o YOLO subconta ~35% da fila ao fundo. Custo em GPU: dezenas de ms. |
 | `YOLO_THRESHOLD` | `0.45` | Confiança mínima do modelo de objetos. |
 | `GX_YOLO_INCIDENT_MODEL` | `ml/models/gx-incident.pt` | Peso dedicado a alagamento, carregado **separado** do modelo padrão (trocar o global quebraria a contagem de veículos). |

@@ -146,7 +146,8 @@ mostrar um evento como real vem sempre do cruzamento no Data Fusion.
 - **MySQL 8.x** opcional — sem `DATABASE_URL` configurada, o sistema usa SQLite local
   (`backend/gx.db`) e cria as tabelas sozinho no startup
 - Para inferência real: `backend/requirements-yolo.txt` + os pesos em `ml/models/`
-  (`yolo11m.pt` para trânsito, `gx-incident.pt` para alagamento). Esses dois estão no git:
+  (`gx-veiculos.pt` para trânsito, `gx-incident.pt` para alagamento; `yolo11m.pt` fica
+  como volta atrás). Esses pesos estão no git:
   o deploy automático builda a imagem a partir do GitHub.
 
 ### Caminho rápido (Windows)

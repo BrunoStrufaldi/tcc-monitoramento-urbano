@@ -31,7 +31,7 @@ também de teto de gasto — um pico de acessos não multiplica a conta.
 | Vai para a imagem | Fica de fora (`.dockerignore` / `.gcloudignore`) |
 |---|---|
 | `backend/`, `ml/`, `data_fusion/`, `database/`, `frontend/` compilado | `backend/venv/` (4,8 GB), `ml/datasets/` (5,4 GB), `ml/runs/`, `runs/` |
-| `ml/models/yolo11m.pt` e `ml/models/gx-incident.pt` | demais pesos (`-anterior`, `-backup`, `-v4-attempt`, `yolo11n/s`) |
+| `ml/models/gx-veiculos.pt`, `ml/models/yolo11m.pt` (volta atrás) e `ml/models/gx-incident.pt` | demais pesos (`-anterior`, `-backup`, `-v4-attempt`, `yolo11n/s`) |
 | torch **CPU** + ultralytics | `backend/.env`, `*.db`, `backend/app/data/` (evidências locais), testes |
 
 > **Armadilha do `.gcloudignore`.** Sem esse arquivo, o `gcloud` usa o
@@ -175,7 +175,7 @@ Cloud Run. É o mesmo resultado do `deploy.ps1`, sem depender da máquina local.
 | | `deploy.ps1` (manual) | Gatilho do Cloud Build (automático) |
 |---|---|---|
 | Fonte do código | pasta local, como está no disco (`.gcloudignore` filtra) | clone do GitHub (só o que está commitado) |
-| Pesos do YOLO | copiados do disco | **precisam estar no Git** — por isso `.gitignore` libera só `yolo11m.pt` e `gx-incident.pt` |
+| Pesos do YOLO | copiados do disco | **precisam estar no Git** — por isso `.gitignore` libera só `gx-veiculos.pt`, `yolo11m.pt` e `gx-incident.pt` |
 | Variáveis do serviço | mescla as que o script conhece (`--update-env-vars`) | não toca em nenhuma: memória, TomTom e monitoramento ficam como estão |
 | Quando usar | emergência, ou testar sem passar pelo GitHub | rotina: `git push` e pronto |
 
