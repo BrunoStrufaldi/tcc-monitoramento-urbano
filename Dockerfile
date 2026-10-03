@@ -28,7 +28,10 @@ ENV PYTHONUNBUFFERED=1 \
     MPLCONFIGDIR=/tmp/matplotlib \
     # O container roda com 2 vCPU. Sem isso o torch abre uma thread por core do
     # host e as inferências das câmeras brigam entre si.
-    OMP_NUM_THREADS=2
+    OMP_NUM_THREADS=2 \
+    # Test-time augmentation dobra o custo de cada inferência — em CPU isso
+    # aperta o ciclo das câmeras. Fica ligado só onde há GPU (padrão local).
+    GX_YOLO_TTA=false
 
 # libGL/libglib: dependências nativas do opencv, que vem junto com o ultralytics.
 RUN apt-get update && apt-get install -y --no-install-recommends \
