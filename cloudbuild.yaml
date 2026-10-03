@@ -3,7 +3,7 @@
 # O gatilho "motsp-main" do Cloud Build roda este arquivo a cada push na
 # branch main do GitHub. Faz o mesmo que o deploy.ps1, só que a partir do
 # repositório em vez da máquina local — por isso os dois pesos do YOLO
-# (ml/models/yolo11m.pt e gx-incident.pt) precisam estar commitados.
+# (ml/models/gx-veiculos.pt, yolo11m.pt e gx-incident.pt) precisam estar commitados.
 #
 # O deploy.ps1 continua valendo para deploy manual.
 

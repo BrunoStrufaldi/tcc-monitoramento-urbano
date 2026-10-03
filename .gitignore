@@ -14,6 +14,7 @@ node_modules/
 # automático (cloudbuild.yaml) builda a imagem a partir do GitHub.
 ml/models/*.pt
 !ml/models/yolo11m.pt
+!ml/models/gx-veiculos.pt
 !ml/models/gx-incident.pt
 weights/
 

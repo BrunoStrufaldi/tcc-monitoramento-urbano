@@ -59,7 +59,7 @@ if (-not (Get-Command gcloud -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-foreach ($peso in @("ml/models/yolo11m.pt", "ml/models/gx-incident.pt")) {
+foreach ($peso in @("ml/models/gx-veiculos.pt", "ml/models/yolo11m.pt", "ml/models/gx-incident.pt")) {
     if (-not (Test-Path $peso)) {
         Write-Error "Peso ausente: $peso. A imagem subiria sem deteccao real."
         exit 1

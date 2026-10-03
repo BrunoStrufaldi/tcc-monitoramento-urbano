@@ -17,7 +17,9 @@ class Settings(BaseSettings):
     yolo_threshold: float = 0.45
     # Pesos e ajustes do YOLO (lidos por ml/detector.py). Caminho relativo vale
     # a partir da raiz do projeto, não do diretório de onde o uvicorn sobe.
-    gx_yolo_model: str = "ml/models/yolo11m.pt"
+    # Ajustado nas câmeras CET a partir do yolo11m (ml/train_vehicle_model.py).
+    # Para voltar ao COCO original: GX_YOLO_MODEL=ml/models/yolo11m.pt.
+    gx_yolo_model: str = "ml/models/gx-veiculos.pt"
     gx_yolo_incident_model: str = "ml/models/gx-incident.pt"
     gx_yolo_imgsz: int = 1280
     gx_yolo_tta: bool = True

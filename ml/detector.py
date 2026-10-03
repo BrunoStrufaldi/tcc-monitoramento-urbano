@@ -3,8 +3,9 @@
 O detector real é carregado sob demanda para que a API continue utilizável em
 ambientes sem GPU ou sem os pesos treinados. O peso COCO padrão reconhece
 objetos (por exemplo, carro e ônibus), não incidentes como congestionamento,
-alagamento ou incêndio. O peso padrão é ``yolo11m.pt`` (COCO); ``GX_YOLO_MODEL``
-permite trocar por outro peso urbano próprio.
+alagamento ou incêndio. O peso padrão é ``gx-veiculos.pt`` — o ``yolo11m.pt`` (COCO) ajustado
+nas câmeras CET por ``ml/train_vehicle_model.py``, com as mesmas 80 classes;
+``GX_YOLO_MODEL`` permite voltar ao COCO original ou trocar por outro peso.
 
 Toda a configuração vem de ``app.config.settings`` (``.env`` local ou variáveis
 de ambiente no Cloud Run) — antes era ``os.getenv`` direto, que não enxerga o

@@ -11,11 +11,34 @@ demanda (a API sobe normalmente em máquina sem GPU e sem pesos):
 
 | Modelo | Variável | Uso | Confiança |
 |---|---|---|---|
-| Objetos (COCO) | `GX_YOLO_MODEL` → `yolo11m.pt` | Contagem de veículos para trânsito, upload de imagem | `YOLO_THRESHOLD` = 0,45 |
+| Veículos (COCO ajustado nas câmeras CET) | `GX_YOLO_MODEL` → `gx-veiculos.pt` | Contagem de veículos para trânsito, upload de imagem | `YOLO_THRESHOLD` = 0,45 |
 | Incidentes (próprio) | `GX_YOLO_INCIDENT_MODEL` → `gx-incident.pt` | Classe única `alagamento` | `GX_YOLO_INCIDENT_CONF` = 0,6 |
 
 Manter os dois separados é deliberado: substituir o peso global por um treinado em
 alagamento faria a contagem de veículos parar de funcionar.
+
+### O modelo de veículos ajustado às câmeras CET
+
+O `yolo11m` (COCO) aprendeu com fotos genéricas; as câmeras da CET entregam JPEG
+480x270 comprimido, com carro pequeno ao fundo e cena noturna. `ml/train_vehicle_model.py`
+o ajusta a esses frames sem ninguém marcar carro à mão: um modelo "professor" maior e
+lento demais para o tempo real (`yolo11x` + TTA) rotula os frames salvos como evidência,
+e o `yolo11m` aprende a imitá-lo. As 80 classes COCO continuam as mesmas, então o
+mapeamento de classes do detector não muda.
+
+Resultado em 79 frames de teste separados antes do treino (de 397 frames únicos),
+no limiar de produção (0,45), sem TTA:
+
+| | `yolo11m.pt` (antes) | `gx-veiculos.pt` (agora) |
+|---|---|---|
+| Acerto em relação ao professor (mAP50, veículos) | 0,78 | 0,85 |
+| Precisão | 0,81 | 0,88 |
+| Confiança média (12 melhores veículos do frame) | 0,71 | 0,87 |
+| Veículos por frame (professor marca 12,5) | 10,1 | 11,6 |
+
+Mesma arquitetura, mesma velocidade. Para voltar ao modelo anterior basta
+`GX_YOLO_MODEL=ml/models/yolo11m.pt` (no Cloud Run, como variável do serviço, sem
+novo build) — o peso original segue no repositório para isso.
 
 ### Classes urbanas (`CLASSES_URBANAS`)
 
