@@ -18,20 +18,20 @@ Comandos de teste:
 ---
 
 ## 0. Antes de tudo
-- [x] (`af9665b`) Commitar as mudanças pendentes do Data Fusion (peso flexível por concordância:
+- [x] (`69f2517`) Commitar as mudanças pendentes do Data Fusion (peso flexível por concordância:
       `data_fusion/*`, `backend/app/routers/fusion.py`, `schemas/fusion.py`,
       `frontend/src/app.ts`, `fusion-format.ts`, `ml/detector.py` com TTA).
 
 ## 1. Código morto (deletar) — concluído em 02/10/2026
 
-- [x] (`4c1aa46`) Scripts e dependências: `reset_mysql.*`, `cleanup_demo_data.py`,
+- [x] (`fbe2f1e`) Scripts e dependências: `reset_mysql.*`, `cleanup_demo_data.py`,
       `migrate_yolo_observations.py`, `pyproj`, `python-dotenv`
-- [x] (`8958b3d`) Backend: `/deteccao/simular`, `/video`, `/frame`, `/confirmar`, `/ws/cv`,
+- [x] (`13d574a`) Backend: `/deteccao/simular`, `/video`, `/frame`, `/confirmar`, `/ws/cv`,
       `visual_validation.py` (+ configs `YOLO_MAX_FPS/FRAME/COOLDOWN`), simulação e classe
       `hidrante` em `ml/detector.py`, model `OcorrenciaExterna`, status `resolvido`/`resolvido_em`
       (migração `006`), schemas `EventoCreate/Update` e `EvidenciaVisualCreate`, `_fonte_yolo`.
       `benchmark_latencia.py` agora mede o caminho real (frame → YOLO → evento → WebSocket).
-- [x] (`69149fb`) Frontend: 6 telas inalcançáveis, drawer de detalhe (decisão: apagar), blocos
+- [x] (`103e2ed`) Frontend: 6 telas inalcançáveis, drawer de detalhe (decisão: apagar), blocos
       "Alertas"/"Atividade" (contêineres inexistentes), busca (decisão: apagar), filtro de
       severidade (seção com `display:none`), `refreshFeeds`, módulos `event-detail-format` e
       `event-actions-format`, `initMapa` sem duplicação. `app.ts` 2505 → 1407 linhas,
@@ -44,7 +44,7 @@ Comandos de teste:
 - [x] Apagados (com permissão pontual em `.claude/settings.local.json`, removida depois):
       `runs/` da raiz (validações de 26/08 das tentativas v3/v4), `ml/models/gx-incident-v3-backup.pt`
       e `ml/models/gx-incident-v4-attempt.pt`.
-- [x] (`9e12700`, `ed3f180`) Ramos mortos de `data_fusion/scores.py` e fontes "Painel manual"/
+- [x] (`bed29cd`, `de3d651`) Ramos mortos de `data_fusion/scores.py` e fontes "Painel manual"/
       "Open-Meteo" do seed — resolvidos junto com o 3a.
 
 ### Observação encontrada no teste visual (não corrigida)
@@ -53,36 +53,36 @@ Comandos de teste:
   Medido num iframe de 390/360/320px, o topo cabe inteiro, inclusive com a pílula "Sinc.".
 
 ## 2. Rápido, baixo risco — concluído em 02/10/2026
-- [x] (`204b97c`) **Segurança:** `/regioes`, `/fontes`, `/localizacoes` e `/dados-contextuais`
+- [x] (`9984f7d`) **Segurança:** `/regioes`, `/fontes`, `/localizacoes` e `/dados-contextuais`
       só com GET; `POST /fusion/recalcular-todos` removido; schemas `*Create/*Update` apagados.
       Testes montam os dados direto no banco e checam o 405. Ficou `POST /fusion/eventos/{id}/
       recalcular` (não injeta dado, só refaz o que o ciclo de 2 min já faz) e os uploads do
       testador YOLO (`/deteccao/imagem|incidente`, isolados do pipeline de evento).
-- [x] (`faccaef`) `app/broadcast.py`: `coro.close()` sem loop — 55 warnings → 1 (do httpx/starlette).
-- [x] (`20a9c81`, `5bb3904`) `aplicar_fusao_evento` grava `LogSistema` só quando promove/rebaixa.
-- [x] (`8fd401a`) `CLASSES_URBANAS`: `tipo` = `"alagamento"`/`"transito"`; saíram o `replace` do
+- [x] (`7e90373`) `app/broadcast.py`: `coro.close()` sem loop — 55 warnings → 1 (do httpx/starlette).
+- [x] (`e25e20c`, `fd552b9`) `aplicar_fusao_evento` grava `LogSistema` só quando promove/rebaixa.
+- [x] (`6df3747`) `CLASSES_URBANAS`: `tipo` = `"alagamento"`/`"transito"`; saíram o `replace` do
       `flood_detection.py` e o `tipo="transito"` forçado do `live_detection.py`.
-- [x] (`24df76f`) Nomes legados → MotSP (título/descrição da API, User-Agent, docstrings,
+- [x] (`3fa919e`) Nomes legados → MotSP (título/descrição da API, User-Agent, docstrings,
       docstring de `routers/evidencias.py` no topo). O `aria-label` do mapa já estava certo.
-- [x] (`7c493f6`) Dev em processo único: `GX_SERVE_FRONTEND` = `true` por padrão; `config.js`
+- [x] (`8982b92`) Dev em processo único: `GX_SERVE_FRONTEND` = `true` por padrão; `config.js`
       versionado com `window.location.origin` (saíram `config.example.js` e `config.prod.js`, e
       a exclusão dele em `.gitignore`/`.dockerignore`/`.gcloudignore`); `start.ps1` só sobe o
       uvicorn em :8000; `CORS_ORIGINS` vazio por padrão; `serve:frontend` removido.
       Efeito colateral: com o painel montado em `/`, POST em rota inexistente dá 405, não 404.
       Seu `backend/.env` ainda tem `CORS_ORIGINS` com a porta 5500 — inofensivo, pode apagar.
-- [x] (`53b9744`) README: tabela "Números atuais" removida.
+- [x] (`8c7bf7c`) README: tabela "Números atuais" removida.
 
 Estado depois do item 2: 146 testes backend + 14 data_fusion + 2 frontend passando.
 Itens 0–2 publicados no Cloud Run em 02/10/2026 (revisão `motsp-00011-85j`, conferida).
 
 ## 3. Mais trabalhoso
 - [x] **(a) Data Fusion honesto — opção B (2 dimensões), concluído em 02/10/2026.**
-      (`9e12700`) `PESOS` = IA 4/7 (57%) + contexto 3/7 (43%) — os pesos efetivos que já valiam;
+      (`bed29cd`) `PESOS` = IA 4/7 (57%) + contexto 3/7 (43%) — os pesos efetivos que já valiam;
       sai a dimensão `fonte_oficial` (`FonteInfo`, `pontuar_fonte_oficial`); "clima" → "contexto"
       no núcleo, na API e no painel; HTML/JS servidos com `no-cache`. Scores idênticos em 620
       cenários (descoberta: 0,0 mm/h de chuva conta como "sem sinal" — mantido e comentado).
-      (`624e443`) `categoria` dos dados contextuais `clima` → `contexto`, com `UPDATE` idempotente
-      no startup + migração `007` para o MySQL. (`ed3f180`) seed e README §12.
+      (`2cf1575`) `categoria` dos dados contextuais `clima` → `contexto`, com `UPDATE` idempotente
+      no startup + migração `007` para o MySQL. (`de3d651`) seed e README §12.
       Conferido ponta a ponta local: evento gravado com a categoria antiga dá o mesmo 0,7805.
 - [~] **(b) Removido do roteiro em 02/10/2026** — era unificar `live_detection.py` +
       `flood_detection.py` (uma thread por câmera, download único). Ganho pequeno: o custo está na
@@ -92,7 +92,7 @@ Itens 0–2 publicados no Cloud Run em 02/10/2026 (revisão `motsp-00011-85j`, c
 - [~] **(c) Removido em 02/10/2026** — era tirar o SSE. Ele é o plano B para redes que bloqueiam
       WebSocket; sem ele essas redes caem direto no polling de 30 s. ~150 linhas no total, e as
       chamadas `_broadcast` + `ws_manager.broadcast_evento` são uma por canal, não duplicação.
-- [x] (`e634502`) **(d) Config única — só a parte de config:** mover `GX_YOLO_MODEL`, `GX_YOLO_IMGSZ`,
+- [x] (`5af3772`) **(d) Config única — só a parte de config:** mover `GX_YOLO_MODEL`, `GX_YOLO_IMGSZ`,
       `GX_YOLO_TTA`, `GX_YOLO_MAX_CONCORRENCIA`, `GX_YOLO_INCIDENT_MODEL` de `os.getenv`
       (`ml/detector.py`) para `Settings` — hoje o `backend/.env` não chega neles localmente (só
       funciona por coincidência com o caminho padrão); remover `GX_YOLO_CLASS_MAPPING`.
@@ -107,7 +107,7 @@ Itens 0–2 publicados no Cloud Run em 02/10/2026 (revisão `motsp-00011-85j`, c
       associar câmera→região seria funcionalidade nova. A tabela parada não atrapalha.
 - [~] **(g) Removido em 02/10/2026** — quebrar `app.ts` (1407 linhas, quase sem teste de UI) arrisca
       quebrar a tela sem aviso por ganho só de organização. Reavaliar só se a banca for ler o front.
-- [x] (`d292c99`) **(h) README em duas camadas:** README curto + `docs/` com detalhes; §19 vira apêndice. Corrigir
+- [x] (`ac8e851`) **(h) README em duas camadas:** README curto + `docs/` com detalhes; §19 vira apêndice. Corrigir
       no caminho: "MySQL em produção" (é SQLite no Cloud Run) e a nota sobre `os.getenv` (§21.5).
 - [x] **Relógio do topo cortado no celular** — não era bug (ver observação no item 1); nada mudou.
       Para conferir layout de celular: iframe com a largura certa, não `--window-size` do headless.
