@@ -30,48 +30,36 @@ def _aviso(*, severidade: str = "Perigo Potencial", geocodes: str = "3550308,310
     }
 
 
-def test_sem_aviso_cobrindo_o_municipio_retorna_indisponivel(monkeypatch):
-    payload = {"hoje": [_aviso(geocodes="3100104,4100103")], "futuro": []}  # não inclui São Paulo capital
+def _responde(monkeypatch, *avisos: dict) -> dict:
+    payload = {"hoje": list(avisos), "futuro": []}
     monkeypatch.setattr(inmet_alert_source, "urlopen", lambda *_a, **_k: _RespostaFalsa(payload))
-
-    resultado = inmet_alert_source.obter_aviso_ativo()
-    assert resultado["disponivel"] is False
+    return inmet_alert_source.obter_aviso_ativo()
 
 
-def test_aviso_ativo_cobrindo_sao_paulo_com_alagamento(monkeypatch):
-    payload = {"hoje": [_aviso()], "futuro": []}
-    monkeypatch.setattr(inmet_alert_source, "urlopen", lambda *_a, **_k: _RespostaFalsa(payload))
-
-    resultado = inmet_alert_source.obter_aviso_ativo()
+def test_escolhe_o_aviso_mais_severo_que_cobre_sao_paulo(monkeypatch):
+    resultado = _responde(monkeypatch, _aviso())
     assert resultado["disponivel"] is True
     assert resultado["descricao"] == "Tempestade"
     assert resultado["severidade_indice"] == 4.0
     assert resultado["menciona_alagamento"] is True
 
-
-def test_aviso_sem_mencao_a_alagamento(monkeypatch):
-    payload = {"hoje": [_aviso(riscos=["Vento costeiro forte, entre 40 e 60 km/h."])], "futuro": []}
-    monkeypatch.setattr(inmet_alert_source, "urlopen", lambda *_a, **_k: _RespostaFalsa(payload))
-
-    resultado = inmet_alert_source.obter_aviso_ativo()
-    assert resultado["disponivel"] is True
-    assert resultado["menciona_alagamento"] is False
-
-
-def test_escolhe_o_aviso_mais_severo_quando_ha_varios(monkeypatch):
-    payload = {
-        "hoje": [
-            _aviso(severidade="Perigo Potencial"),
-            _aviso(severidade="Grande Perigo"),
-            _aviso(severidade="Perigo"),
-        ],
-        "futuro": [],
-    }
-    monkeypatch.setattr(inmet_alert_source, "urlopen", lambda *_a, **_k: _RespostaFalsa(payload))
-
-    resultado = inmet_alert_source.obter_aviso_ativo()
+    resultado = _responde(
+        monkeypatch,
+        _aviso(severidade="Perigo Potencial"),
+        _aviso(severidade="Grande Perigo"),
+        _aviso(severidade="Perigo"),
+    )
     assert resultado["severidade"] == "Grande Perigo"
     assert resultado["severidade_indice"] == 9.5
+
+
+def test_aviso_de_outro_municipio_ou_sem_alagamento(monkeypatch):
+    # Não inclui São Paulo capital.
+    assert _responde(monkeypatch, _aviso(geocodes="3100104,4100103"))["disponivel"] is False
+
+    resultado = _responde(monkeypatch, _aviso(riscos=["Vento costeiro forte, entre 40 e 60 km/h."]))
+    assert resultado["disponivel"] is True
+    assert resultado["menciona_alagamento"] is False
 
 
 def test_falha_de_rede_nao_propaga(monkeypatch):

@@ -3,11 +3,14 @@
 O download das imagens é simulado, sem acessar a internet.
 """
 
+import time
 from contextlib import contextmanager
 
 import pytest
 from sqlalchemy.orm import Session
 
+from app.models.dado_contextual import DadoContextual
+from app.models.evento import Evento
 from app.services import detection_events, flood_detection
 from ml.detector import Deteccao
 
@@ -30,119 +33,59 @@ def _deteccao_alagamento(confianca: float = 0.8) -> list[Deteccao]:
     return [Deteccao(1, "alagamento", confianca, "critica", "alagamento", (0, 0, 50, 50), "flood")]
 
 
-def test_processar_frame_ignora_quando_nao_detecta_alagamento(db_session: Session, monkeypatch):
-    monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: [])
-
-    from app.models.evento import Evento
-
-    flood_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {}, "câmera teste")
-    assert db_session.query(Evento).count() == 0
-
-
-def test_processar_frame_sinaliza_alagamento_com_tipo_corrigido(db_session: Session, tmp_path, monkeypatch):
+def _monta_camera_alagamento(db_session, tmp_path, monkeypatch, confianca: float = 0.8):
     monkeypatch.setattr(flood_detection, "SessionLocal", lambda: _sessao_de_teste(db_session))
     monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
     monkeypatch.setattr(detection_events, "annotate_evidence", lambda content, _detections: (content, 10, 10))
-    monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: _deteccao_alagamento(0.81))
+    monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: _deteccao_alagamento(confianca))
+
+
+def _contexto_do_evento(db_session) -> dict[str, DadoContextual]:
+    evento = db_session.query(Evento).one()
+    return {d.chave: d for d in db_session.query(DadoContextual).filter(DadoContextual.evento_id == evento.id)}
+
+
+def test_processar_frame_sem_contexto_cria_evento_em_analise(db_session: Session, tmp_path, monkeypatch):
+    _monta_camera_alagamento(db_session, tmp_path, monkeypatch, 0.81)
 
     cooldown: dict[str, float] = {}
     flood_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, cooldown, "câmera teste")
 
-    from app.models.evento import Evento
-
-    eventos = db_session.query(Evento).all()
-    assert len(eventos) == 1
+    evento = db_session.query(Evento).one()
     # Evento.tipo é o que data_fusion.scores usa para escolher o cálculo.
-    assert eventos[0].tipo == "alagamento"
+    assert evento.tipo == "alagamento"
     # A confiança salva é a do Data Fusion, não a do YOLO. Sem chuva, sem aviso
     # e sem histórico, a nota cai e o evento fica em análise.
-    assert float(eventos[0].confianca) == 0.57
-    assert eventos[0].status == "em_analise"
-    assert "câmera teste" in eventos[0].fonte.nome
+    assert float(evento.confianca) == 0.57
+    assert evento.status == "em_analise"
+    assert "câmera teste" in evento.fonte.nome
     assert "alagamento" in cooldown
 
 
-def test_processar_frame_com_chuva_disponivel_registra_contexto_climatico(db_session: Session, tmp_path, monkeypatch):
-    monkeypatch.setattr(flood_detection, "SessionLocal", lambda: _sessao_de_teste(db_session))
-    monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
-    monkeypatch.setattr(detection_events, "annotate_evidence", lambda content, _detections: (content, 10, 10))
-    monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: _deteccao_alagamento())
-    monkeypatch.setattr(
-        flood_detection,
-        "obter_condicoes_atuais",
-        lambda _lat, _lon: {"disponivel": True, "chuva_mm": 18.5},
-    )
-
-    flood_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {}, "câmera teste")
-
-    from app.models.dado_contextual import DadoContextual
-    from app.models.evento import Evento
-
-    evento = db_session.query(Evento).first()
-    contexto = db_session.query(DadoContextual).filter(
-        DadoContextual.evento_id == evento.id,
-        DadoContextual.chave == "precipitacao_mm_h",
-    ).all()
-    assert len(contexto) == 1
-    assert contexto[0].categoria == "contexto"
-    assert float(contexto[0].valor_numerico) == 18.5
-
-
-def test_processar_frame_sem_chuva_disponivel_nao_registra_contexto(db_session: Session, tmp_path, monkeypatch):
-    monkeypatch.setattr(flood_detection, "SessionLocal", lambda: _sessao_de_teste(db_session))
-    monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
-    monkeypatch.setattr(detection_events, "annotate_evidence", lambda content, _detections: (content, 10, 10))
-    monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: _deteccao_alagamento())
-    # Aqui a API responde, mas sem o dado de chuva.
-    monkeypatch.setattr(
-        flood_detection,
-        "obter_condicoes_atuais",
-        lambda _lat, _lon: {"disponivel": True, "chuva_mm": None},
-    )
-
-    flood_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {}, "câmera teste")
-
-    from app.models.dado_contextual import DadoContextual
-    from app.models.evento import Evento
-
-    evento = db_session.query(Evento).first()
-    assert db_session.query(DadoContextual).filter(
-        DadoContextual.evento_id == evento.id,
-        DadoContextual.chave == "precipitacao_mm_h",
-    ).count() == 0
-
-
-def test_processar_frame_com_aviso_inmet_de_alagamento_registra_contexto(db_session: Session, tmp_path, monkeypatch):
-    monkeypatch.setattr(flood_detection, "SessionLocal", lambda: _sessao_de_teste(db_session))
-    monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
-    monkeypatch.setattr(detection_events, "annotate_evidence", lambda content, _detections: (content, 10, 10))
-    monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: _deteccao_alagamento())
+def test_processar_frame_registra_chuva_aviso_e_historico(db_session: Session, tmp_path, monkeypatch):
+    _monta_camera_alagamento(db_session, tmp_path, monkeypatch)
+    monkeypatch.setattr(flood_detection, "obter_condicoes_atuais", lambda _lat, _lon: {"disponivel": True, "chuva_mm": 22.0})
     monkeypatch.setattr(
         flood_detection,
         "obter_aviso_ativo",
-        lambda: {"disponivel": True, "menciona_alagamento": True, "severidade_indice": 7.0, "severidade": "Perigo"},
+        lambda: {"disponivel": True, "menciona_alagamento": True, "severidade_indice": 9.5, "severidade": "Grande Perigo"},
     )
+    # A coordenada cai num ponto que alaga sempre.
+    monkeypatch.setattr(flood_detection, "indice_historico", lambda _lat, _lon: (8.5, "Av. Exemplo (~80 m, recorrência cronico)"))
 
     flood_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {}, "câmera teste")
 
-    from app.models.dado_contextual import DadoContextual
-    from app.models.evento import Evento
-
-    evento = db_session.query(Evento).first()
-    contexto = db_session.query(DadoContextual).filter(
-        DadoContextual.evento_id == evento.id,
-        DadoContextual.chave == "alerta_inmet_severidade",
-    ).all()
-    assert len(contexto) == 1
-    assert float(contexto[0].valor_numerico) == 7.0
+    contexto = _contexto_do_evento(db_session)
+    valores = {chave: float(d.valor_numerico) for chave, d in contexto.items()}
+    assert valores == {"precipitacao_mm_h": 22.0, "alerta_inmet_severidade": 9.5, "historico_alagamento_indice": 8.5}
+    assert all(d.categoria == "contexto" for d in contexto.values())
+    assert contexto["historico_alagamento_indice"].unidade == "indice_0_10"
 
 
-def test_processar_frame_com_aviso_inmet_sem_mencao_a_alagamento_nao_registra(db_session: Session, tmp_path, monkeypatch):
-    monkeypatch.setattr(flood_detection, "SessionLocal", lambda: _sessao_de_teste(db_session))
-    monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
-    monkeypatch.setattr(detection_events, "annotate_evidence", lambda content, _detections: (content, 10, 10))
-    monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: _deteccao_alagamento())
-    # Existe um aviso, mas ele não fala de alagamento, então não conta.
+def test_processar_frame_descarta_contexto_incompleto(db_session: Session, tmp_path, monkeypatch):
+    """A API do clima responde sem o dado de chuva e o aviso do INMET não fala de alagamento."""
+    _monta_camera_alagamento(db_session, tmp_path, monkeypatch)
+    monkeypatch.setattr(flood_detection, "obter_condicoes_atuais", lambda _lat, _lon: {"disponivel": True, "chuva_mm": None})
     monkeypatch.setattr(
         flood_detection,
         "obter_aviso_ativo",
@@ -151,87 +94,24 @@ def test_processar_frame_com_aviso_inmet_sem_mencao_a_alagamento_nao_registra(db
 
     flood_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {}, "câmera teste")
 
-    from app.models.dado_contextual import DadoContextual
-    from app.models.evento import Evento
-
-    evento = db_session.query(Evento).first()
-    assert db_session.query(DadoContextual).filter(
-        DadoContextual.evento_id == evento.id,
-        DadoContextual.chave == "alerta_inmet_severidade",
-    ).count() == 0
+    contexto = _contexto_do_evento(db_session)
+    assert "precipitacao_mm_h" not in contexto
+    assert "alerta_inmet_severidade" not in contexto
 
 
-def test_processar_frame_combina_chuva_e_aviso_inmet(db_session: Session, tmp_path, monkeypatch):
-    monkeypatch.setattr(flood_detection, "SessionLocal", lambda: _sessao_de_teste(db_session))
-    monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
-    monkeypatch.setattr(detection_events, "annotate_evidence", lambda content, _detections: (content, 10, 10))
-    monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: _deteccao_alagamento())
-    monkeypatch.setattr(flood_detection, "obter_condicoes_atuais", lambda _lat, _lon: {"disponivel": True, "chuva_mm": 22.0})
-    monkeypatch.setattr(
-        flood_detection,
-        "obter_aviso_ativo",
-        lambda: {"disponivel": True, "menciona_alagamento": True, "severidade_indice": 9.5, "severidade": "Grande Perigo"},
-    )
+def test_processar_frame_nao_cria_sem_alagamento_em_espera_ou_sem_modelo(db_session: Session, tmp_path, monkeypatch):
+    _monta_camera_alagamento(db_session, tmp_path, monkeypatch)
+    flood_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {"alagamento": time.monotonic()}, "câmera teste")
 
+    monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: [])
     flood_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {}, "câmera teste")
 
-    from app.models.dado_contextual import DadoContextual
-    from app.models.evento import Evento
-
-    evento = db_session.query(Evento).first()
-    contexto = db_session.query(DadoContextual).filter(DadoContextual.evento_id == evento.id).all()
-    chaves = {
-        item.chave: float(item.valor_numerico)
-        for item in contexto
-        if item.chave != "historico_alagamento_indice"
-    }
-    assert chaves == {"precipitacao_mm_h": 22.0, "alerta_inmet_severidade": 9.5}
-
-
-def test_processar_frame_registra_indice_historico_de_alagamento(db_session: Session, tmp_path, monkeypatch):
-    monkeypatch.setattr(flood_detection, "SessionLocal", lambda: _sessao_de_teste(db_session))
-    monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
-    monkeypatch.setattr(detection_events, "annotate_evidence", lambda content, _detections: (content, 10, 10))
-    monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: _deteccao_alagamento())
-    # Aqui a coordenada cai num ponto que alaga sempre.
-    monkeypatch.setattr(flood_detection, "indice_historico", lambda _lat, _lon: (8.5, "Av. Exemplo (~80 m, recorrência cronico)"))
-
-    flood_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {}, "câmera teste")
-
-    from app.models.dado_contextual import DadoContextual
-    from app.models.evento import Evento
-
-    evento = db_session.query(Evento).first()
-    row = db_session.query(DadoContextual).filter(
-        DadoContextual.evento_id == evento.id,
-        DadoContextual.chave == "historico_alagamento_indice",
-    ).one()
-    assert row.categoria == "contexto"
-    assert float(row.valor_numerico) == 8.5
-    assert row.unidade == "indice_0_10"
-
-
-def test_processar_frame_respeita_cooldown(db_session: Session, monkeypatch):
-    monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: _deteccao_alagamento())
-
-    import time
-
-    from app.models.evento import Evento
-
-    cooldown = {"alagamento": time.monotonic()}
-    flood_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, cooldown, "câmera teste")
-    assert db_session.query(Evento).count() == 0
-
-
-def test_processar_frame_ignora_quando_modelo_indisponivel(db_session: Session, monkeypatch):
     def _falha(_path, _threshold):
         raise RuntimeError("modelo de incidentes indisponível")
 
     monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", _falha)
-
-    from app.models.evento import Evento
-
     flood_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {}, "câmera teste")
+
     assert db_session.query(Evento).count() == 0
 
 
@@ -272,17 +152,13 @@ def test_loop_ignora_frame_desatualizado_e_nao_processa(monkeypatch):
     assert chamadas == []
 
 
-def test_iniciar_desligado_por_padrao_nao_sobe_thread(monkeypatch):
+def test_iniciar_sobe_uma_thread_por_camera_so_quando_ligado(monkeypatch):
     from app.config import settings
+    from app.services import cet_camera_catalog
 
     monkeypatch.setattr(settings, "gx_alagamento_monitorar_catalogo", False)
     flood_detection.iniciar()
     assert flood_detection._threads == []
-
-
-def test_iniciar_ativo_sobe_uma_thread_por_camera(monkeypatch):
-    from app.config import settings
-    from app.services import cet_camera_catalog
 
     monkeypatch.setattr(settings, "gx_alagamento_monitorar_catalogo", True)
     # Troca o loop real, que acessaria as câmeras, por um que só espera o sinal de parada.

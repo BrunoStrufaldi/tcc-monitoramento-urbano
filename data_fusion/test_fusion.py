@@ -4,34 +4,6 @@ from data_fusion.fusion import PESOS, calcular_confiabilidade
 from data_fusion.models import DadoContexto, EvidenciaIA, EventoFusionInput
 
 
-def test_alagamento_so_com_chuva_forte():
-    entrada = EventoFusionInput(
-        evento_id=2,
-        tipo="alagamento",
-        evidencias_ia=[],
-        dados_contexto=[DadoContexto(chave="precipitacao_mm_h", valor_numerico=45.2, unidade="mm/h")],
-    )
-    r = calcular_confiabilidade(entrada)
-    assert r.confiabilidade > 0.6
-    assert r.nivel in ("media", "alta")
-
-
-def test_alagamento_combina_chuva_e_aviso_inmet():
-    entrada = EventoFusionInput(
-        evento_id=8,
-        tipo="alagamento",
-        evidencias_ia=[],
-        dados_contexto=[
-            DadoContexto(chave="precipitacao_mm_h", valor_numerico=32.0, unidade="mm/h"),  # rampa 30->50 mm/h: 0.934
-            DadoContexto(chave="alerta_inmet_severidade", valor_numerico=4.0, unidade="indice_0_10"),  # "perigo potencial" -> 0.60
-        ],
-    )
-    r = calcular_confiabilidade(entrada)
-    componente_contexto = next(c for c in r.componentes if c.nome == "contexto")
-    assert "combina 2 fontes" in componente_contexto.detalhe
-    assert componente_contexto.pontuacao == round((0.934 + 0.60) / 2, 4)
-
-
 def _entrada_alagamento(dados_contexto):
     return EventoFusionInput(
         evento_id=9,
@@ -39,56 +11,6 @@ def _entrada_alagamento(dados_contexto):
         evidencias_ia=[],
         dados_contexto=dados_contexto,
     )
-
-
-def test_alagamento_historico_reforca_quando_ha_chuva():
-    chuva = DadoContexto(chave="precipitacao_mm_h", valor_numerico=18.0, unidade="mm/h")
-    hist = DadoContexto(chave="historico_alagamento_indice", valor_numerico=9.0, unidade="indice_0_10")
-
-    sem_hist = calcular_confiabilidade(_entrada_alagamento([chuva]))
-    com_hist = calcular_confiabilidade(_entrada_alagamento([chuva, hist]))
-
-    contexto_sem = next(c for c in sem_hist.componentes if c.nome == "contexto").pontuacao
-    contexto_com = next(c for c in com_hist.componentes if c.nome == "contexto")
-    assert contexto_com.pontuacao > contexto_sem
-    assert "crônico" in contexto_com.detalhe
-
-
-def test_alagamento_sem_sinal_ao_vivo_e_sem_historico_cai_para_baixa():
-    hist_zero = DadoContexto(chave="historico_alagamento_indice", valor_numerico=0.0, unidade="indice_0_10")
-    r = calcular_confiabilidade(_entrada_alagamento([hist_zero]))
-    componente_contexto = next(c for c in r.componentes if c.nome == "contexto")
-    assert componente_contexto.pontuacao == 0.25
-    assert "falso positivo" in componente_contexto.detalhe
-
-
-def test_alagamento_sem_historico_na_chave_reproduz_comportamento_antigo():
-    chuva = DadoContexto(chave="precipitacao_mm_h", valor_numerico=18.0, unidade="mm/h")
-    r = calcular_confiabilidade(_entrada_alagamento([chuva]))
-    componente_contexto = next(c for c in r.componentes if c.nome == "contexto")
-    # 18 mm/h fica entre 15 e 30 mm/h (nota entre 0.78 e 0.93), sem outro ajuste.
-    assert componente_contexto.pontuacao == 0.81
-    assert "precipitação elevada" in componente_contexto.detalhe
-
-
-def test_transito_combina_indice_de_veiculos_e_tomtom():
-    entrada = EventoFusionInput(
-        evento_id=7,
-        tipo="transito",
-        evidencias_ia=[],
-        dados_contexto=[
-            DadoContexto(chave="indice_congestionamento", valor_numerico=3.0, unidade="indice_0_10"),
-            DadoContexto(chave="indice_congestionamento_tomtom", valor_numerico=8.0, unidade="indice_0_10"),
-        ],
-    )
-    r = calcular_confiabilidade(entrada)
-    # A média dos dois índices dá 5.5/10, que é congestionamento moderado.
-    componente_contexto = next(c for c in r.componentes if c.nome == "contexto")
-    assert "média de 2 fontes" in componente_contexto.detalhe
-    assert componente_contexto.pontuacao == 0.72
-    # 3 e 8 são fontes que se contradizem, então o contexto pesa menos.
-    assert componente_contexto.peso_base == round(PESOS["contexto"] * 0.8, 4)
-    assert "fontes divergem" in componente_contexto.detalhe
 
 
 def _entrada_transito(*indices):
@@ -108,35 +30,13 @@ def _contexto(resultado):
     return next(c for c in resultado.componentes if c.nome == "contexto")
 
 
-def test_transito_nota_contextual_e_continua_dentro_da_antiga_faixa():
-    # Índices diferentes precisam dar notas diferentes.
-    notas = [_contexto(calcular_confiabilidade(_entrada_transito(i))).pontuacao for i in (4.5, 5.5, 6.5)]
-    assert notas[0] < notas[1] < notas[2]
-    contribuicoes = {_contexto(calcular_confiabilidade(_entrada_transito(i))).contribuicao for i in (4.5, 5.5, 6.5)}
-    assert len(contribuicoes) == 3
+def test_pesos_e_dimensoes_ausentes():
+    # IA com 4/7 e contexto com 3/7.
+    assert round(PESOS["ia"], 4) == 0.5714
+    assert round(PESOS["contexto"], 4) == 0.4286
+    assert abs(sum(PESOS.values()) - 1.0) < 1e-9
 
-
-def test_transito_peso_contextual_sobe_quando_fontes_concordam():
-    concordam = calcular_confiabilidade(_entrada_transito(6.5, 6.5))
-    uma_fonte = calcular_confiabilidade(_entrada_transito(6.5))
-    contexto_concordam, contexto_uma = _contexto(concordam), _contexto(uma_fonte)
-
-    assert contexto_uma.peso_base == round(PESOS["contexto"], 4)
-    assert contexto_concordam.peso_base == round(PESOS["contexto"] * 1.4, 4)
-    assert contexto_concordam.peso > contexto_uma.peso
-    assert "fontes concordam" in contexto_concordam.detalhe
-    # Mesma nota, mas com mais peso: as fontes concordando sobem a confiabilidade.
-    assert contexto_concordam.pontuacao == contexto_uma.pontuacao
-    assert concordam.confiabilidade > uma_fonte.confiabilidade
-
-
-def test_transito_peso_contextual_varia_continuamente_com_a_concordancia():
-    pesos = [_contexto(calcular_confiabilidade(_entrada_transito(6.0, t))).peso_base for t in (6.0, 5.0, 4.0, 3.0)]
-    assert pesos == sorted(pesos, reverse=True)
-    assert len(set(pesos)) == 4
-
-
-def test_dimensoes_ausentes_nao_inventam_contribuicao():
+    # Sem dado de contexto, a nota é só a da IA, sem inventar contribuição.
     entrada = EventoFusionInput(
         evento_id=6,
         tipo="observacao_visual",
@@ -150,13 +50,81 @@ def test_dimensoes_ausentes_nao_inventam_contribuicao():
     assert [c.nome for c in resultado.componentes] == ["ia", "contexto"]
 
 
-def test_pesos_sao_4_para_3():
-    # IA com 4/7 e contexto com 3/7.
-    assert round(PESOS["ia"], 4) == 0.5714
-    assert round(PESOS["contexto"], 4) == 0.4286
-    assert abs(sum(PESOS.values()) - 1.0) < 1e-9
+def test_alagamento_pela_chuva():
+    forte = calcular_confiabilidade(
+        _entrada_alagamento([DadoContexto(chave="precipitacao_mm_h", valor_numerico=45.2, unidade="mm/h")])
+    )
+    assert forte.confiabilidade > 0.6
+    assert forte.nivel in ("media", "alta")
+
+    # 18 mm/h fica entre 15 e 30 mm/h (nota entre 0.78 e 0.93), sem outro ajuste.
+    elevada = _contexto(calcular_confiabilidade(
+        _entrada_alagamento([DadoContexto(chave="precipitacao_mm_h", valor_numerico=18.0, unidade="mm/h")])
+    ))
+    assert elevada.pontuacao == 0.81
+    assert "precipitação elevada" in elevada.detalhe
+
+
+def test_alagamento_combina_chuva_e_aviso_inmet():
+    r = calcular_confiabilidade(_entrada_alagamento([
+        DadoContexto(chave="precipitacao_mm_h", valor_numerico=32.0, unidade="mm/h"),  # rampa 30->50 mm/h: 0.934
+        DadoContexto(chave="alerta_inmet_severidade", valor_numerico=4.0, unidade="indice_0_10"),  # "perigo potencial" -> 0.60
+    ]))
+    componente_contexto = _contexto(r)
+    assert "combina 2 fontes" in componente_contexto.detalhe
+    assert componente_contexto.pontuacao == round((0.934 + 0.60) / 2, 4)
+
+
+def test_historico_da_via_reforca_ou_derruba_o_alagamento():
+    chuva = DadoContexto(chave="precipitacao_mm_h", valor_numerico=18.0, unidade="mm/h")
+    hist = DadoContexto(chave="historico_alagamento_indice", valor_numerico=9.0, unidade="indice_0_10")
+
+    sem_hist = _contexto(calcular_confiabilidade(_entrada_alagamento([chuva])))
+    com_hist = _contexto(calcular_confiabilidade(_entrada_alagamento([chuva, hist])))
+    assert com_hist.pontuacao > sem_hist.pontuacao
+    assert "crônico" in com_hist.detalhe
+
+    # Sem chuva, sem aviso e numa via que nunca alagou, provavelmente é falso positivo.
+    hist_zero = DadoContexto(chave="historico_alagamento_indice", valor_numerico=0.0, unidade="indice_0_10")
+    sem_sinal = _contexto(calcular_confiabilidade(_entrada_alagamento([hist_zero])))
+    assert sem_sinal.pontuacao == 0.25
+    assert "falso positivo" in sem_sinal.detalhe
+
+
+def test_transito_combina_veiculos_e_tomtom():
+    # A média dos dois índices dá 5.5/10, que é congestionamento moderado.
+    divergem = _contexto(calcular_confiabilidade(_entrada_transito(3.0, 8.0)))
+    assert "média de 2 fontes" in divergem.detalhe
+    assert divergem.pontuacao == 0.72
+    # 3 e 8 são fontes que se contradizem, então o contexto pesa menos.
+    assert divergem.peso_base == round(PESOS["contexto"] * 0.8, 4)
+    assert "fontes divergem" in divergem.detalhe
+
+    concordam = calcular_confiabilidade(_entrada_transito(6.5, 6.5))
+    uma_fonte = calcular_confiabilidade(_entrada_transito(6.5))
+    contexto_concordam, contexto_uma = _contexto(concordam), _contexto(uma_fonte)
+    assert contexto_uma.peso_base == round(PESOS["contexto"], 4)
+    assert contexto_concordam.peso_base == round(PESOS["contexto"] * 1.4, 4)
+    assert "fontes concordam" in contexto_concordam.detalhe
+    # Mesma nota, mas com mais peso: as fontes concordando sobem a confiabilidade.
+    assert contexto_concordam.pontuacao == contexto_uma.pontuacao
+    assert concordam.confiabilidade > uma_fonte.confiabilidade
+
+
+def test_transito_nota_e_peso_variam_continuamente():
+    # Índices diferentes precisam dar notas e contribuições diferentes.
+    contextos = [_contexto(calcular_confiabilidade(_entrada_transito(i))) for i in (4.5, 5.5, 6.5)]
+    assert contextos[0].pontuacao < contextos[1].pontuacao < contextos[2].pontuacao
+    assert len({c.contribuicao for c in contextos}) == 3
+
+    # Quanto mais as fontes discordam, menor o peso, sem degraus.
+    pesos = [_contexto(calcular_confiabilidade(_entrada_transito(6.0, t))).peso_base for t in (6.0, 5.0, 4.0, 3.0)]
+    assert pesos == sorted(pesos, reverse=True)
+    assert len(set(pesos)) == 4
 
 
 if __name__ == "__main__":
-    test_alagamento_so_com_chuva_forte()
+    for nome, teste in list(globals().items()):
+        if nome.startswith("test_"):
+            teste()
     print("OK, testes de fusão passaram")

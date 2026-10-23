@@ -21,21 +21,18 @@ python -m data_fusion.test_historico_alagamento
 
 | Arquivo | O que testa |
 |---|---|
-| `test_live_detection.py` | Gatilho de três faixas, recusa e confirmação da TomTom, tempos de espera e eventos repetidos |
-| `test_websocket.py` | Protocolo, envio das mensagens, conexões que caíram e ping/pong |
-| `test_flood_detection.py` | Loop de alagamento, dados de clima e histórico da via |
-| `test_deteccao.py` | Status e testador do YOLO, limites de upload e ausência das rotas de escrita |
-| `test_localizacoes.py` | Consulta, filtro por região e escrita bloqueada (405) |
-| `test_dados_contextuais.py` | Consulta, filtros e escrita bloqueada (405) |
-| `test_eventos.py` · `test_evidencias.py` · `test_regioes.py` · `test_fontes.py` | Consulta e filtros |
-| `test_cet_camera_catalog.py` | Distância, câmera mais próxima e imagem travada |
+| `test_live_detection.py` | Gatilho de três faixas, recusa e confirmação da TomTom, tempos de espera e câmera travada |
+| `test_flood_detection.py` | Loop de alagamento, dados de clima, aviso do INMET e histórico da via |
 | `test_data_fusion_service.py` | Promoção, rebaixamento, arredondamento do limite, log só quando o status muda e troca de categoria |
+| `test_consultas.py` | Consulta e filtros de todas as rotas, 404 e escrita bloqueada (405) |
+| `test_evidencias.py` | Evidência gravada pela detecção (imagem original e hash) e download do arquivo |
+| `test_tempo_real.py` | WebSocket, SSE, conexões que caíram, ping/pong e envio entre threads |
+| `test_deteccao.py` | Status e testador do YOLO, upload inválido e modelo indisponível |
 | `test_detector_concorrencia.py` | Trava de carregamento, limite de detecções e trava por modelo; configuração do YOLO pelo `Settings` |
-| `test_e2e.py` | Fluxos de ponta a ponta |
-| `test_inmet_alert_source.py` | Leitura dos avisos |
-| `test_broadcast.py` · `test_logs.py` | Envio entre threads; consulta de logs |
 | `test_event_retention.py` | Limpeza, junção de repetidos e aviso de remoção |
-| `test_tomtom_traffic_source.py` | Índice, API indisponível e via fechada |
+| `test_e2e.py` | Fluxos de ponta a ponta, status da API e cache do painel |
+| `test_cet_camera_catalog.py` | Câmera mais próxima e imagem travada |
+| `test_inmet_alert_source.py` · `test_tomtom_traffic_source.py` | Leitura das APIs externas e falha de rede |
 
 ### Convenções da suíte
 

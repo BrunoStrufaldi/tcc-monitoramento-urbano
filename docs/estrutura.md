@@ -40,7 +40,7 @@ TCC-Atualizado/
 │   │   │   ├── inmet_alert_source.py    avisos meteorológicos oficiais
 │   │   │   └── evidence_annotation.py   desenha as caixas do YOLO na evidência
 │   │   └── data/evidencias/      imagens gravadas durante a execução (fora do Git)
-│   └── tests/                    150 testes pytest (SQLite em memória)
+│   └── tests/                    testes pytest (SQLite em memória)
 │
 ├── data_fusion/                  cálculo da confiabilidade (Python puro, sem FastAPI)
 │   ├── fusion.py                 combina as dimensões com os pesos

@@ -4,8 +4,6 @@ O evento nasce da detecção automática e o painel só consulta. Estes testes
 seguem esse caminho.
 """
 
-from datetime import datetime, timedelta
-
 from fastapi.testclient import TestClient
 
 from app.models.dado_contextual import DadoContextual
@@ -91,41 +89,17 @@ def test_fluxo_fusao_dados(client: TestClient, criar_evento):
     assert recalculo.json()["nivel"] in ("alta", "media", "baixa")
 
 
-def test_fluxo_retencao_remove_evento_expirado(client: TestClient, db_session, criar_evento):
-    """Quem tira o evento do painel é a limpeza automática, não uma rota."""
-    from app.services.event_retention import purgar_eventos_expirados
-
-    evento = criar_evento(titulo="Evento antigo", tipo="transito")
-    evento_id = evento.id
-    evento.detectado_em = datetime.now() - timedelta(days=30)
-    db_session.commit()
-
-    assert client.get(f"/eventos/{evento_id}").status_code == 200
-
-    purgar_eventos_expirados(db_session)
-
-    assert client.get(f"/eventos/{evento_id}").status_code == 404
-
-
-def test_health_e_raiz(client: TestClient):
-    """Verifica endpoints de saúde do sistema."""
-    status_api = client.get("/api/status")
-    assert status_api.status_code == 200
-    assert status_api.json()["status"] == "online"
+def test_painel_e_status_da_api(client: TestClient):
+    assert client.get("/api/status").json()["status"] == "online"
+    assert client.get("/health").json()["status"] == "ok"
 
     # "/" é o painel: a API serve o frontend na mesma origem.
     raiz = client.get("/")
     assert raiz.status_code == 200
     assert "text/html" in raiz.headers["content-type"]
 
-    health = client.get("/health")
-    assert health.status_code == 200
-    assert health.json()["status"] == "ok"
-
-
-def test_painel_html_e_js_revalidam_cache(client: TestClient):
-    """O app.js e o fusion-format.js precisam ser revalidados juntos pelo navegador."""
-    assert client.get("/").headers["cache-control"] == "no-cache"
+    # O app.js e o fusion-format.js precisam ser revalidados juntos pelo navegador.
+    assert raiz.headers["cache-control"] == "no-cache"
     assert client.get("/dist/app.js").headers["cache-control"] == "no-cache"
     assert client.get("/dist/fusion-format.js").headers["cache-control"] == "no-cache"
     assert "cache-control" not in client.get("/css/style.css").headers

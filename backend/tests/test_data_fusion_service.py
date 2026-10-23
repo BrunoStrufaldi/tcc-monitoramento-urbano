@@ -51,79 +51,43 @@ def _criar_evento(db: Session, *, status: str, fonte_tipo: str) -> Evento:
     return evento
 
 
-def test_evento_yolo_ativo_e_rebaixado_quando_abaixo_do_limiar(db_session: Session, monkeypatch):
-    _fixar_confiabilidade(monkeypatch, settings.gx_fusion_auto_ativo_min - 0.05)
-    evento = _criar_evento(db_session, status="ativo", fonte_tipo="yolo")
-
-    _, atualizado = data_fusion_service.aplicar_fusao_evento(
-        db_session, evento.id, persistir=True
-    )
-
-    assert atualizado.status == "em_analise"
-
-
-def test_evento_yolo_em_analise_e_promovido_quando_atinge_limiar(db_session: Session, monkeypatch):
+def test_evento_yolo_e_promovido_ao_atingir_o_limiar(db_session: Session, monkeypatch):
     _fixar_confiabilidade(monkeypatch, settings.gx_fusion_auto_ativo_min + 0.01)
     evento = _criar_evento(db_session, status="em_analise", fonte_tipo="yolo")
 
-    _, atualizado = data_fusion_service.aplicar_fusao_evento(
-        db_session, evento.id, persistir=True
-    )
+    _, atualizado = data_fusion_service.aplicar_fusao_evento(db_session, evento.id, persistir=True)
 
     assert atualizado.status == "ativo"
     logs = db_session.query(LogSistema).filter(LogSistema.evento_id == evento.id).all()
     assert len(logs) == 1
     assert logs[0].contexto["promovido_para_ativo"] is True
 
-
-def test_evento_yolo_ativo_permanece_quando_acima_do_limiar(db_session: Session, monkeypatch):
-    _fixar_confiabilidade(monkeypatch, settings.gx_fusion_auto_ativo_min + 0.10)
-    evento = _criar_evento(db_session, status="ativo", fonte_tipo="yolo")
-
-    _, atualizado = data_fusion_service.aplicar_fusao_evento(
-        db_session, evento.id, persistir=True
-    )
-
-    assert atualizado.status == "ativo"
     # Se o status não muda, não grava log, porque o recálculo roda o tempo todo.
-    assert db_session.query(LogSistema).filter(LogSistema.evento_id == evento.id).count() == 0
-
-
-def test_evento_manual_ativo_nao_e_rebaixado(db_session: Session, monkeypatch):
-    _fixar_confiabilidade(monkeypatch, settings.gx_fusion_auto_ativo_min - 0.20)
-    evento = _criar_evento(db_session, status="ativo", fonte_tipo="operador")
-
-    _, atualizado = data_fusion_service.aplicar_fusao_evento(
-        db_session, evento.id, persistir=True
-    )
-
+    _, atualizado = data_fusion_service.aplicar_fusao_evento(db_session, evento.id, persistir=True)
     assert atualizado.status == "ativo"
+    assert db_session.query(LogSistema).filter(LogSistema.evento_id == evento.id).count() == 1
 
 
-def test_evento_yolo_promovido_quando_arredonda_para_o_limiar(db_session: Session, monkeypatch):
-    """0,7977 aparece como 80% no painel, então o evento vira ativo."""
+def test_evento_yolo_e_rebaixado_abaixo_do_limiar_mas_o_manual_nao(db_session: Session, monkeypatch):
+    _fixar_confiabilidade(monkeypatch, settings.gx_fusion_auto_ativo_min - 0.05)
+    yolo = _criar_evento(db_session, status="ativo", fonte_tipo="yolo")
+    manual = _criar_evento(db_session, status="ativo", fonte_tipo="operador")
+
+    _, yolo = data_fusion_service.aplicar_fusao_evento(db_session, yolo.id, persistir=True)
+    _, manual = data_fusion_service.aplicar_fusao_evento(db_session, manual.id, persistir=True)
+
+    assert yolo.status == "em_analise"
+    assert manual.status == "ativo"
+
+
+def test_limiar_compara_o_percentual_arredondado(db_session: Session, monkeypatch):
+    """0,7977 aparece como 80% no painel e vira ativo. 0,7949 aparece como 79% e não vira."""
     monkeypatch.setattr(settings, "gx_fusion_auto_ativo_min", 0.80)
-    _fixar_confiabilidade(monkeypatch, 0.7977)
-    evento = _criar_evento(db_session, status="em_analise", fonte_tipo="yolo")
-
-    _, atualizado = data_fusion_service.aplicar_fusao_evento(
-        db_session, evento.id, persistir=True
-    )
-
-    assert atualizado.status == "ativo"
-
-
-def test_evento_yolo_nao_promovido_quando_arredonda_abaixo_do_limiar(db_session: Session, monkeypatch):
-    """0,7949 aparece como 79%, então continua em análise."""
-    monkeypatch.setattr(settings, "gx_fusion_auto_ativo_min", 0.80)
-    _fixar_confiabilidade(monkeypatch, 0.7949)
-    evento = _criar_evento(db_session, status="em_analise", fonte_tipo="yolo")
-
-    _, atualizado = data_fusion_service.aplicar_fusao_evento(
-        db_session, evento.id, persistir=True
-    )
-
-    assert atualizado.status == "em_analise"
+    for valor, esperado in ((0.7977, "ativo"), (0.7949, "em_analise")):
+        _fixar_confiabilidade(monkeypatch, valor)
+        evento = _criar_evento(db_session, status="em_analise", fonte_tipo="yolo")
+        _, atualizado = data_fusion_service.aplicar_fusao_evento(db_session, evento.id, persistir=True)
+        assert atualizado.status == esperado, valor
 
 
 def test_migrar_categoria_legada_mantem_contexto_do_evento(db_session: Session):

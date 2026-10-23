@@ -66,31 +66,15 @@ def _disparar(alvo, n: int) -> None:
         t.join(timeout=10)
 
 
-def test_peso_e_carregado_uma_unica_vez_sob_concorrencia(detector_limpo):
+def test_cada_peso_e_carregado_uma_unica_vez(detector_limpo):
     cargas, _ = detector_limpo
     _disparar(detector._load_model, 20)
-    assert cargas["n"] == 1
-
-
-def test_peso_de_incidentes_tambem_carrega_uma_vez(detector_limpo):
-    cargas, _ = detector_limpo
     _disparar(detector._load_incident_model, 20)
-    assert cargas["n"] == 1
+    assert cargas["n"] == 2
 
 
-def test_inferencias_simultaneas_respeitam_o_semaforo(detector_limpo, monkeypatch):
-    _, modelo = detector_limpo
-    monkeypatch.setattr(detector, "_inferencia_semaforo", threading.BoundedSemaphore(2))
-
-    _disparar(lambda: detector.detectar_imagem_real("qualquer.jpg"), 20)
-    assert modelo.pico <= 2
-
-    _disparar(lambda: detector.detectar_incidentes_imagem("qualquer.jpg"), 20)
-    assert modelo.pico <= 2
-
-
-def test_cada_modelo_infere_uma_vez_por_vez(detector_limpo, monkeypatch):
-    """Duas threads nunca usam o mesmo modelo ao mesmo tempo."""
+def test_inferencia_respeita_o_semaforo_e_a_trava_de_cada_modelo(detector_limpo, monkeypatch):
+    """Duas threads nunca usam o mesmo modelo juntas, mas trânsito e alagamento seguem em paralelo."""
     _, modelo = detector_limpo
     monkeypatch.setattr(detector, "_inferencia_semaforo", threading.BoundedSemaphore(2))
 
@@ -101,11 +85,7 @@ def test_cada_modelo_infere_uma_vez_por_vez(detector_limpo, monkeypatch):
     _disparar(lambda: detector.detectar_incidentes_imagem("qualquer.jpg"), 20)
     assert modelo.pico == 1
 
-
-def test_transito_e_alagamento_seguem_em_paralelo(detector_limpo, monkeypatch):
-    """Cada modelo tem sua trava: o de trânsito não bloqueia o de alagamento."""
-    _, modelo = detector_limpo
-    monkeypatch.setattr(detector, "_inferencia_semaforo", threading.BoundedSemaphore(2))
+    modelo.pico = 0
     alvos = [lambda: detector.detectar_imagem_real("a.jpg"), lambda: detector.detectar_incidentes_imagem("b.jpg")] * 10
     threads = [threading.Thread(target=alvo) for alvo in alvos]
     for t in threads:
@@ -115,25 +95,20 @@ def test_transito_e_alagamento_seguem_em_paralelo(detector_limpo, monkeypatch):
     assert modelo.pico <= 2
 
 
-def test_limite_de_concorrencia_vem_do_settings(monkeypatch):
+def test_configuracao_do_yolo_vem_do_settings(monkeypatch):
+    from app.config import Settings
+
     monkeypatch.setattr(settings, "gx_yolo_max_concorrencia", 3)
     assert detector._max_inferencias_simultaneas() == 3
     monkeypatch.setattr(settings, "gx_yolo_max_concorrencia", 0)
     assert detector._max_inferencias_simultaneas() == 1  # nunca zero: travaria tudo
 
-
-def test_caminho_relativo_do_modelo_vale_a_partir_da_raiz(monkeypatch):
-    """Caminhos relativos dos modelos partem da raiz do projeto, não de backend/."""
+    # Caminhos relativos dos modelos partem da raiz do projeto, não de backend/.
     monkeypatch.setattr(settings, "gx_yolo_incident_model", "ml/models/gx-incident.pt")
     assert Path(detector._incident_model_path()) == PROJECT_ROOT / "ml" / "models" / "gx-incident.pt"
     absoluto = str(PROJECT_ROOT / "outro.pt")
     monkeypatch.setattr(settings, "gx_yolo_model", absoluto)
     assert detector._model_path() == absoluto
-
-
-def test_config_do_yolo_vem_do_env_via_settings(monkeypatch):
-    """A configuração do detector vem do .env."""
-    from app.config import Settings
 
     monkeypatch.setenv("GX_YOLO_IMGSZ", "960")
     monkeypatch.setenv("GX_YOLO_TTA", "false")

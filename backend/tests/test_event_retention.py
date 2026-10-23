@@ -55,31 +55,25 @@ def _criar_evento(db: Session, *, tipo: str, minutos_atras: float, lat: float, l
     return evento.id
 
 
-def test_purga_publica_evento_removido(db_session: Session, remocoes_publicadas) -> None:
+def test_purga_remove_so_o_antigo_e_avisa_o_painel(db_session: Session, remocoes_publicadas) -> None:
     antigo = _criar_evento(db_session, tipo="transito", minutos_atras=90, lat=-23.55, lng=-46.63)
     recente = _criar_evento(db_session, tipo="transito", minutos_atras=1, lat=-23.56, lng=-46.64)
 
     assert event_retention.purgar_eventos_expirados(db_session, janela_minutos=45) == 1
+    assert event_retention.purgar_eventos_expirados(db_session, janela_minutos=45) == 0
 
     assert db_session.get(Evento, antigo) is None
     assert db_session.get(Evento, recente) is not None
     assert remocoes_publicadas == [("evento_removido", {"id": antigo})]
 
 
-def test_colapso_publica_evento_removido(db_session: Session, remocoes_publicadas) -> None:
+def test_colapso_junta_repetidos_e_avisa_o_painel(db_session: Session, remocoes_publicadas) -> None:
     velho = _criar_evento(db_session, tipo="transito", minutos_atras=10, lat=-23.55, lng=-46.63)
     novo = _criar_evento(db_session, tipo="transito", minutos_atras=1, lat=-23.55, lng=-46.63)
 
     assert event_retention.colapsar_eventos_duplicados(db_session) == 1
+    assert event_retention.colapsar_eventos_duplicados(db_session) == 0
 
     assert db_session.get(Evento, velho) is None
     assert db_session.get(Evento, novo) is not None
     assert remocoes_publicadas == [("evento_removido", {"id": velho})]
-
-
-def test_sem_remocao_nao_publica_nada(db_session: Session, remocoes_publicadas) -> None:
-    _criar_evento(db_session, tipo="transito", minutos_atras=1, lat=-23.55, lng=-46.63)
-
-    assert event_retention.purgar_eventos_expirados(db_session, janela_minutos=45) == 0
-    assert event_retention.colapsar_eventos_duplicados(db_session) == 0
-    assert remocoes_publicadas == []
