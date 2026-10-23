@@ -7,7 +7,6 @@
 ```text
 TCC-Atualizado/
 ├── README.md                     visão geral + mapa da documentação
-├── ROADMAP.md                    roteiro de melhorias (checklist com commits)
 ├── docs/                         documentação detalhada, um arquivo por assunto (§3–§21)
 ├── package.json                  build/test do frontend (tsc + node:test)
 ├── start.ps1                     sobe a API, que também serve o painel, em http://localhost:8000

@@ -3,10 +3,8 @@
 
 .git/
 .gitignore
-.idea/
-.vscode/
-.codex/
-.claude/
+# Pastas ocultas de editor e ferramentas locais (.idea, .vscode etc.)
+.*/
 **/__pycache__/
 **/*.py[cod]
 **/.pytest_cache/

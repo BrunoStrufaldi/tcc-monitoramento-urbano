@@ -7,9 +7,7 @@ alagamento da via) e publica no painel apenas o que sobrevive a esse cruzamento.
 
 > A documentação tem duas camadas: este README é a visão geral (o que o sistema faz, como
 > ele se encaixa e como rodar), e os detalhes de cada parte estão em `docs/`. As seções
-> mantêm a numeração (§1–§21) em todos os arquivos. Se você é um agente/LLM lendo o
-> repositório pela primeira vez: leia este README e depois o arquivo de `docs/` da parte
-> que vai tocar.
+> mantêm a numeração (§1–§21) em todos os arquivos.
 
 ---
 
