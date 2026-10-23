@@ -1,7 +1,5 @@
 /* ============================================================
-   MotSP — MONITORAMENTO URBANO — Premium Dark Theme
-   Grid: 64px rail | 310px left | flex map | 330px right
-   Topbar: 56px | Feed: 132px
+   MotSP: estilos do painel
    ============================================================ */
 :root {
   --gx: #FF5500;
@@ -72,19 +70,19 @@ input, select, textarea { font-family: inherit; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
 
 /* ============================================================
-   APP SHELL
+   ESTRUTURA DA PÁGINA
    ============================================================ */
 .app-shell {
   display: grid;
   grid-template-rows: 56px 1fr;
   height: 100vh;
-  /* iOS Safari: 100vh inclui a barra do navegador e corta o rodapé do mapa. */
+  /* No iPhone, 100vh inclui a barra do navegador e cortava o rodapé do mapa. */
   height: 100dvh;
   overflow: hidden;
 }
 
 /* ============================================================
-   TOPBAR — 56px
+   BARRA SUPERIOR
    ============================================================ */
 .topbar {
   display: flex;
@@ -147,7 +145,7 @@ input, select, textarea { font-family: inherit; }
   flex-shrink: 0;
 }
 
-/* Field / Control */
+/* Campos */
 
 .control {
   height: 36px;
@@ -165,7 +163,7 @@ input, select, textarea { font-family: inherit; }
 .control:focus-visible { border-color: var(--border-focus); }
 .control:focus:not(:focus-visible) { border-color: rgba(255,255,255,0.18); }
 
-/* Buttons */
+/* Botões */
 .btn-primary {
   height: 38px;
   padding: 0 16px;
@@ -202,7 +200,7 @@ input, select, textarea { font-family: inherit; }
 }
 .btn-icon:active { transform: scale(0.95); }
 
-/* Status Badge */
+/* Selo de status */
 .status-badge {
   height: 26px;
   display: inline-flex;
@@ -250,7 +248,7 @@ input, select, textarea { font-family: inherit; }
 }
 .live-source-status { color: var(--info); font-size: 10px; font-weight: 700; white-space: nowrap; }
 
-/* Skeleton */
+/* Carregamento */
 @keyframes skeleton-pulse { 0%,100%{opacity:.4} 50%{opacity:.12} }
 .skeleton { background: var(--bg-card); border-radius: var(--r-sm); animation: skeleton-pulse 1.4s ease-in-out infinite; }
 
@@ -258,9 +256,7 @@ input, select, textarea { font-family: inherit; }
 .skeleton-circle { width: 48px; height: 48px; border-radius: 50%; }
 
 /* ============================================================
-   WORKSPACE — CSS Grid
-   64px | 310px | flex | 330px
-   rows: 56px topbar is separate | 1fr | 132px feed
+   ÁREA DE TRABALHO
    ============================================================ */
 .workspace {
   display: grid;
@@ -273,12 +269,11 @@ input, select, textarea { font-family: inherit; }
   gap: 0;
 }
 
-/* Feed de atividade inferior removido — mantém uma única linha em todos os
-   breakpoints, que ainda redefinem grid-template-rows com a faixa antiga. */
+/* Uma linha só na grade, em todos os tamanhos de tela. */
 .workspace { grid-template-rows: minmax(0, 1fr) !important; }
 
 /* ============================================================
-   SIDEBAR (rail + left panel)
+   BARRA LATERAL
    ============================================================ */
 .sidebar {
   position: relative;
@@ -293,7 +288,7 @@ input, select, textarea { font-family: inherit; }
   overflow: hidden;
 }
 
-/* Rail */
+/* Barra de ícones */
 .rail {
   width: 64px;
   flex-shrink: 0;
@@ -355,7 +350,7 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* ============================================================
-   LEFT PANEL
+   PAINEL ESQUERDO
    ============================================================ */
 .left-panel {
   display: flex;
@@ -378,15 +373,14 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* ============================================================
-   KPI Grid — 2×2
+   TOTAIS
    ============================================================ */
 .kpi-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
-/* Grade de status (Ativos / Em análise): sempre 2 colunas, altura pelo conteúdo,
-   sobrepondo as variações de .kpi-grid nos breakpoints (eram 4 cards). */
+/* Totais por status (ativos e em análise), sempre em duas colunas. */
 .criticality-grid { grid-template-columns: 1fr 1fr !important; height: auto !important; }
 .criticality-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; color: var(--text-secondary); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
 .criticality-heading strong { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--r-pill); background: rgba(220,53,69,.18); color: #ff6a79; font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -444,7 +438,7 @@ input, select, textarea { font-family: inherit; }
 .kpi-card.accent-success .kpi-spark { color: var(--ok); }
 
 /* ============================================================
-   SECTIONS
+   SEÇÕES
    ============================================================ */
 .section {
   border-radius: var(--r-lg);
@@ -468,8 +462,8 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* ============================================================
-   STATUS FILTER (painel lateral, mobile/tablet)
-   Só aparece nas larguras em que .map-controls está oculto.
+   FILTRO DE STATUS (celular e tablet)
+   Aparece só quando o filtro do mapa está escondido.
    ============================================================ */
 .status-filter {
   display: none;
@@ -490,7 +484,7 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* ============================================================
-   SEVERITY FILTERS
+   FILTROS DE SEVERIDADE
    ============================================================ */
 
 .sev-btn {
@@ -524,13 +518,11 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* ============================================================
-   MAP STAGE
+   MAPA
    ============================================================ */
 .map-stage {
   position: relative;
-  /* Cria um stacking context próprio: os painéis do Leaflet (z-index 200–700)
-     e os overlays do mapa (1000) ficam confinados aqui e não passam por cima
-     da sidebar/right-panel fixos no mobile (z-index 90–92). */
+  /* Mantém as camadas do mapa abaixo dos painéis laterais no celular. */
   z-index: 0;
   background: var(--bg-base);
   grid-column: 3;
@@ -542,13 +534,13 @@ input, select, textarea { font-family: inherit; }
 #mapa { width: 100%; height: 100%; }
 .map-overlay {
   position: absolute;
-  /* Leaflet usa painéis até z-index 700; os comandos do MotSP devem ficar acima. */
+  /* Os controles do MotSP ficam acima das camadas do mapa. */
   z-index: 1000;
   pointer-events: none;
 }
 .map-overlay > * { pointer-events: auto; }
 
-/* Glassmorphism — ONLY on map overlays */
+/* Efeito de vidro, só nos controles que ficam por cima do mapa */
 .map-command-card {
   top: 16px;
   left: 16px;
@@ -582,7 +574,7 @@ input, select, textarea { font-family: inherit; }
 }
 .map-command-card .live-air-status { color: #72c7ff; }
 
-/* Mapa aberto: controles e pop-ups integrados ao visual do MotSP. */
+/* Controles e pop-ups do mapa no visual do MotSP. */
 #mapa .leaflet-container { background: #071019; font-family: var(--font, Inter, sans-serif); }
 #mapa .leaflet-control-zoom { border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; box-shadow: var(--sh-sm); }
 #mapa .leaflet-control-zoom a { width: 28px; height: 28px; line-height: 27px; background: #10161d; color: var(--text-primary); border-color: var(--border-strong); }
@@ -595,7 +587,7 @@ input, select, textarea { font-family: inherit; }
 #mapa .leaflet-popup-close-button { width: 28px; height: 28px; color: var(--text-secondary) !important; font-size: 20px; line-height: 26px; }
 #mapa .leaflet-popup-close-button:focus-visible { outline: 2px solid var(--gx-light); outline-offset: -3px; border-radius: 4px; }
 
-/* Marcadores com leitura imediata de tipo e criticidade, como no painel de comando. */
+/* Marcadores do mapa */
 .gx-marker-shell { background: transparent; border: 0; }
 .gx-map-marker {
   position: relative;
@@ -632,7 +624,7 @@ input, select, textarea { font-family: inherit; }
   50% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--marker-color) 5%, transparent), 0 0 20px var(--marker-color); }
 }
 
-/* Map Controls */
+/* Controles do mapa */
 .map-controls {
   top: 8px;
   right: 8px;
@@ -641,7 +633,7 @@ input, select, textarea { font-family: inherit; }
   align-items: center;
 }
 
-/* Filtro de status (menu suspenso) no overlay do mapa */
+/* Filtro de status no mapa */
 .map-filter-select {
   display: inline-flex;
   align-items: center;
@@ -671,7 +663,7 @@ input, select, textarea { font-family: inherit; }
 .map-controls .map-icon-only svg { width: 17px; height: 17px; }
 
 /* ============================================================
-   TESTADOR YOLO (barra esquerda)
+   TESTADOR YOLO
    ============================================================ */
 #view-yolo-teste { gap: 12px; padding: 4px 2px 16px; overflow-y: auto; min-height: 0; }
 .yt-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
@@ -711,7 +703,7 @@ input, select, textarea { font-family: inherit; }
 .yt-det-conf { font-size: 12px; font-weight: 750; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .yt-det-src { grid-column: 1 / -1; font-size: 10px; color: var(--text-muted); }
 
-/* Map Fallback */
+/* Aviso quando o mapa não carrega */
 .map-fallback {
   position: absolute;
   inset: 0;
@@ -738,7 +730,7 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* ============================================================
-   RIGHT PANEL — 330px
+   PAINEL DIREITO
    ============================================================ */
 .right-panel {
   grid-column: 4;
@@ -819,7 +811,7 @@ input, select, textarea { font-family: inherit; }
 }
 .rp-retry:hover { border-color: var(--gx-light); }
 
-/* Evidence Cards */
+/* Cartões de evidência */
 .rp-evidence-card {
   padding: 10px;
   border-radius: var(--r-md);
@@ -881,7 +873,7 @@ input, select, textarea { font-family: inherit; }
 .evidence-viewer-image { display: block; width: 100%; min-height: 0; max-height: calc(100vh - 120px); object-fit: contain; background: #05080b; }
 
 /* ============================================================
-   SELECTED EVENT PANEL
+   EVENTO SELECIONADO
    ============================================================ */
 .selected-event {
   position: relative;
@@ -940,7 +932,7 @@ input, select, textarea { font-family: inherit; }
   opacity: 0.5;
 }
 
-/* Confidence Circle */
+/* Círculo de confiança */
 .confidence-circle-wrap {
   display: flex;
   align-items: center;
@@ -978,7 +970,7 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* ============================================================
-   POPUP DO MAPA (Leaflet)
+   POPUP DO MAPA
    ============================================================ */
 .gx-event-popup { width: min(272px, calc(100vw - 84px)); max-width: 300px; color: var(--text-primary); font-family: var(--font-sans); }
 .gx-event-popup-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-right: 22px; margin-bottom: 8px; }
@@ -991,18 +983,18 @@ input, select, textarea { font-family: inherit; }
 .gx-event-popup-confidence { color: var(--gx-light); font-size: 11px; font-weight: 750; white-space: nowrap; }
 
 /* ============================================================
-   ANIMATIONS
+   ANIMAÇÕES
    ============================================================ */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ============================================================
-   VIEWS
+   TELAS
    ============================================================ */
 .view { display: flex; flex-direction: column; gap: 12px; }
 .view[hidden] { display: none; }
 .view-active { animation: fadeIn var(--dur-slow) var(--ease) forwards; }
 
-/* Painel "como o score foi calculado" — abaixo do evento selecionado no mapa */
+/* Painel que explica como a nota foi calculada */
 .fusion-explain {
   padding: 12px;
   border-radius: var(--r-lg);
@@ -1075,7 +1067,7 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* ============================================================
-   FOCUS & ACCESSIBILITY
+   FOCO E ACESSIBILIDADE
    ============================================================ */
 :focus-visible {
   outline: 2px solid var(--gx-light);
@@ -1102,12 +1094,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .skip-link:focus { top: 0; }
 
-/* Right toggle */
+/* Botão do painel direito */
 .left-toggle { display: none; }
 .left-toggle.on { color: var(--gx-light); background: var(--gx-dim); }
 
 /* ============================================================
-   RESPONSIVE — 1366×768
+   TELAS MENORES
    ============================================================ */
 @media (max-width: 1400px) {
   .workspace {
@@ -1119,7 +1111,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 }
 
-/* Tablet: right panel becomes drawer */
+/* Tablet: o painel direito vira uma gaveta */
 @media (max-width: 1200px) {
   .workspace { grid-template-columns: 56px 285px 1fr 0; }
   .right-panel {
@@ -1136,7 +1128,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .right-panel-close { display: inline-flex; }
 }
 
-/* Tablet: sidebar hidden */
+/* Tablet: barra lateral escondida */
 @media (max-width: 980px) {
   .workspace { grid-template-columns: 1fr; grid-template-rows: 1fr 132px; }
   .sidebar { display: none; }
@@ -1155,7 +1147,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .map-controls { display: none; }
 }
 
-/* Mobile */
+/* Celular */
 @media (max-width: 680px) {
   .topbar { padding: 0 12px; gap: 8px; }
   .topbar-actions { margin-left: auto; gap: 4px; }
@@ -1188,12 +1180,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     box-shadow: var(--sh-lg);
   }
   .right-panel.open { transform: translateX(0); }
-  /* iOS/WebKit: os painéis do Leaflet usam translate3d (camadas compostas) e
-     o Safari já desenhou o mapa por cima da sidebar fixa mesmo com z-index
-     maior. Três defesas: (1) o mapa vira uma camada composta própria, (2) os
-     painéis fixos também, com z-index acima de qualquer valor interno do mapa,
-     (3) com a sidebar aberta o mapa nem é pintado — ela cobre 94vw, e a
-     sidebar vem antes do mapa no DOM, então o seletor de irmão funciona. */
+  /* No Safari do iPhone o mapa às vezes aparecia por cima da barra lateral.
+     As regras abaixo colocam os painéis numa camada acima do mapa e deixam de
+     desenhar o mapa enquanto a barra lateral está aberta. */
   .map-stage { isolation: isolate; transform: translateZ(0); }
   .sidebar, .right-panel { z-index: 1050; will-change: transform; }
   .sidebar.open ~ .map-stage { visibility: hidden; }
@@ -1226,7 +1215,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* ============================================================
-   COMPACT OPERATIONAL LAYOUT — referência do centro de comando
+   LAYOUT COMPACTO
    ============================================================ */
 @media (min-width: 721px) {
   .app-shell { grid-template-rows: 52px 1fr; }
@@ -1250,7 +1239,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
   .workspace {
     height: calc(100vh - 52px);
-    /* Painéis com largura de leitura; o mapa segue como foco central. */
+    /* Painéis com largura boa para leitura e o mapa no centro. */
     grid-template-columns: 56px 270px minmax(390px, 1fr) 294px;
     grid-template-rows: 1fr 148px;
   }
@@ -1290,7 +1279,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .selected-event-meta { display: grid !important; }
   .confidence-circle-wrap { min-height: 58px; transform: none; margin: 0; }
 
-  /* No painel compacto, detalhes operacionais têm prioridade sobre gamificação. */
+  /* No layout compacto os detalhes do evento têm prioridade. */
   .section { padding: 11px; border-radius: 7px; }
   .section-title { font-size: 12px; }
 
@@ -1316,8 +1305,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 }
 
-/* Abaixo de 1200px, o painel direito mantém o comportamento de drawer e o
-   mapa conserva largura útil; esta regra vem após o layout desktop compacto. */
+/* Abaixo de 1200px o painel direito continua como gaveta. */
 @media (min-width: 721px) and (max-width: 1200px) {
   .workspace { grid-template-columns: 56px 270px minmax(0, 1fr); }
   .right-panel {
@@ -1344,8 +1332,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 @media (max-width: 680px) {
   .map-stage { grid-column: 1; grid-row: 1; }
-  /* Zoom do Leaflet: afastado do rodapé (barra do Safari / gesto de início)
-     e com alvo de toque de 44px; o "−" ficava cortado abaixo da tela. */
+  /* Botões de zoom mais longe do rodapé e maiores, para facilitar o toque. */
   #mapa .leaflet-bottom.leaflet-right { right: 12px; bottom: 24px; }
   #mapa .leaflet-control-zoom { margin: 0; }
   #mapa .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 43px; font-size: 20px; }
@@ -1360,7 +1347,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* ============================================================
-   OPERATION DESK — visual inspirado no painel de referência
+   VISUAL DO PAINEL
    ============================================================ */
 @media (min-width: 1201px) {
   :root { --bg-base: #070c10; --bg-panel: #0c1217; --bg-raised: #101820; --bg-card: #111a22; --bg-input: #0a1015; --border: #1b2a34; --border-strong: #2a3a45; --text-primary: #e7edf1; --text-secondary: #9aa9b4; --text-muted: #64737e; }
@@ -1435,9 +1422,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* ============================================================
-   MotSP — identidade visual e hierarquia da marca
-   A camada abaixo consolida o visual do centro de operações sem
-   interferir nos contratos de dados, mapa ou drawers existentes.
+   IDENTIDADE VISUAL DO MOTSP
    ============================================================ */
 .gx-wordmark {
   display: block;
@@ -1463,8 +1448,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   box-shadow: 0 0 0 3px rgba(46, 170, 90, .09);
 }
 
-/* Superfícies sólidas para leitura. Transparência fica restrita aos controles
-   que repousam diretamente sobre o mapa. */
+/* Fundos sólidos para facilitar a leitura. A transparência fica só nos
+   controles que ficam por cima do mapa. */
 .topbar { background: #080c10; border-bottom-color: #202830; }
 .sidebar, .left-panel, .right-panel {
   background: #0d1319;
@@ -1567,9 +1552,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 @media (max-width: 560px) {
-  /* Em telas estreitas o wordmark mantém a identificação sem disputar espaço
-     com as ações operacionais. O nome completo permanece visível no tablet e
-     desktop. */
+  /* Em telas estreitas aparece só o logo. O nome completo aparece no tablet e no computador. */
   .brand-text { display: none; }
   .brand-block { gap: 0; }
   #ultima-atualizacao { display: none; }
@@ -1584,8 +1567,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .brand-text, .brand-eyebrow { display: none; }
 }
 
-/* Composição de centro de comando: áreas distintas, leitura lateral mais
-   confortável e comandos do mapa com prioridade menor que o conteúdo. */
+/* Áreas bem separadas e painéis laterais mais confortáveis de ler. */
 @media (min-width: 721px) {
   .workspace {
     box-sizing: border-box;
@@ -1633,8 +1615,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .kpi-card { min-height: 86px; padding: 11px 12px; }
   .selected-event { padding: 12px; }
 
-  /* A busca concentra os comandos de mapa; o resumo permanece no DOM para
-     integrações, mas não compete visualmente com os dados geográficos. */
+  /* O resumo continua na página, mas fica escondido para não disputar espaço com o mapa. */
   .map-command-card { display: none; }
   .selected-event {
     display: grid;
@@ -1648,7 +1629,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 }
 
-/* Controles e alertas no padrão de leitura operacional da referência. */
+/* Controles e alertas */
 .map-filter-button {
   height: 36px;
   display: inline-flex;
@@ -1666,9 +1647,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .map-filter-button:hover { border-color: rgba(255, 138, 0, .5); color: var(--gx-light); }
 .map-filter-button svg { width: 16px; height: 16px; }
 
-/* O GeoSampa (MapaBase_Politico) é servido em tons claros; invertemos a
-   luminosidade antes de aplicar o mesmo tingimento azul-carvão usado no
-   centro de comando, mantendo o provedor de mapa intacto. */
+/* O mapa do GeoSampa vem claro. As cores são invertidas e depois tingidas
+   de azul escuro para combinar com o painel. */
 #mapa .leaflet-tile-pane {
   filter: invert(1) hue-rotate(180deg) sepia(.16) hue-rotate(155deg) saturate(1.28) brightness(.88) contrast(1.06);
 }
@@ -1704,7 +1684,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   #right-panel-evidence .right-panel-empty { min-height: 134px; }
 }
 
-/* Ajuste final de densidade: deve ficar após os breakpoints legados. */
+/* Ajuste de espaçamento. Precisa ficar depois das regras de tamanho de tela. */
 @media (min-width: 1201px) {
   .workspace { grid-template-columns: 86px 342px minmax(530px, 1fr) 460px; grid-template-rows: minmax(0, 1fr) 142px; height: calc(100vh - 64px); padding: 8px; gap: 8px; }
   .sidebar { grid-column: 1 / 3; }
@@ -1724,7 +1704,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .rp-evidence-img { aspect-ratio: 16 / 8.5; }
 }
 
-/* Fechamento visual do painel operacional na proporção da referência. */
+/* Acabamento do painel */
 @media (min-width: 1201px) {
   .sidebar-content { padding: 10px; gap: 8px; }
   .kpi-card { min-height: 92px; padding: 11px 12px; }
@@ -1742,7 +1722,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 }
 
-/* Refinamento de fidelidade visual sem promover observações a incidentes. */
+/* Ajustes finos de visual */
 .gx-marker-shell.is-selected .gx-map-marker {
   background: radial-gradient(circle at 38% 34%,
     color-mix(in srgb, var(--marker-color) 75%, white),
@@ -1751,7 +1731,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-color: color-mix(in srgb, var(--marker-color) 50%, white);
 }
 .selected-event[data-type="observacao_visual"] .selected-event-header::before { content: "◎"; }
-/* Trânsito: ícone de carro no lugar do símbolo padrão de alagamento. */
+/* Trânsito usa o ícone de carro. */
 .selected-event[data-type="transito"] .selected-event-header::before {
   content: "";
   background:
@@ -1801,7 +1781,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .rp-evidence-img { aspect-ratio: 16 / 8.2; }
 }
 
-/* Passagem de comparação direta com a composição 1672 × 941. */
+/* Ajustes de medidas */
 
 @media (min-width: 1201px) {
   #view-dashboard > .section:last-child { display: none; }
@@ -1815,15 +1795,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .rp-evidence-disclaimer { margin-top: 5px; padding: 5px 7px; }
 }
 
-/* Evita frestas de subpixel entre tiles durante zoom e filtros visuais. */
+/* Evita linhas finas entre os pedaços do mapa durante o zoom. */
 #mapa .leaflet-tile {
   outline: 1px solid transparent;
   backface-visibility: hidden;
   transform: translateZ(0);
 }
 
-/* Desktop compacto: mantém as quatro áreas dentro da janela sem comprimir
-   conteúdo sobre seus vizinhos. */
+/* Computador com tela menor: as quatro áreas cabem na janela sem se sobrepor. */
 @media (min-width: 1201px) and (max-width: 1450px) {
   .workspace {
     grid-template-columns: 60px 230px minmax(420px, 1fr) 310px;
@@ -1871,8 +1850,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .rp-evidence-disclaimer { font-size: 7px; }
 }
 
-/* Altura reduzida: todo o painel principal e a navegação terminam antes do
-   feed, sem círculos ou textos cortados. */
+/* Telas baixas: tudo cabe na altura da tela, sem cortar textos. */
 @media (min-width: 1201px) and (max-height: 700px) {
   .workspace { grid-template-rows: minmax(0, 1fr) 96px; }
   .rail { padding-block: 4px; }
@@ -1900,12 +1878,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* ============================================================
-   CORRECOES DE INTEGRIDADE VISUAL
-   Mantidas ao final do arquivo para neutralizar regras legadas conflitantes.
+   CORREÇÕES DE VISUAL
+   Ficam no fim do arquivo para valer por cima das regras anteriores.
    ============================================================ */
 
-/* Sobrepor os tiles elimina as frestas claras criadas pelo arredondamento de
-   subpixel quando o navegador reduz o painel para caber na janela. */
+/* Os pedaços do mapa se sobrepõem um pouco para não aparecer linha clara entre eles. */
 #mapa .leaflet-tile {
   width: 256.5px !important;
   height: 256.5px !important;
@@ -2049,7 +2026,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* ============================================================
-   COMPOSICAO FINAL — referencia 1672 x 941
+   AJUSTES FINAIS DE LAYOUT
    ============================================================ */
 .selected-event-section-title {
   color: var(--text-secondary);
@@ -2113,7 +2090,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   }
   .sidebar, .map-stage, .right-panel { grid-row: 1; }
 
-  /* Cabecalho */
+  /* Cabeçalho */
   .topbar { height: 62px; min-height: 62px; max-height: 62px; padding: 0 11px 0 22px; }
   .brand-block { min-width: 300px; gap: 22px; }
   .gx-wordmark { width: 70px; }
@@ -2167,7 +2144,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .topbar-actions > .topbar-sep { left: 746px; top: 7px; width: 1px; height: 28px; margin: 0; }
   #btn-toggle-right { left: 756px; top: 2px; width: 38px; height: 38px; display: inline-flex !important; }
 
-  /* Navegacao e painel esquerdo */
+  /* Navegação e painel esquerdo */
   .rail { padding: 2px 7px 8px; overflow: hidden; }
   .rail-btn { width: 71px; height: 76px; min-height: 76px; }
   .sidebar-content { padding: 10px 10px 0; gap: 0; overflow: hidden; }
@@ -2254,7 +2231,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   #mapa .leaflet-control-zoom { width: 44px; margin: 0; }
   #mapa .leaflet-control-zoom a { width: 42px; height: 36px; line-height: 35px; }
 
-  /* Alertas e evidencia */
+  /* Alertas e evidência */
   .right-panel-header { height: 40px; min-height: 40px; padding: 0 13px; }
   .right-panel-title { font-size: 12px; }
   .right-panel-content { padding: 0 8px 8px; gap: 8px; overflow: hidden; }
@@ -2291,8 +2268,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .evidence-live-metrics { font-size: 8px; }
 }
 
-/* Faixa desktop intermediaria: mantem os quatro paineis visiveis sem
-   comprimir ou recortar a coluna de alertas. */
+/* Telas médias: os quatro painéis continuam visíveis sem cortar os alertas. */
 @media (min-width: 1201px) and (max-width: 1439px) and (min-height: 701px) {
   .workspace {
     grid-template-columns: 72px 292px minmax(420px, 1fr) 360px;
@@ -2303,8 +2279,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 }
 
-/* Compactacao vertical para notebooks. A composicao 1672 x 941 permanece
-   intocada; esta faixa evita cortar Data Fusion e evidencia em 768/800 px. */
+/* Notebooks: evita cortar o Data Fusion e a evidência em telas de 768 ou
+   800 px de altura. */
 @media (min-width: 1201px) and (min-height: 701px) and (max-height: 900px) {
   .kpi-grid { height: 170px; }
   .kpi-card { height: 83px; min-height: 83px; padding-block: 9px; }
@@ -2339,13 +2315,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .rp-evidence-disclaimer { min-height: 22px; margin-top: 3px; padding-block: 3px; }
 }
 
-/* Painel "como o score foi calculado". No desktop de coluna travada
-   (overflow:hidden), o painel vira o item flexível de #view-dashboard: cresce
-   para ocupar todo o espaço livre abaixo do card do evento e rola por dentro se
-   faltar altura. Abaixo de 1201px a coluna inteira rola e o painel fica solto. */
+/* Painel que explica a nota. No computador ele ocupa o espaço que sobra
+   abaixo do evento e rola por dentro se precisar. Em telas menores a coluna
+   inteira rola. */
 @media (min-width: 1201px) {
-  /* #view-dashboard deixa de ter altura fixa e passa a preencher exatamente a
-     coluna; o painel é o item que estica para consumir a folga. */
+  /* A coluna ocupa toda a altura e o painel estica para preencher o resto. */
   #view-dashboard { height: auto; min-height: 0; flex: 1 1 auto; }
   .fusion-explain {
     flex: 1 1 auto;
@@ -2367,17 +2341,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .fusion-explain-title { font-size: 10px; }
   .fusion-explain-body { gap: 5px; }
   .fx-label { font-size: 9px; }
-  /* Tela baixa: as linhas nota × peso já mostram a conta; corta a prosa. */
+  /* Em tela baixa o texto explicativo some e ficam só os números. */
   .fx-weights, .fx-just { display: none; }
 }
 
 /* ============================================================
-   LAYOUT — a secao "Criticidade" foi removida da interface.
-   No modo retrato, a "Evidencia visual" (normalmente no painel
-   direito) desce para o painel esquerdo, no lugar dela, e o
-   acesso ao painel direito some. O app.ts alterna o atributo
-   [hidden] de #left-evidence-dock e move a .section-evidence
-   entre os dois paineis.
+   CELULAR EM PÉ
+   A evidência visual sai do painel direito e vai para o esquerdo.
+   Quem faz essa troca é o app.ts.
    ============================================================ */
 
 #left-evidence-dock:not([hidden]) { display: block; }
@@ -2386,8 +2357,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 @media (orientation: portrait) {
   #btn-toggle-right { display: none !important; }
-  /* Evidência YOLO no modo vertical: versão enxuta, sem as linhas
-     Tipo/Modelo e sem o aviso do Data Fusion. */
+  /* Evidência com o celular em pé: versão mais curta, sem tipo, modelo e aviso do Data Fusion. */
   .rp-evidence-row--tipo,
   .rp-evidence-row--modelo,
   .rp-evidence-disclaimer { display: none !important; }

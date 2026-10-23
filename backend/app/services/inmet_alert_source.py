@@ -1,18 +1,7 @@
-"""Avisos meteorológicos oficiais ativos via INMET (Instituto Nacional de
-Meteorologia) — API pública, sem chave, JSON estruturado.
+"""Avisos oficiais do INMET para a cidade de São Paulo.
 
-Diferente da leitura de chuva atual (``weather_source.py``, sensor bruto),
-isto é o julgamento institucional oficial de que existe risco meteorológico
-numa área — mais perto do papel que a dimensão "fonte oficial" do Data
-Fusion deveria preencher (hoje sempre 0%, porque a única fonte de todo
-evento autônomo é a própria câmera YOLO). Verificado em 26/08/2026
-consultando o JSON de verdade, campo por campo (não só a documentação):
-havia um aviso ativo real de tempestade cobrindo São Paulo no momento do
-teste, com "riscos" mencionando alagamento em texto livre.
-
-A API cobre o Brasil inteiro; aqui filtramos por município via código IBGE
-(campo ``geocodes`` — string de códigos separados por vírgula, confirmado no
-JSON real) e checamos se o texto livre de "riscos" menciona alagamento.
+A API do INMET é pública e cobre o Brasil todo. O sistema filtra os avisos do
+município e verifica se o texto deles fala em risco de alagamento.
 """
 
 from __future__ import annotations
@@ -24,10 +13,8 @@ _URL = "https://apiprevmet3.inmet.gov.br/avisos/ativos"
 _IBGE_SAO_PAULO_CAPITAL = "3550308"
 _PALAVRAS_ALAGAMENTO = ("alagamento", "inunda", "enchente")
 
-# Escala de cor oficial do INMET (portal.inmet.gov.br/avisos) — o JSON não
-# traz um índice ordinal limpo (id_severidade não é 1/2/3), só o rótulo em
-# texto, então a conversão pra índice 0-10 (mesma escala do índice de
-# congestionamento do trânsito) é derivada daqui.
+# O INMET só informa o nível do aviso em texto. Aqui cada nível vira um número
+# de 0 a 10, a mesma escala usada no trânsito.
 _SEVERIDADE_INDICE = {
     "perigo potencial": 4.0,  # amarelo
     "perigo": 7.0,  # laranja
@@ -40,7 +27,7 @@ def _severidade_indice(rotulo: str | None) -> float:
 
 
 def obter_aviso_ativo(municipio_ibge: str = _IBGE_SAO_PAULO_CAPITAL) -> dict:
-    """Aviso ativo mais severo do INMET que cobre o município informado, se houver."""
+    """Devolve o aviso mais grave do INMET para o município, se houver."""
     request = Request(_URL, headers={"User-Agent": "Mozilla/5.0 (MotSP inmet-alert-source)"})
     try:
         with urlopen(request, timeout=8) as response:  # nosec B310 - URL fixa e pública

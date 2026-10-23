@@ -25,9 +25,8 @@ let reconnectAttempt = 0;
 const WS_MAX_RECONNECT = 8;
 const WS_BASE_DELAY_MS = 1000;
 const POLLING_INTERVAL_MS = 15000;
-// Rede de segurança: mesmo com WS/SSE vivos, reconcilia a lista com a API de
-// tempos em tempos. Qualquer mensagem perdida (socket caído entre o create e o
-// remove, remoção feita fora do broadcast) deixaria evento fantasma na tela.
+// De tempos em tempos a lista é conferida com a API, mesmo com o tempo real
+// funcionando. Assim, se alguma mensagem se perder, nenhum evento velho fica na tela.
 const RESYNC_INTERVAL_MS = 120000;
 let pingTimer = null;
 let resyncTimer = null;
@@ -58,14 +57,13 @@ function escapeHtml(value) {
         .replace(/'/g, "&#39;");
 }
 /* ============================================================
-   REAL-TIME: WebSocket → SSE → Polling (cascata de fallback)
+   TEMPO REAL: tenta WebSocket, depois SSE e por último consulta periódica
    ============================================================ */
 function updateConnectionStatus() {
     const el = byId("status-conexao");
     if (!el)
         return;
-    // O canal (WebSocket/SSE) fica só na classe CSS e no title: para quem usa
-    // o painel a diferença não importa, os dois são tempo real.
+    // Para quem usa o painel tanto faz se é WebSocket ou SSE, os dois são tempo real.
     const labels = {
         ws: "Sistema ao vivo",
         sse: "Sistema ao vivo",
@@ -126,8 +124,7 @@ function connectWebSocket() {
         connectionMode = "ws";
         reconnectAttempt = 0;
         updateConnectionStatus();
-        // Reconecta ≠ continua de onde parou: enquanto o canal esteve fora, eventos
-        // podem ter sido criados e removidos sem a tela saber.
+        // Enquanto a conexão esteve fora, eventos podem ter mudado sem a tela saber.
         void resyncEvents();
         startResyncTimer();
         if (pingTimer)
@@ -220,9 +217,7 @@ function startResyncTimer() {
         clearInterval(resyncTimer);
     resyncTimer = setInterval(() => { void resyncEvents(); }, RESYNC_INTERVAL_MS);
 }
-/** Reconciliação silenciosa com a API: deixa a lista exatamente igual à do
- * backend, sem o "flash" de carregamento do loadEvents e sem trocar o evento
- * selecionado por conta própria. */
+/** Deixa a lista igual à da API sem piscar a tela e sem trocar o evento selecionado. */
 async function resyncEvents() {
     try {
         const remotos = await fetchEvents();
@@ -241,8 +236,7 @@ async function resyncEvents() {
         updateLastUpdate();
     }
     catch {
-        // Silencioso de propósito: o canal de tempo real e o polling já sinalizam
-        // API indisponível; um resync que falha não deve limpar a tela.
+        // Se falhar, não faz nada: o aviso de API fora do ar já aparece em outro lugar.
     }
 }
 function fallbackReconnect() {
@@ -298,8 +292,7 @@ function handleRealtimeMessage(tipo, dados) {
     }
 }
 function updateMarker(evento) {
-    // Evento que não passa no filtro atual (status/severidade/busca) não pode
-    // ganhar marcador só por ter chegado via WebSocket — remove se já existir.
+    // Se o evento não passa no filtro atual, ele não aparece no mapa.
     if (!isEventVisible(evento)) {
         removeMarker(evento.id);
         return;
@@ -345,7 +338,7 @@ function statusColor(status) {
         default: return "#E6A817";
     }
 }
-/** Ícone de carro (Material "directions_car") usado em eventos de trânsito. */
+/** Ícone de carro usado nos eventos de trânsito. */
 const GLYPH_CARRO = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/></svg>';
 function isEventoTransito(event) {
     const value = (event.tipo + " " + event.titulo).toLowerCase();
@@ -358,9 +351,8 @@ function setApiStatus(ok, message) {
     element.classList.toggle("erro", !ok);
 }
 /* ============================================================
-   LAYOUT VERTICAL — no retrato, a "Evidência visual" (bloco do
-   painel direito) desce para o painel esquerdo, ocupando o
-   espaço da antiga Criticidade. Em paisagem volta ao seu lugar.
+   CELULAR EM PÉ: a evidência visual passa do painel direito
+   para o esquerdo. Com o celular deitado ela volta ao lugar.
    ============================================================ */
 function initEvidencePanelDock() {
     const dock = document.getElementById("left-evidence-dock");
@@ -469,11 +461,10 @@ function ytDrawBoxes(deteccoes) {
 async function ytChamarModelo(rota) {
     const form = new FormData();
     form.append("file", ytFile);
-    // Sem parâmetro de confiança: o servidor aplica o limiar padrão de cada modelo
-    // e devolve o que reconheceu, com a confiança de cada caixa.
+    // O servidor usa a confiança mínima padrão de cada modelo.
     const response = await apiFetch(rota, { method: "POST", body: form });
     if (response.status === 503)
-        return []; // modelo indisponível — tratado no resumo
+        return []; // modelo indisponível, o resumo avisa
     if (!response.ok)
         throw new Error("O modelo retornou " + response.status);
     return response.json();
@@ -496,7 +487,7 @@ async function ytAnalisar() {
         let tone = "ok";
         let titulo = "Nada relevante detectado";
         let detalhe = veiculos.length
-            ? veiculos.length + " veículo(s) reconhecido(s) — abaixo do limite de trânsito (" + ytMinVeiculos + ")"
+            ? veiculos.length + " veículo(s) reconhecido(s), abaixo do limite de trânsito (" + ytMinVeiculos + ")"
             : "Nenhum objeto ou incidente reconhecido acima do limiar";
         if (alagamentos.length) {
             const maxConf = Math.max(...alagamentos.map((d) => d.confianca));
@@ -554,7 +545,7 @@ async function ytCarregarStatus() {
         badge.textContent = objOk && incOk ? "2 modelos prontos" : objOk || incOk ? "1 de 2 modelos" : "Modelos indisponíveis";
         badge.className = "yt-status " + (objOk && incOk ? "ready" : objOk || incOk ? "partial" : "unavailable");
         if (!incOk)
-            ytSetFeedback("Modelo de alagamento indisponível no servidor — só a detecção de objetos vai responder.", "error");
+            ytSetFeedback("Modelo de alagamento indisponível no servidor. Só a detecção de objetos vai responder.", "error");
     }
     catch {
         badge.textContent = "API indisponível";
@@ -577,9 +568,8 @@ function initYoloTester() {
     byId("yt-analyze").addEventListener("click", () => { void ytAnalisar(); });
     void ytCarregarStatus();
 }
-/** Baixa todos os status de uma vez: o filtro Ativos/Em análise é aplicado no
- * cliente (isEventVisible), assim os KPIs mostram o total real de cada status
- * mesmo com o filtro ligado. */
+/** Baixa os eventos de todos os status. O filtro é aplicado aqui no navegador,
+ * assim os totais continuam certos mesmo com o filtro ligado. */
 async function fetchEvents() {
     const params = new URLSearchParams({ limite: "200" });
     const response = await apiFetch("/eventos?" + params.toString());
@@ -587,7 +577,7 @@ async function fetchEvents() {
         throw new Error("API retornou " + response.status);
     return response.json();
 }
-/** GET na API que lança erro em resposta não-2xx. */
+/** Faz um GET na API e dá erro se a resposta não for de sucesso. */
 async function fetchOperationalData(url) {
     const response = await apiFetch(url);
     if (!response.ok)
@@ -637,8 +627,7 @@ function matchesStatusFilter(event) {
     const statusFiltro = currentStatusFilter();
     return !statusFiltro || event.status === statusFiltro;
 }
-/** Sincroniza o controle segmentado do painel lateral (mobile) com o <select>
- * do mapa (desktop); os dois manipulam o mesmo filtro. */
+/** Mantém o filtro do celular e o do computador sempre iguais. */
 function syncStatusFilterButtons() {
     const current = currentStatusFilter();
     document.querySelectorAll("#filtro-status-mobile button[data-status]").forEach((btn) => {
@@ -682,9 +671,8 @@ function markerGlyph(event) {
 }
 function markerIcon(event, style, selected = false) {
     const critical = style.label === "Crítica";
-    // O marcador passa a comunicar o STATUS (ativo = verde, em análise = amarelo),
-    // não mais a criticidade.
-    // Selecionado usa a MESMA cor do status (só maior e com brilho), não laranja.
+    // A cor do marcador mostra o status: verde é ativo e amarelo é em análise.
+    // O selecionado tem a mesma cor, só que maior e com brilho.
     const markerColor = statusColor(event.status);
     const hue = markerColor;
     const transito = isEventoTransito(event);
@@ -946,11 +934,10 @@ function scheduleMarkerRefresh() {
         clearTimeout(markerRefreshTimer);
     markerRefreshTimer = setTimeout(() => applyMarkers(false), 80);
 }
-// Pesos-base das dimensões da fusão — espelham data_fusion/fusion.py (PESOS).
-// Só fallback: a API manda `peso_base` por componente, e o de contexto varia
-// com a concordância entre as fontes contextuais. Proporção 4:3.
+// Pesos padrão do Data Fusion, iguais aos de data_fusion/fusion.py. Só são
+// usados se a API não mandar os pesos dela.
 const PESO_BASE_FUSAO = { ia: 4 / 7, contexto: 3 / 7 };
-/** Painel no mapa: a conta completa da fusão, o veredito e o dado decisivo. */
+/** Painel no mapa com a conta do Data Fusion, o resultado e o que mais pesou. */
 function renderFusionExplain(result, eventoTipo) {
     const panel = document.getElementById("fusion-explain");
     const levelBadge = document.getElementById("fusion-explain-level");
@@ -971,8 +958,8 @@ function renderFusionExplain(result, eventoTipo) {
     levelBadge.textContent = formatFusionLevel(result.nivel) + " · " + finalPct;
     levelBadge.className = "fusion-explain-level nivel-" + result.nivel;
     // --- A conta ---
-    // Peso contextual flexionado pela concordância das fontes: vira frase própria
-    // para a lista "Base" continuar mostrando os pesos fixos, que somam 100%.
+    // Quando o peso do contexto muda, isso aparece numa frase separada, para a
+    // lista de pesos padrão continuar somando 100%.
     const ajustados = usados.filter((c) => PESO_BASE_FUSAO[c.nome] != null
         && Math.abs(pesoBase(c) - PESO_BASE_FUSAO[c.nome]) > 0.005);
     const ajuste = ajustados.map((c) => escapeHtml(rotulo(c)) + " " + p0(PESO_BASE_FUSAO[c.nome]) + "&rarr;" + p0(pesoBase(c)) +
@@ -1024,7 +1011,7 @@ function renderFusionExplain(result, eventoTipo) {
     const dominante = usados.reduce((maior, atual) => (atual.contribuicao > maior.contribuicao ? atual : maior));
     const decisivo = '<div class="fx-block">' +
         '<span class="fx-label">O que mais pesou</span>' +
-        '<p class="fx-lead"><strong>' + escapeHtml(rotulo(dominante)) + '</strong> — ' +
+        '<p class="fx-lead"><strong>' + escapeHtml(rotulo(dominante)) + '</strong>: ' +
         p0(dominante.contribuicao) + ' dos ' + finalPct + ' vieram daqui.</p>' +
         (dominante.detalhe ? '<p class="fx-just">' + escapeHtml(dominante.detalhe) + '</p>' : '') +
         '</div>';
@@ -1088,7 +1075,7 @@ function updateClock() {
     }
 }
 /* ============================================================
-   RIGHT PANEL — Evidence
+   PAINEL DIREITO: evidência visual
    ============================================================ */
 async function loadEventEvidence(eventId) {
     const container = byId("right-panel-evidence");
@@ -1248,10 +1235,8 @@ function criarMapa() {
     }).addTo(map);
     window.L.control.zoom({ position: "bottomright" }).addTo(map);
     map.on("zoomend", scheduleMarkerRefresh);
-    // iOS Safari: a barra de endereço recolhe/expande depois do carregamento e o
-    // mapa fica com a altura medida no primeiro layout — os controles do rodapé
-    // caem fora da tela. O Leaflet só escuta o resize da window, que nem sempre
-    // dispara nesse caso; o visualViewport dispara.
+    // No iPhone a barra de endereço muda de tamanho depois que a página carrega,
+    // e o mapa precisa ser recalculado para os botões não sumirem da tela.
     const remedirMapa = () => { if (map)
         map.invalidateSize({ pan: false }); };
     window.visualViewport?.addEventListener("resize", remedirMapa);
@@ -1282,8 +1267,8 @@ function initMapa() {
     if (appInitialized)
         return;
     appInitialized = true;
-    // Ao iniciar o sistema o mapa mostra todos os status; o navegador pode
-    // restaurar a seleção anterior do <select>, então forçamos o padrão.
+    // O mapa sempre abre mostrando todos os status, mesmo que o navegador
+    // lembre o filtro anterior.
     const filtroStatusInicial = byId("filtro-status");
     if (filtroStatusInicial)
         filtroStatusInicial.value = "";

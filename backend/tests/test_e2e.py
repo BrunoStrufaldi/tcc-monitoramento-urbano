@@ -1,8 +1,7 @@
-"""Testes end-to-end — fluxo completo do MotSP.
+"""Testes de ponta a ponta do MotSP.
 
-O sistema não tem operador: o evento nasce da detecção automática e é o próprio
-backend que o promove, recalcula e purga. O painel só consulta. Estes fluxos
-percorrem esse caminho — não as rotas de escrita, que não existem mais.
+O evento nasce da detecção automática e o painel só consulta. Estes testes
+seguem esse caminho.
 """
 
 from datetime import datetime, timedelta
@@ -29,7 +28,7 @@ def _criar_fonte(db_session) -> int:
 
 
 def test_fluxo_evento_detectado_ate_consulta(client: TestClient, db_session, criar_evento, criar_evidencia):
-    """Evento detectado → evidência → dado contextual → consultas do painel."""
+    """Evento detectado, evidência, dado de contexto e consultas do painel."""
     regiao_id = _criar_regiao(db_session)
     fonte_id = _criar_fonte(db_session)
 
@@ -93,7 +92,7 @@ def test_fluxo_fusao_dados(client: TestClient, criar_evento):
 
 
 def test_fluxo_retencao_remove_evento_expirado(client: TestClient, db_session, criar_evento):
-    """A retenção automática é quem tira o evento do quadro — não uma rota."""
+    """Quem tira o evento do painel é a limpeza automática, não uma rota."""
     from app.services.event_retention import purgar_eventos_expirados
 
     evento = criar_evento(titulo="Evento antigo", tipo="transito")
@@ -125,7 +124,7 @@ def test_health_e_raiz(client: TestClient):
 
 
 def test_painel_html_e_js_revalidam_cache(client: TestClient):
-    """app.js importa fusion-format.js sem ?v=: os dois têm que revalidar juntos."""
+    """O app.js e o fusion-format.js precisam ser revalidados juntos pelo navegador."""
     assert client.get("/").headers["cache-control"] == "no-cache"
     assert client.get("/dist/app.js").headers["cache-control"] == "no-cache"
     assert client.get("/dist/fusion-format.js").headers["cache-control"] == "no-cache"

@@ -1,5 +1,5 @@
-# Nada aqui é copiado para a imagem. O objetivo é duplo: imagem pequena
-# (cold start rápido no Cloud Run) e nenhum segredo/dado local viajando junto.
+# Arquivos que não vão para a imagem. Isso deixa a imagem menor e evita levar
+# segredos e dados locais junto.
 
 .git/
 .gitignore
@@ -14,17 +14,17 @@ backend/venv/
 notificacoes-urbanas/
 node_modules/
 
-# Segredos e config local — as variáveis vêm do Cloud Run, não de arquivo
+# Segredos e configuração local. Na nuvem as variáveis vêm do Cloud Run.
 backend/.env
 
-# Dados de runtime da máquina local: o deploy sobe com banco vazio
+# Dados locais. O deploy sobe com o banco vazio.
 **/*.db
 **/*.db-shm
 **/*.db-wal
 backend/app/data/
 backend/data/
 
-# Treino: datasets, runs e pesos intermediários não vão para produção
+# Arquivos de treino não vão para produção
 ml/datasets/
 ml/runs/
 runs/
@@ -34,8 +34,7 @@ weights/
 backend/tests/
 frontend/tests/
 
-# Dos pesos, só os dois que o runtime carrega (yolo11m = trânsito,
-# gx-incident = alagamento). Os backups/tentativas antigas ficam de fora.
+# Dos modelos, só vão os que o sistema usa.
 ml/models/*
 !ml/models/yolo11m.pt
 !ml/models/gx-veiculos.pt

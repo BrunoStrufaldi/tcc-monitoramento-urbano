@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Banco: notificacoes_urbanas
--- Sistema de notificações urbanas em tempo real 
+-- Sistema de monitoramento urbano em tempo real
 -- =============================================================================
 
 CREATE DATABASE IF NOT EXISTS notificacoes_urbanas
@@ -155,8 +155,8 @@ INSERT INTO regioes (nome, codigo, descricao) VALUES
 INSERT INTO fontes_dados (nome, tipo, descricao, ativo) VALUES
   ('MotSP YOLO', 'yolo', 'Observações visuais revalidadas no servidor', 1);
 
--- O schema não popula eventos, evidências, contexto ou notificações. Esses
--- registros só podem entrar por uma integração real ou por uma ação auditada.
+-- O schema não cria eventos, evidências nem dados de contexto. Eles só vêm da
+-- detecção automática.
 
 INSERT INTO logs_sistema (nivel, modulo, mensagem, evento_id, contexto) VALUES
   ('INFO', 'api', 'Schema inicializado sem eventos demonstrativos', NULL, JSON_OBJECT('versao_schema', '2.1'));

@@ -1,7 +1,6 @@
-"""Testes da fonte de trânsito ao vivo TomTom (Flow Segment Data).
+"""Testes da fonte de trânsito da TomTom.
 
-A chave vem de ``settings.tomtom_api_key`` (lida do .env pelo pydantic-settings),
-não de ``os.getenv`` — o .env não é exportado para o os.environ do processo.
+A chave vem da configuração (settings.tomtom_api_key), que lê o .env.
 """
 
 from app.config import settings
@@ -32,7 +31,7 @@ def test_resposta_valida_calcula_indice_de_congestionamento(monkeypatch):
 
     resultado = tomtom_traffic_source.obter_fluxo_transito(-23.55, -46.63)
     assert resultado["disponivel"] is True
-    # currentSpeed 10 de 40 livre -> 75% mais lento que o ideal -> índice 7.5/10
+    # 10 km/h numa via de 40 km/h livres: 75% mais lento, índice 7.5/10
     assert resultado["indice_congestionamento"] == 7.5
     assert resultado["via_fechada"] is False
 

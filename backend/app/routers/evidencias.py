@@ -1,5 +1,4 @@
-"""Consulta de evidências. As evidências são gravadas pela detecção
-(``services/detection_events.py``), nunca por requisição do painel."""
+"""Consulta de evidências. Elas são gravadas pela detecção, nunca pelo painel."""
 
 from pathlib import Path
 
@@ -17,7 +16,7 @@ _EVIDENCIAS_DIR = Path(__file__).resolve().parents[1] / "data" / "evidencias"
 
 @router.get("/arquivo/{nome_arquivo}")
 def obter_arquivo(nome_arquivo: str) -> FileResponse:
-    """Entrega uma evidência local sem permitir travessia de diretórios."""
+    """Entrega o arquivo da evidência sem deixar acessar outras pastas."""
     caminho = _EVIDENCIAS_DIR / Path(nome_arquivo).name
     if not caminho.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arquivo não encontrado")

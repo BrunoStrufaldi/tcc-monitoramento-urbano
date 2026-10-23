@@ -1,4 +1,4 @@
-"""Testes da fonte de avisos meteorológicos oficiais ativos do INMET."""
+"""Testes dos avisos do INMET."""
 
 import json
 

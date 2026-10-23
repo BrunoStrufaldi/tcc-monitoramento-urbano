@@ -1,13 +1,13 @@
-# MotSP — Monitoramento Urbano de São Paulo
+# MotSP: Monitoramento Urbano de São Paulo
 
 Sistema de detecção e monitoramento de eventos urbanos em tempo real, desenvolvido como TCC.
-O sistema observa câmeras públicas da CET-SP com visão computacional (YOLO), cruza o que
-vê com fontes de dados independentes (trânsito, clima, avisos oficiais, histórico de
-alagamento da via) e publica no painel apenas o que sobrevive a esse cruzamento.
+O sistema observa câmeras públicas da CET-SP com visão computacional (YOLO), confere o
+que vê com outras fontes de dados (trânsito, clima, avisos oficiais e histórico de
+alagamento da via) e só mostra no painel o que essas fontes confirmam.
 
-> A documentação tem duas camadas: este README é a visão geral (o que o sistema faz, como
-> ele se encaixa e como rodar), e os detalhes de cada parte estão em `docs/`. As seções
-> mantêm a numeração (§1–§21) em todos os arquivos.
+> Este README é a visão geral: o que o sistema faz, como as partes se ligam e como rodar.
+> Os detalhes de cada parte estão em `docs/`. As seções seguem a mesma numeração (§1 a §21)
+> em todos os arquivos.
 
 ---
 
@@ -38,7 +38,7 @@ alagamento da via) e publica no painel apenas o que sobrevive a esse cruzamento.
 | §21 | [Deploy no Google Cloud Run](docs/deploy.md#21-deploy-no-google-cloud-run) | `docs/deploy.md` |
 
 Testes: `cd backend; venv\Scripts\python -m pytest -q` (backend), `npm run test:frontend`
-(painel) e `python -m pytest -q data_fusion` na raiz — detalhes em [§17](docs/testes-e-seguranca.md#17-testes).
+(painel) e `python -m pytest -q data_fusion` na raiz. Detalhes em [§17](docs/testes-e-seguranca.md#17-testes).
 
 ---
 
@@ -46,36 +46,35 @@ Testes: `cd backend; venv\Scripts\python -m pytest -q` (backend), `npm run test:
 
 ### Faz
 
-- **Detecta sozinho.** Threads de monitoramento baixam periodicamente o snapshot JPEG de
-  10 câmeras públicas da CET-SP e rodam YOLO em cima. Dois tipos de evento urbano estão
-  no escopo: **trânsito** (congestionamento) e **alagamento**.
-- **Cruza com fontes independentes.** Nenhum evento nasce só do que a câmera viu. Trânsito
-  é arbitrado pela velocidade real do trecho (TomTom Traffic API); alagamento é corroborado
-  por chuva medida (Open-Meteo), aviso oficial ativo (INMET) e o histórico de alagamento
-  daquela via (CGE-SP/GeoSampa, camada estática).
-- **Pontua a confiabilidade.** O módulo Data Fusion combina duas dimensões, IA (57%) e
-  contexto (43%), num score 0–1. Um evento só é promovido a `ativo` no painel quando
-  cruza o limiar (padrão 77%); abaixo disso fica `em_analise`.
-- **Publica em tempo real.** Toda criação, atualização e remoção de evento é transmitida
-  por WebSocket, com fallback automático para SSE e depois polling.
-- **Expira sozinho.** "Tempo real" é literal: um evento vive no máximo 45 minutos após a
-  última detecção. Passou disso, é apagado do banco e removido do painel.
+- Detecta sozinho. De tempos em tempos o sistema baixa a imagem de 10 câmeras públicas da
+  CET-SP e roda o YOLO nela. Dois tipos de evento estão no escopo: trânsito
+  (congestionamento) e alagamento.
+- Confere com outras fontes. Nenhum evento é criado só pelo que a câmera viu. No trânsito,
+  quem ajuda a decidir é a velocidade real do trecho (TomTom). No alagamento entram a
+  chuva medida (Open-Meteo), o aviso oficial do INMET e o histórico de alagamento da via
+  (CGE-SP e GeoSampa).
+- Calcula a confiabilidade. O Data Fusion junta duas notas, IA (57%) e contexto (43%), num
+  valor de 0 a 1. O evento só aparece como `ativo` quando passa do limite (77% por
+  padrão). Abaixo disso fica `em_analise`.
+- Atualiza em tempo real. Todo evento criado, atualizado ou removido chega ao painel por
+  WebSocket. Se ele não funcionar, o painel usa SSE e, por último, consulta periódica.
+- Apaga o que ficou velho. Um evento dura no máximo 45 minutos depois da última detecção.
+  Depois disso ele sai do banco e do painel.
 
 ### Não faz
 
-- **Não notifica ninguém.** Não há e-mail, SMS, push ou webhook. O sistema detecta e mostra
-  no painel; avisar terceiros nunca foi implementado (a tabela `notificacoes` foi removida
-  na migração `005` — nada jamais a preencheu).
-- **Não tem login.** Sem usuários, perfis, sessão ou trilha por operador (removido na
-  migração `003`). Os eventos nascem de câmera, não de gente.
-- **Não aceita registro manual de ocorrência.** O painel é somente leitura: não existe rota
-  que crie, altere ou remova evento/evidência por requisição de operador. Evento só nasce
-  da detecção contínua nas câmeras.
-- **Não detecta buraco, incêndio, lixo, árvore caída ou vazamento.** Todas essas classes
-  saíram do escopo (ver [§19](docs/apendice-decisoes-de-escopo.md#19-decisões-de-escopo-o-que-foi-removido-e-por-quê)).
-- **Não usa dado em lote.** Fontes que republicam ocorrências semanas ou anos depois
-  (GeoSampa/Defesa Civil como gatilho) foram removidas: o evento saía carimbado com o
-  horário em que o sistema notou o registro, não com o horário do incidente.
+- Não manda notificações. Não há e-mail, SMS, push nem webhook. O sistema detecta e mostra
+  no painel. A tabela `notificacoes` foi removida na migração `005`, porque nada gravava
+  nela.
+- Não tem login. Não há usuários, perfis nem sessão (removidos na migração `003`). Os
+  eventos vêm das câmeras, não de pessoas.
+- Não aceita registro manual. O painel só consulta: nenhuma rota cria, altera ou remove
+  eventos ou evidências. Os eventos vêm só da detecção nas câmeras.
+- Não detecta buraco, incêndio, lixo, árvore caída nem vazamento. Essas classes saíram do
+  escopo (ver [§19](docs/apendice-decisoes-de-escopo.md#19-decisões-de-escopo-o-que-foi-removido-e-por-quê)).
+- Não usa dados atrasados. Fontes que publicam as ocorrências semanas ou anos depois
+  (GeoSampa e Defesa Civil como gatilho) foram removidas, porque o evento saía com o
+  horário em que o sistema viu o registro, e não com o horário real.
 
 ---
 
@@ -90,13 +89,13 @@ Testes: `cd backend; venv\Scripts\python -m pytest -q` (backend), `npm run test:
         ▼                        │                  │                  │
   ┌───────────────────────────┐  │                  │                  │
   │ live_detection.py         │  │                  │                  │
-  │  YOLO11m COCO → contagem  │◄─┘                  │                  │
-  │  de veículos              │                     │                  │
+  │  gx-veiculos.pt →         │◄─┘                  │                  │
+  │  contagem de veículos     │                     │                  │
   ├───────────────────────────┤                     │                  │
   │ flood_detection.py        │◄────────────────────┴──────────────────┘
   │  gx-incident.pt →         │
   │  classe "alagamento"      │      + data_fusion/historico_alagamento.py
-  └───────────┬───────────────┘        (prior espacial ESTÁTICO, lookup local)
+  └───────────┬───────────────┘        (histórico da via, arquivo local)
               │
               ▼
    ┌────────────────────────────────────────────────┐
@@ -124,14 +123,14 @@ Testes: `cd backend; venv\Scripts\python -m pytest -q` (backend), `npm run test:
                ▼
    ┌────────────────────────────────────────────────┐
    │ event_retention (loop a cada 120 s)            │
-   │  · purga eventos fora da janela de 45 min      │
-   │  · colapsa duplicados no mesmo ponto           │
+   │  · apaga eventos fora da janela de 45 min      │
+   │  · junta duplicados no mesmo ponto             │
    │  · promove/rebaixa por confiabilidade          │
    └────────────────────────────────────────────────┘
 ```
 
-**Princípio central do projeto:** o YOLO produz *evidência*, não *veredito*. A decisão de
-mostrar um evento como real vem sempre do cruzamento no Data Fusion.
+A ideia central do projeto é que o YOLO dá uma evidência, não a resposta final. Quem
+decide se o evento aparece como real é o Data Fusion, conferindo com as outras fontes.
 
 ---
 
@@ -139,14 +138,14 @@ mostrar um evento como real vem sempre do cruzamento no Data Fusion.
 
 ### Pré-requisitos
 
-- **Python 3.11+**
-- **Node.js 18+** (apenas para compilar o TypeScript)
-- **MySQL 8.x** opcional — sem `DATABASE_URL` configurada, o sistema usa SQLite local
-  (`backend/gx.db`) e cria as tabelas sozinho no startup
-- Para inferência real: `backend/requirements-yolo.txt` + os pesos em `ml/models/`
-  (`gx-veiculos.pt` para trânsito, `gx-incident.pt` para alagamento; `yolo11m.pt` fica
-  como volta atrás). Esses pesos estão no git:
-  o deploy automático builda a imagem a partir do GitHub.
+- Python 3.11 ou mais novo
+- Node.js 18 ou mais novo (só para compilar o TypeScript)
+- MySQL 8 é opcional. Sem `DATABASE_URL`, o sistema usa um SQLite local
+  (`backend/gx.db`) e cria as tabelas sozinho ao iniciar.
+- Para a detecção funcionar: `backend/requirements-yolo.txt` e os modelos em `ml/models/`
+  (`gx-veiculos.pt` para trânsito, `gx-incident.pt` para alagamento e `yolo11m.pt` como
+  reserva). Os modelos estão no Git porque o deploy automático monta a imagem a partir do
+  GitHub.
 
 ### Caminho rápido (Windows)
 
@@ -155,12 +154,11 @@ mostrar um evento como real vem sempre do cruzamento no Data Fusion.
 ```
 
 Sobe o uvicorn numa janela do PowerShell e abre o navegador em `http://localhost:8000`.
-Um processo só: o FastAPI serve a API e o painel (`frontend/`) na mesma origem, igual ao
-container.
+É um processo só: o FastAPI serve a API e o painel (`frontend/`) no mesmo endereço, igual
+na nuvem.
 
-> `start.ps1` chama o uvicorn direto, **sem exportar variável de ambiente nenhuma**. Toda
-> configuração precisa estar em `backend/.env` — é por isso que `config.py` é a única
-> leitora de configuração no projeto (ver a nota sobre `TOMTOM_API_KEY` em [§5](docs/configuracao.md#5-configuração-env)).
+> O `start.ps1` não define variáveis de ambiente. Toda a configuração fica em
+> `backend/.env`, que é lido pelo `config.py` (ver [§5](docs/configuracao.md#5-configuração-env)).
 
 ### Caminho manual
 
@@ -185,24 +183,23 @@ cd backend
 venv\Scripts\python -m pip install -r requirements-yolo.txt
 ```
 
-Coloque os pesos em `ml/models/` e confirme com `GET /deteccao/status` antes de enviar
-imagens. Sem os pesos, a API responde indisponibilidade explicitamente em vez de fingir
-que detectou algo.
+Coloque os modelos em `ml/models/` e confira com `GET /deteccao/status` antes de enviar
+imagens. Sem os modelos, a API avisa que a detecção está indisponível.
 
 ### Ligar o monitoramento automático
 
-Desligado por padrão, **inclusive nos testes** (evita threads de rede real subindo sozinhas).
+Vem desligado por padrão, inclusive nos testes, para nada acessar as câmeras sem querer.
 No `.env`:
 
 ```env
 GX_MONITORAMENTO_ATIVO=true
 GX_TRANSITO_MONITORAR_CATALOGO=true      # 10 threads de trânsito
 GX_ALAGAMENTO_MONITORAR_CATALOGO=true    # 10 threads de alagamento (exige gx-incident.pt)
-TOMTOM_API_KEY=...                       # sem ela, parte da lógica de trânsito degrada
+TOMTOM_API_KEY=...                       # sem ela, o trânsito é decidido só pela contagem
 ```
 
 ---
 
 ## Licença
 
-Projeto acadêmico — TCC. Uso educacional.
+Projeto acadêmico (TCC), para uso educacional.

@@ -1,27 +1,21 @@
 ﻿<#
 .SYNOPSIS
-    Publica o MotSP no Google Cloud Run (uma imagem: API + painel + YOLO).
+    Publica o MotSP no Google Cloud Run (API, painel e YOLO numa imagem só).
 
 .DESCRIPTION
-    O serviço sobe com min-instances=0: nenhuma instância fica de pé quando
-    ninguém está acessando, e o Google não cobra por isso. A instância nasce na
-    primeira requisição do link e morre sozinha ~15 min depois da última.
+    O serviço não fica ligado quando ninguém está usando, então não gera custo
+    parado. Ele liga no primeiro acesso e desliga sozinho uns 15 min depois.
 
-    max-instances=1 é proposital e importante: o banco é um SQLite dentro do
-    container, então duas instâncias simultâneas teriam dados diferentes — e é
-    também o teto de gasto, impedindo que um pico de acessos multiplique a conta.
+    Só pode existir uma instância por vez, porque o banco é um SQLite dentro do
+    container. Isso também limita o gasto.
 
-    A TOMTOM_API_KEY é lida do backend/.env na hora do deploy e enviada como
-    variável de ambiente do serviço. Ela nunca é escrita neste script nem vai
-    para dentro da imagem (o .dockerignore exclui o .env).
+    A TOMTOM_API_KEY é lida do backend/.env na hora do deploy. Ela não fica
+    escrita neste script nem vai para dentro da imagem.
 
-    As variáveis são enviadas com --update-env-vars (mescla), não --set-env-vars
-    (substitui). Isso importa: o monitoramento contínuo e qualquer ajuste feito
-    depois com `gcloud run services update` sobrevivem a um redeploy. Sem
-    -Monitoramento nem -DesligarMonitoramento o script não toca nesse estado.
+    As variáveis já configuradas na nuvem são mantidas. O monitoramento só muda
+    se for usado -Monitoramento ou -DesligarMonitoramento.
 
-    Este script é o caminho MANUAL. O automático é o gatilho do Cloud Build
-    (cloudbuild.yaml), que publica a cada push na main do GitHub.
+    Este é o deploy manual. O automático roda a cada push na main (cloudbuild.yaml).
 
 .EXAMPLE
     .\deploy.ps1 -ProjectId motsp-tcc
@@ -34,20 +28,17 @@ param(
 
     [string]$Service = "motsp",
 
-    # southamerica-east1 = São Paulo (menor latência para as câmeras da CET e
-    # para quem abrir o link no Brasil). us-central1 é mais barato por
-    # vCPU-segundo se o crédito ficar apertado.
+    # southamerica-east1 é São Paulo, mais perto das câmeras e de quem usa o painel.
     [string]$Region = "southamerica-east1",
 
-    # Liga as threads de detecção contínua (trânsito + alagamento) no serviço.
-    # Sem esta flag o estado atual da nuvem é PRESERVADO — um redeploy nunca
-    # desliga o monitoramento por acidente.
+    # Liga o monitoramento das câmeras. Sem esta opção, o que já está na nuvem
+    # continua como está.
     [switch]$Monitoramento,
 
-    # Desliga as threads explicitamente. É o único jeito de desligar por aqui.
+    # Desliga o monitoramento das câmeras.
     [switch]$DesligarMonitoramento,
 
-    # Pula o "enable services" (só precisa na primeira vez; leva ~1 min).
+    # Pula a ativação das APIs, que só é preciso na primeira vez.
     [switch]$PularApis
 )
 
@@ -75,19 +66,16 @@ if (-not $PularApis) {
     if (-not $?) { Write-Error "Falha ao habilitar as APIs. O faturamento do projeto esta ativo?"; exit 1 }
 }
 
-# --- Permissao para o Cloud Build --------------------------------------------
-# Em projetos criados a partir de 2024 a conta de servico padrao do Compute
-# (<numero>-compute@developer.gserviceaccount.com) nao recebe mais o papel
-# Editor automaticamente — e e ela que o `gcloud run deploy --source` usa para
-# ler o zip do codigo e publicar a imagem. Sem este papel a build morre com
-# "PERMISSION_DENIED ... could not resolve source". Idempotente: repetir nao duplica.
+# --- Permissão para o Cloud Build ------------------------------------------
+# Projetos novos do Google Cloud não dão essa permissão sozinhos, e sem ela o
+# build falha. Rodar de novo não duplica nada.
 $numero = (gcloud projects describe $ProjectId --format "value(projectNumber)")
 $contaBuild = "serviceAccount:$numero-compute@developer.gserviceaccount.com"
 Write-Host "==> Garantindo papel cloudbuild.builds.builder para $contaBuild..." -ForegroundColor Cyan
 gcloud projects add-iam-policy-binding $ProjectId --member $contaBuild --role roles/cloudbuild.builds.builder --condition=None | Out-Null
 if (-not $?) { Write-Error "Nao consegui conceder o papel ao Cloud Build."; exit 1 }
 
-# --- TOMTOM_API_KEY: lida do .env local, nunca versionada -------------------
+# --- TOMTOM_API_KEY: lida do .env local, nunca vai para o Git --------------
 $tomtom = ""
 if (Test-Path "backend/.env") {
     $linha = Select-String -Path "backend/.env" -Pattern '^\s*TOMTOM_API_KEY\s*=\s*(.+)$' |
@@ -95,7 +83,7 @@ if (Test-Path "backend/.env") {
     if ($linha) { $tomtom = $linha.Matches[0].Groups[1].Value.Trim().Trim('"') }
 }
 if (-not $tomtom) {
-    Write-Warning "TOMTOM_API_KEY nao encontrada em backend/.env — a arbitragem de transito vai degradar."
+    Write-Warning "TOMTOM_API_KEY nao encontrada em backend/.env. Sem ela o transito e decidido so pela contagem."
 }
 
 if ($Monitoramento -and $DesligarMonitoramento) {
@@ -103,16 +91,13 @@ if ($Monitoramento -and $DesligarMonitoramento) {
     exit 1
 }
 
-# Variaveis que este script sempre garante (idempotentes: mesmo valor a cada
-# deploy). Tudo que NAO esta aqui e preservado como esta na nuvem.
+# Variáveis que o script sempre define. O resto continua como está na nuvem.
 $pares = @(
     "DATABASE_URL=sqlite:///./gx.db",
-    # 15s (valor local, com GPU) viraria fila infinita em CPU: cada inferencia
-    # do yolo11m a 1280 leva alguns segundos por camera.
+    # Na nuvem não tem GPU, então a detecção é mais lenta e o intervalo é maior.
     "GX_LIVE_DETECTION_INTERVAL_SECONDS=60"
 )
-# So sobrescreve a chave se ela foi encontrada: um .env sem a chave nao pode
-# apagar a que ja esta configurada no servico.
+# Só manda a chave se ela foi encontrada, para não apagar a que já está na nuvem.
 if ($tomtom) { $pares += "TOMTOM_API_KEY=$tomtom" }
 
 $ativo = "(preservado)"
@@ -125,11 +110,10 @@ if ($Monitoramento -or $DesligarMonitoramento) {
     )
 }
 
-# Delimitador customizado (^@^): evita que o gcloud quebre valores em virgulas.
+# Separador ^@^ para o gcloud não quebrar valores que têm vírgula.
 $envVars = "^@^" + ($pares -join "@")
 
-# O Cloud Build assume 10 min por build; instalar o torch passa disso com
-# folga e a build morreria no meio, sem imagem e sem mensagem clara.
+# Instalar o torch demora mais que os 10 min padrão do Cloud Build.
 gcloud config set builds/timeout 1800 | Out-Null
 
 Write-Host "==> Build + deploy (a primeira vez leva ~10 min: instala o torch)..." -ForegroundColor Cyan

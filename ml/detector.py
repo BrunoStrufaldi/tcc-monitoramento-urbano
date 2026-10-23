@@ -1,15 +1,8 @@
-"""Detecção visual com YOLO: contagem de veículos (COCO) e modelo de alagamento.
+"""Detecção com YOLO: contagem de veículos e modelo de alagamento.
 
-O detector real é carregado sob demanda para que a API continue utilizável em
-ambientes sem GPU ou sem os pesos treinados. O peso COCO padrão reconhece
-objetos (por exemplo, carro e ônibus), não incidentes como congestionamento,
-alagamento ou incêndio. O peso padrão é ``gx-veiculos.pt`` — o ``yolo11m.pt`` (COCO) ajustado
-nas câmeras CET por ``ml/train_vehicle_model.py``, com as mesmas 80 classes;
-``GX_YOLO_MODEL`` permite voltar ao COCO original ou trocar por outro peso.
-
-Toda a configuração vem de ``app.config.settings`` (``.env`` local ou variáveis
-de ambiente no Cloud Run) — antes era ``os.getenv`` direto, que não enxerga o
-``.env``.
+Os modelos só são carregados na primeira vez que forem usados, assim a API
+funciona mesmo numa máquina sem os pesos. O modelo de veículos é o YOLO padrão
+ajustado com imagens das câmeras da CET. O de alagamento foi treinado à parte.
 """
 
 import threading
@@ -23,17 +16,12 @@ _RAIZ_PROJETO = Path(__file__).resolve().parents[1]
 
 
 CLASSES_URBANAS = {
-    # Havia também buraco, lixo, incêndio, construção irregular e vazamento
-    # aqui (IDs 0, 3, 4, 5, 7) — removidos por decisão do grupo de focar o
-    # escopo do TCC só em alagamento e trânsito, os dois tipos com detector
-    # de verdade rodando contínuo (ver flood_detection.py e
-    # live_detection.py). Os IDs não foram reaproveitados.
-    # "tipo" vira Evento.tipo direto (registrar_deteccao) e é o que
-    # data_fusion.scores usa para escolher o cálculo de contexto.
+    # O projeto detecta só alagamento e trânsito. Os números das classes que
+    # saíram do escopo não foram reaproveitados.
     1: {"nome": "alagamento", "severidade": "critica", "tipo": "alagamento"},
     2: {"nome": "transito", "severidade": "media", "tipo": "transito"},
-    # Classes COCO abaixo são observações visuais: a presença de um veículo não
-    # comprova congestionamento — live_detection conta quantos aparecem juntos.
+    # Um veículo sozinho não é trânsito. Eles são contados juntos em
+    # live_detection.py.
     8: {"nome": "veiculo", "severidade": "baixa", "tipo": "observacao_visual"},
     9: {"nome": "motocicleta", "severidade": "baixa", "tipo": "observacao_visual"},
     10: {"nome": "onibus", "severidade": "baixa", "tipo": "observacao_visual"},
@@ -49,19 +37,8 @@ _COCO_PARA_URBANO = {
 }
 _model: Any | None = None
 _model_error: str | None = None
-# yolo11m em vez de yolo11n/s: o nano/small perdiam carro pequeno/distante e à
-# noite, e o piso de confiança do índice de trânsito às vezes despencava. O `m`
-# recupera parte da contagem noturna nas câmeras ruins e nunca dá confiança
-# sintética abaixo de ~0.5. Custa ~2x o `s`, irrelevante no poll de 5 s em
-# GPU. `GX_YOLO_MODEL` troca por outro peso.
 
-# Modelo dedicado a alagamento — pesos próprios (não vêm do COCO), carregado
-# separado do modelo padrão para não perder a detecção de veículos usada pela
-# contagem de trânsito ao trocar de peso. O treino atual é de classe única
-# (`alagamento`, ver ml/train_incident_model.py); pesos antigos treinados
-# também com árvore caída ainda funcionam — essa classe não tem entrada em
-# CLASSES_URBANAS, então `_normalizar_classe` descarta qualquer detecção dela
-# antes de virar Deteccao/evento.
+# O modelo de alagamento é separado do de veículos e tem pesos próprios.
 
 _incident_model: Any | None = None
 _incident_model_error: str | None = None
@@ -69,7 +46,7 @@ _incident_model_error: str | None = None
 
 @dataclass
 class Deteccao:
-    """Resultado normalizado de uma detecção."""
+    """Uma detecção já no formato do sistema."""
 
     classe_id: int
     nome: str
@@ -81,73 +58,58 @@ class Deteccao:
 
 
 def _caminho_do_projeto(caminho: str) -> str:
-    """Relativo vale a partir da raiz do projeto: o uvicorn sobe de backend/,
-    e "ml/models/x.pt" resolvido ali apontaria para um lugar que não existe."""
+    """Caminhos relativos partem da raiz do projeto, e não da pasta backend/."""
     p = Path(caminho)
     return str(p if p.is_absolute() else _RAIZ_PROJETO / p)
 
 
 def _model_path() -> str:
-    """Resolve o peso padrão sem depender do diretório de execução da API."""
+    """Caminho do modelo de veículos."""
     return _caminho_do_projeto(settings.gx_yolo_model)
 
 
 def _max_inferencias_simultaneas() -> int:
-    """Quantas inferências podem rodar ao mesmo tempo no processo.
+    """Quantas detecções podem rodar ao mesmo tempo.
 
-    Com o monitoramento do catálogo ligado sobem 20 threads (10 câmeras ×
-    trânsito + alagamento), e cada uma chama o YOLO por conta própria. Em GPU
-    isso nunca doeu: a inferência leva dezenas de ms e as chamadas se
-    enfileiram no próprio CUDA. Em CPU (Cloud Run, 20/09/2026) 20 inferências
-    simultâneas a imgsz=1280 passaram de 4 GiB e o container foi morto por
-    OOM 19 s depois de carregar o modelo — levando o SQLite junto. O semáforo
-    faz as threads esperarem a vez em vez de alocarem todas de uma vez; o
-    ciclo completo das 10 câmeras fica mais longo, mas nenhuma decisão muda.
-    ``GX_YOLO_MAX_CONCORRENCIA`` ajusta; nunca abaixo de 1 (zero travaria tudo).
+    Sem esse limite as threads das câmeras rodavam o YOLO todas juntas e o
+    servidor na nuvem ficava sem memória. O valor nunca fica abaixo de 1.
     """
     return max(1, settings.gx_yolo_max_concorrencia)
 
 
 _inferencia_semaforo = threading.BoundedSemaphore(_max_inferencias_simultaneas())
 
-# Trava de carga dos pesos. Sem ela, no cold start com o catálogo ligado as 10
-# threads de uma mesma classe chegam juntas em ``_load_*``, todas veem o modelo
-# ainda ``None`` e cada uma carrega sua própria cópia do peso — foi isso, mais
-# que a inferência em si, que estourou os 4 GiB do Cloud Run em 19 s.
+# Garante que cada modelo seja carregado uma vez só, mesmo com várias threads
+# pedindo ao mesmo tempo.
 _carga_lock = threading.Lock()
 
-# Uma inferência por vez em cada modelo. O objeto YOLO do Ultralytics não é
-# seguro entre threads: na primeira ``predict`` ele funde Conv+BatchNorm e
-# apaga o atributo ``bn`` — duas threads chegando juntas quebram com
-# "'Conv' object has no attribute 'bn'" (21/09/2026, monitoramento local) — e
-# depois disso o predictor guarda estado entre chamadas, podendo misturar
-# resultados de câmeras diferentes. Com um lock por modelo, o semáforo acima
-# vira só o teto global (útil em CPU); trânsito e alagamento seguem em paralelo
-# porque são objetos distintos.
+# O YOLO dá erro quando duas threads usam o mesmo modelo ao mesmo tempo, então
+# cada modelo tem a sua trava.
 _model_infer_lock = threading.Lock()
 _incident_infer_lock = threading.Lock()
 
 
 def _imgsz() -> int:
-    """Resolução de inferência. 1280 (não o padrão 640 do Ultralytics) porque
-    as câmeras da CET acumulam fila de carro pequeno ao fundo — em 640 o YOLO
-    subconta ~35%. Custo em GPU é de dezenas de ms, irrelevante no poll de 5s.
-    ``GX_YOLO_IMGSZ`` ajusta (múltiplo de 32; nunca abaixo de 320)."""
+    """Tamanho da imagem usado na detecção.
+
+    É 1280 em vez do padrão 640 porque, com a imagem menor, o YOLO deixava de
+    contar muitos carros pequenos ao fundo.
+    """
     return max(320, settings.gx_yolo_imgsz)
 
 
 def _tta() -> bool:
-    """Test-time augmentation na contagem de veículos: o Ultralytics roda o
-    frame também espelhado e em escalas menores e funde as caixas. Medido em 40
-    frames reais das câmeras CET (480x270, JPEG pesado): confiança média dos 12
-    melhores veículos 0,725 -> 0,761 e ~1 veículo a mais por frame, sem trocar
-    de peso. Custa ~2x a inferência — irrelevante em GPU; em CPU (Cloud Run)
-    ``GX_YOLO_TTA=false`` desliga se o ciclo das câmeras ficar apertado."""
+    """Diz se a contagem de veículos usa TTA.
+
+    Com o TTA o YOLO também analisa a imagem espelhada e em outros tamanhos, o
+    que encontrou um pouco mais de carros nos testes. Na nuvem fica desligado,
+    porque deixa a detecção duas vezes mais lenta.
+    """
     return settings.gx_yolo_tta
 
 
 def _load_model() -> Any | None:
-    """Carrega Ultralytics somente na primeira inferência."""
+    """Carrega o modelo de veículos na primeira vez que ele for usado."""
     global _model, _model_error
     if _model is not None:
         return _model
@@ -155,7 +117,7 @@ def _load_model() -> Any | None:
         return None
 
     with _carga_lock:
-        # Quem esperou a trava reaproveita a cópia de quem carregou primeiro.
+        # Se outra thread carregou o modelo enquanto esta esperava, usa o mesmo.
         if _model is not None or _model_error is not None:
             return _model
         model_path = _model_path()
@@ -175,7 +137,7 @@ def _load_model() -> Any | None:
 
 
 def status_detector() -> dict[str, Any]:
-    """Informa se a inferência real está disponível, sem executar a imagem."""
+    """Diz se o modelo de veículos está disponível."""
     model = _load_model()
     return {
         "disponivel": model is not None,
@@ -192,7 +154,7 @@ def _incident_model_path() -> str:
 
 
 def _load_incident_model() -> Any | None:
-    """Carrega o peso de incidentes (alagamento) sob demanda."""
+    """Carrega o modelo de alagamento na primeira vez que ele for usado."""
     global _incident_model, _incident_model_error
     if _incident_model is not None:
         return _incident_model
@@ -219,7 +181,7 @@ def _load_incident_model() -> Any | None:
 
 
 def status_incident_detector() -> dict[str, Any]:
-    """Informa se o modelo de alagamento está disponível, sem executar a imagem."""
+    """Diz se o modelo de alagamento está disponível."""
     model = _load_incident_model()
     return {
         "disponivel": model is not None,
@@ -229,13 +191,13 @@ def status_incident_detector() -> dict[str, Any]:
 
 
 def detectar_incidentes_imagem(caminho_imagem: str, confianca_minima: float = 0.6) -> list[Deteccao]:
-    """Roda o modelo dedicado a alagamento — confirmação direta, não sinal indireto."""
+    """Procura alagamento na imagem com o modelo de alagamento."""
     model = _load_incident_model()
     if model is None:
         raise RuntimeError(_incident_model_error or "Detector de incidentes indisponível")
 
     resultados: list[Deteccao] = []
-    # Lock antes do semáforo: quem espera a vez do modelo não ocupa uma vaga global.
+    # Primeiro espera a vez do modelo e só depois ocupa uma vaga do limite geral.
     with _incident_infer_lock, _inferencia_semaforo:
         predicoes = model.predict(source=caminho_imagem, conf=confianca_minima, verbose=False)
     for resultado in predicoes:
@@ -267,7 +229,7 @@ def _normalizar_classe(nome_modelo: str) -> tuple[int, dict[str, str]] | None:
 
 
 def detectar_imagem_real(caminho_imagem: str, confianca_minima: float = 0.45) -> list[Deteccao]:
-    """Executa inferência YOLO e converte classes do modelo para o domínio GX."""
+    """Detecta os veículos da imagem e traduz as classes do YOLO para as do sistema."""
     model = _load_model()
     if model is None:
         raise RuntimeError(_model_error or "Detector YOLO indisponível")

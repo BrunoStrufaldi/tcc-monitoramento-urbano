@@ -1,9 +1,8 @@
-"""Testes da promoção/rebaixamento automático de status pelo Data Fusion.
+"""Testes da mudança automática de status pelo Data Fusion.
 
-Um evento YOLO só chega a "ativo" por promoção automática (a confirmação
-humana cria "em_analise"); quando a confiabilidade não bate mais o limiar
-``gx_fusion_auto_ativo_min`` ele deve voltar para "em_analise". Eventos
-manuais (fonte não-YOLO) nunca são rebaixados."""
+O evento do YOLO só vira ativo quando passa do limite de confiabilidade, e
+volta para análise se cair abaixo dele. Eventos que não vêm do YOLO nunca voltam.
+"""
 
 from decimal import Decimal
 
@@ -86,7 +85,7 @@ def test_evento_yolo_ativo_permanece_quando_acima_do_limiar(db_session: Session,
     )
 
     assert atualizado.status == "ativo"
-    # Sem mudança de status não há log — o recálculo roda a cada ciclo.
+    # Se o status não muda, não grava log, porque o recálculo roda o tempo todo.
     assert db_session.query(LogSistema).filter(LogSistema.evento_id == evento.id).count() == 0
 
 
@@ -102,7 +101,7 @@ def test_evento_manual_ativo_nao_e_rebaixado(db_session: Session, monkeypatch):
 
 
 def test_evento_yolo_promovido_quando_arredonda_para_o_limiar(db_session: Session, monkeypatch):
-    """0.7977 é exibido como "80%" no painel — a promoção segue o valor exibido."""
+    """0,7977 aparece como 80% no painel, então o evento vira ativo."""
     monkeypatch.setattr(settings, "gx_fusion_auto_ativo_min", 0.80)
     _fixar_confiabilidade(monkeypatch, 0.7977)
     evento = _criar_evento(db_session, status="em_analise", fonte_tipo="yolo")
@@ -115,7 +114,7 @@ def test_evento_yolo_promovido_quando_arredonda_para_o_limiar(db_session: Sessio
 
 
 def test_evento_yolo_nao_promovido_quando_arredonda_abaixo_do_limiar(db_session: Session, monkeypatch):
-    """0.7949 é exibido como "79%" — continua em análise."""
+    """0,7949 aparece como 79%, então continua em análise."""
     monkeypatch.setattr(settings, "gx_fusion_auto_ativo_min", 0.80)
     _fixar_confiabilidade(monkeypatch, 0.7949)
     evento = _criar_evento(db_session, status="em_analise", fonte_tipo="yolo")
@@ -128,7 +127,7 @@ def test_evento_yolo_nao_promovido_quando_arredonda_abaixo_do_limiar(db_session:
 
 
 def test_migrar_categoria_legada_mantem_contexto_do_evento(db_session: Session):
-    """Dado gravado antes da renomeação ("clima") continua entrando na fusão."""
+    """Dado gravado com a categoria antiga ("clima") continua entrando na fusão."""
     from app.models.dado_contextual import DadoContextual
 
     evento = _criar_evento(db_session, status="em_analise", fonte_tipo="yolo")
@@ -137,7 +136,7 @@ def test_migrar_categoria_legada_mantem_contexto_do_evento(db_session: Session):
     db_session.commit()
 
     assert data_fusion_service.migrar_categoria_legada(db_session) == 1
-    assert data_fusion_service.migrar_categoria_legada(db_session) == 0  # idempotente
+    assert data_fusion_service.migrar_categoria_legada(db_session) == 0  # rodar de novo não muda nada
 
     entrada = data_fusion_service.evento_para_fusao(db_session.get(Evento, evento.id))
     assert [d.chave for d in entrada.dados_contexto] == ["indice_congestionamento"]

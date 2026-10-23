@@ -7,9 +7,8 @@ from app.config import settings
 
 _engine_kwargs: dict = {"pool_pre_ping": True, "pool_recycle": 3600}
 if settings.database_url.startswith("sqlite"):
-    # As threads de monitoramento contínuo (live_detection, flood_detection)
-    # escrevem no banco em paralelo com as requisições HTTP; sem isso o SQLite
-    # erra "database is locked" em vez de esperar a outra escrita liberar.
+    # As threads das câmeras gravam no banco junto com a API. Sem isso o SQLite
+    # dá erro de banco travado em vez de esperar a vez.
     _engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
 
 engine = create_engine(settings.database_url, **_engine_kwargs)

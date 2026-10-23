@@ -1,11 +1,4 @@
-"""Testes do WebSocket e ConnectionManager.
-
-Cobertura:
-- ConnectionManager: connect, disconnect, broadcast, remoção de conexões mortas
-- WSMessage: formato JSON tipado com tipo, timestamp, dados
-- Integração: broadcast via manager é acionado por eventos e notificações
-- Fallback: lógica conceitual ws → sse → polling
-"""
+"""Testes do WebSocket e do ConnectionManager."""
 
 import asyncio
 import json
@@ -16,7 +9,7 @@ from fastapi.testclient import TestClient
 from app.ws_manager import ConnectionManager, WSMessage
 
 
-# ── Mock ───────────────────────────────────────────────────────────
+# Mock
 
 
 class MockWebSocket:
@@ -39,7 +32,7 @@ class MockWebSocket:
         self._closed = True
 
 
-# ── Unit tests: ConnectionManager ──────────────────────────────────
+# Testes do ConnectionManager
 
 
 @pytest.fixture
@@ -125,7 +118,7 @@ async def test_manager_no_connections_broadcast(manager: ConnectionManager) -> N
     assert sent == 0
 
 
-# ── Unit tests: WSMessage ──────────────────────────────────────────
+# Testes do WSMessage
 
 
 def test_ws_message_json_format() -> None:
@@ -153,7 +146,7 @@ def test_ws_message_handles_nested_data() -> None:
     assert parsed["dados"]["evento"]["nested"]["deep"] is True
 
 
-# ── Integration: broadcast via eventos.py ──────────────────────────
+# Integração com os eventos
 
 
 def test_evento_detectado_gera_payload_de_broadcast(client: TestClient, criar_evento) -> None:
@@ -170,8 +163,7 @@ def test_evento_detectado_gera_payload_de_broadcast(client: TestClient, criar_ev
 
 
 def test_publicar_evento_transmite_atualizacao(db_session, criar_evento, monkeypatch) -> None:
-    """``publicar_evento`` é o caminho real de 'evento_atualizado' (usado após
-    recalcular a fusão e ao refrescar um evento no mesmo ponto)."""
+    """publicar_evento é o que manda o evento_atualizado depois de recalcular a fusão."""
     from app.services import detection_events
 
     enviados: list[tuple[str, dict]] = []
@@ -195,7 +187,7 @@ def _noop():
 
 
 def test_purga_de_evento_expirado_transmite_remocao(db_session, criar_evento, monkeypatch) -> None:
-    """'evento_removido' vem da retenção automática, não de uma rota DELETE."""
+    """O evento_removido vem da limpeza automática, não de uma rota DELETE."""
     from datetime import datetime, timedelta
 
     from app.services import event_retention
@@ -218,15 +210,14 @@ def test_purga_de_evento_expirado_transmite_remocao(db_session, criar_evento, mo
     assert enviados[0][1]["id"] == evento_id
 
 
-# ── Endpoint availability ──────────────────────────────────────────
+# Endpoints
 
 
 def test_ws_endpoint_exists(client: TestClient) -> None:
     """Verifica que o endpoint WebSocket está registrado."""
-    # TestClient não suporta WebSocket diretamente via GET,
-    # mas podemos verificar que o endpoint não retorna 404 para GET
+    # O TestClient não abre WebSocket por GET, mas dá para ver que a rota existe.
     resp = client.get("/ws")
-    # WebSocket endpoints retornam 403 ou 426 (Upgrade Required) para GET
+    # Rotas de WebSocket respondem 403 ou 426 a um GET comum
     assert resp.status_code in (403, 426, 404)
 
 
@@ -248,14 +239,11 @@ def test_connected_endpoint_exists(client: TestClient) -> None:
     assert "connected" in data
 
 
-# ── Fallback conceitual ────────────────────────────────────────────
+# Troca de canal no frontend
 
 
 def test_fallback_cascata_ws_sse_polling() -> None:
-    """Testa conceito: cascata ws → sse → polling.
-
-    Verifica que o frontend define os 4 modos de conexão.
-    """
+    """O frontend define os quatro modos de conexão."""
     modos_validos = {"ws", "sse", "polling", "disconnected"}
     assert modos_validos == {"ws", "sse", "polling", "disconnected"}
 

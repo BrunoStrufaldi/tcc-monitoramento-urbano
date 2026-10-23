@@ -15,12 +15,8 @@ export function fusionComponentLabel(name, eventoTipo) {
     return labels[name] || name;
 }
 /**
- * A promoção automática para "Ativo" decide pelo percentual **exibido**: um
- * evento de 0,7977 aparece como "80%" no painel e precisa contar como 80%.
- * `toFixed` arredonda meio-para-cima sobre a representação decimal, o mesmo
- * critério do `Decimal(str(v)).quantize(ROUND_HALF_UP)` em
- * backend/app/services/data_fusion_service.py — as duas pontas têm que
- * concordar, senão o veredito do painel contradiz o status do evento.
+ * Diz se o evento chegou ao limite para virar ativo, usando o percentual que
+ * aparece na tela. O arredondamento é o mesmo do backend (data_fusion_service.py).
  */
 export function atingeLimiarAtivo(confiabilidade, limiar) {
     return Number(confiabilidade.toFixed(2)) >= limiar;

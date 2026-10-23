@@ -1,8 +1,7 @@
-"""Rotas de visão computacional do MotSP.
+"""Rotas para testar os modelos do YOLO pelo painel.
 
-Só consulta e teste: nenhuma rota daqui grava evento ou evidência. Eventos nascem
-da detecção contínua nas câmeras (``services/live_detection.py`` e
-``services/flood_detection.py``)."""
+Nenhuma delas grava eventos. Os eventos vêm só do monitoramento das câmeras.
+"""
 
 import os
 import sys
@@ -79,7 +78,7 @@ async def detectar_em_imagem(
     file: UploadFile = File(...),
     confianca_minima: float = Query(0.45, ge=0.05, le=0.95),
 ):
-    """Executa inferência YOLO sobre upload temporário, que é removido ao final."""
+    """Roda o YOLO numa imagem enviada. A imagem é apagada no fim."""
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Apenas imagens são aceitas (image/*)")
     conteudo = await file.read()
@@ -111,9 +110,7 @@ async def detectar_incidente_em_imagem(
     file: UploadFile = File(...),
     confianca_minima: float = Query(0.3, ge=0.05, le=0.95),
 ):
-    """Roda o modelo dedicado a alagamento (GX_YOLO_INCIDENT_MODEL) sobre um
-    upload de teste — não passa pelo pipeline de eventos/evidências, é só pra
-    validar a inferência isoladamente."""
+    """Roda o modelo de alagamento numa imagem enviada, só para teste."""
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Apenas imagens são aceitas (image/*)")
     conteudo = await file.read()

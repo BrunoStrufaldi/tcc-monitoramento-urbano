@@ -6,69 +6,70 @@
 
 ```text
 TCC-Atualizado/
-├── README.md                     visão geral + mapa da documentação
-├── docs/                         documentação detalhada, um arquivo por assunto (§3–§21)
-├── package.json                  build/test do frontend (tsc + node:test)
+├── README.md                     visão geral e mapa da documentação
+├── docs/                         documentação detalhada, um arquivo por assunto (§3 a §21)
+├── package.json                  build e testes do frontend (tsc + node:test)
 ├── start.ps1                     sobe a API, que também serve o painel, em http://localhost:8000
-├── Dockerfile                    imagem única API + painel + YOLO (CPU) para o Cloud Run — §21
-├── deploy.ps1                    deploy manual no Cloud Run (build a partir da pasta local)
-├── cloudbuild.yaml               deploy automático: gatilho a cada push na main do GitHub
-├── .dockerignore / .gcloudignore o que fica fora da imagem (venv, datasets, .env, pesos extras)
+├── Dockerfile                    imagem com API, painel e YOLO (CPU) para o Cloud Run (§21)
+├── deploy.ps1                    deploy manual no Cloud Run (a partir da pasta local)
+├── cloudbuild.yaml               deploy automático a cada push na main do GitHub
+├── .dockerignore / .gcloudignore o que fica fora da imagem (venv, datasets, .env, modelos extras)
 │
 ├── backend/
 │   ├── requirements.txt          FastAPI, SQLAlchemy, Pydantic, Pillow, pytest…
-│   ├── requirements-yolo.txt     + ultralytics (só na máquina que roda/treina o modelo)
-│   ├── .env.example              todas as variáveis, com o racional de cada uma
+│   ├── requirements-yolo.txt     ultralytics (só na máquina que roda ou treina o modelo)
+│   ├── .env.example              todas as variáveis, com uma explicação curta de cada uma
 │   ├── app/
-│   │   ├── main.py               app FastAPI, lifespan, loop de manutenção (120 s)
-│   │   ├── config.py             Settings (pydantic-settings) — fonte única de configuração
-│   │   ├── database.py           engine, SessionLocal, Base, PRAGMA WAL para SQLite
-│   │   ├── broadcast.py          agenda coroutines no loop principal a partir de threads
-│   │   ├── ws_manager.py         ConnectionManager + WSMessage (protocolo WebSocket)
-│   │   ├── models/               8 models SQLAlchemy (um arquivo por entidade)
-│   │   ├── schemas/              schemas Pydantic (Literal[] para enums)
+│   │   ├── main.py               app FastAPI, início e fim, loop de manutenção (120 s)
+│   │   ├── config.py             Settings (pydantic-settings), onde fica toda a configuração
+│   │   ├── database.py           engine, SessionLocal, Base e PRAGMA WAL para o SQLite
+│   │   ├── broadcast.py          agenda tarefas no loop principal a partir das threads
+│   │   ├── ws_manager.py         ConnectionManager e WSMessage (protocolo WebSocket)
+│   │   ├── models/               7 models SQLAlchemy (um arquivo por entidade)
+│   │   ├── schemas/              schemas Pydantic (Literal[] para os enums)
 │   │   ├── routers/              11 routers (ver §7)
 │   │   ├── services/
-│   │   │   ├── live_detection.py        detecção contínua de TRÂNSITO (thread/câmera)
-│   │   │   ├── flood_detection.py       detecção contínua de ALAGAMENTO (thread/câmera)
-│   │   │   ├── detection_events.py      persiste evento + evidência e faz o broadcast
-│   │   │   ├── event_retention.py       purga, colapsa duplicados
-│   │   │   ├── data_fusion_service.py   ponte app ↔ data_fusion; promove/rebaixa status
-│   │   │   ├── cet_camera_catalog.py    catálogo das 10 câmeras + checagem de frescor
-│   │   │   ├── tomtom_traffic_source.py velocidade atual × livre do trecho
+│   │   │   ├── live_detection.py        detecção contínua de trânsito (uma thread por câmera)
+│   │   │   ├── flood_detection.py       detecção contínua de alagamento (uma thread por câmera)
+│   │   │   ├── detection_events.py      grava evento e evidência e avisa o painel
+│   │   │   ├── event_retention.py       apaga eventos velhos e junta os repetidos
+│   │   │   ├── data_fusion_service.py   liga o app ao data_fusion e muda o status
+│   │   │   ├── cet_camera_catalog.py    catálogo das 10 câmeras e checagem de imagem travada
+│   │   │   ├── tomtom_traffic_source.py velocidade atual e normal do trecho
 │   │   │   ├── weather_source.py        Open-Meteo (clima e qualidade do ar)
-│   │   │   ├── inmet_alert_source.py    avisos meteorológicos oficiais ativos
-│   │   │   └── evidence_annotation.py   desenha as caixas YOLO sobre a evidência
-│   │   └── data/evidencias/      JPEGs gravados em runtime (fora do git)
-│   └── tests/                    165 testes pytest (SQLite em memória)
+│   │   │   ├── inmet_alert_source.py    avisos meteorológicos oficiais
+│   │   │   └── evidence_annotation.py   desenha as caixas do YOLO na evidência
+│   │   └── data/evidencias/      imagens gravadas durante a execução (fora do Git)
+│   └── tests/                    150 testes pytest (SQLite em memória)
 │
-├── data_fusion/                  motor de confiabilidade (puro Python, sem FastAPI)
-│   ├── fusion.py                 combinação ponderada das dimensões
-│   ├── scores.py                 pontuação por dimensão e por tipo de evento
-│   ├── models.py                 dataclasses de entrada/saída
-│   ├── historico_alagamento.py   prior espacial estático (lookup local, sem rede)
-│   ├── data/pontos_alagamento_sp.json   20 pontos CGE-SP/GeoSampa
+├── data_fusion/                  cálculo da confiabilidade (Python puro, sem FastAPI)
+│   ├── fusion.py                 combina as dimensões com os pesos
+│   ├── scores.py                 nota de cada dimensão, por tipo de evento
+│   ├── models.py                 dataclasses de entrada e saída
+│   ├── historico_alagamento.py   histórico de alagamento das vias (arquivo local, sem rede)
+│   ├── data/pontos_alagamento_sp.json   20 pontos do CGE-SP e do GeoSampa
 │   ├── test_fusion.py            `python -m data_fusion.test_fusion`
 │   └── test_historico_alagamento.py
 │
 ├── ml/
-│   ├── detector.py               carrega os DOIS modelos YOLO, normaliza classes
+│   ├── detector.py               carrega os dois modelos do YOLO e traduz as classes
+│   ├── train_vehicle_model.py    ajusta o modelo de veículos às câmeras da CET
 │   ├── train_incident_model.py   inspect/download/merge/train do modelo de alagamento
-│   ├── collect_negatives.py      coleta frames CET-SP como negativos de treino
-│   ├── models/                   pesos .pt (fora do git)
-│   ├── datasets/ · runs/         datasets e runs de treino (fora do git)
+│   ├── collect_negatives.py      baixa imagens das câmeras sem alagamento para o treino
+│   ├── models/                   modelos .pt (só os 3 que o sistema usa vão para o Git)
+│   ├── datasets/ · runs/         datasets e resultados de treino (fora do Git)
 │
 ├── database/
-│   ├── schema.sql                DDL MySQL das 7 tabelas + seed mínimo
-│   └── migrations/               001…005 (ver §6)
+│   ├── schema.sql                DDL MySQL das 7 tabelas e dados iniciais mínimos
+│   └── migrations/               001 a 007 (ver §6)
 │
 └── frontend/
-    ├── index.html                SPA com ARIA: painel de eventos, testador YOLO, overlays
-    ├── css/style.css             design tokens, dark theme sólido
-    ├── js/config.js              API_BASE_URL (= window.location.origin), centro/zoom do mapa
-    ├── src/                      TypeScript fonte
-    │   ├── app.ts                aplicação inteira (mapa, tempo real, YOLO, fusão)
-    │   └── fusion-format.ts      formatação e limiar de promoção (espelha o backend)
-    ├── dist/                     saída do `tsc` (versionada)
-    └── tests/                    testes node:test do módulo puro de formatação
+    ├── index.html                página única com ARIA: painel de eventos, testador YOLO, mapa
+    ├── css/style.css             design tokens e tema escuro
+    ├── js/config.js              API_BASE_URL (= window.location.origin), centro e zoom do mapa
+    ├── src/                      código TypeScript
+    │   ├── app.ts                o painel inteiro (mapa, tempo real, YOLO, Data Fusion)
+    │   └── fusion-format.ts      formatação e limite de promoção (igual ao backend)
+    ├── dist/                     saída do `tsc` (vai para o Git)
+    └── tests/                    testes node:test do módulo de formatação
 ```

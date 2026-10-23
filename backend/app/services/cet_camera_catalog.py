@@ -1,24 +1,8 @@
-"""Catálogo das câmeras públicas da CET-SP expostas em cameras.cetsp.com.br.
+"""Lista das câmeras públicas da CET-SP usadas pelo sistema.
 
-Não existe uma API de listagem — este conjunto foi extraído do HTML público de
-``https://cameras.cetsp.com.br/View/Cam.aspx`` (as 11 câmeras "favoritas" que o
-próprio site expõe, cada uma com ID e nome do cruzamento; confirmado em
-2026-08-26). É um subconjunto pequeno da rede real de câmeras da CET, não a
-cobertura completa da cidade.
-
-Ficaram 10: a câmera 22 ("Paulista - Metrô Consolação") foi retirada em
-04/09/2026 por estar permanentemente travada — o endpoint responde 200 com um
-JPEG válido, mas ``Last-Modified`` de ~191 dias atrás, e a checagem de frescor
-descartava todo frame dela. Manter no catálogo só custava uma thread e um GET
-por intervalo pra jogar o resultado fora a cada volta. A cobertura do ponto não
-se perde: a câmera 23 ("Paulista - Av Brigadeiro Luiz Antônio") fica a ~50 m
-dali. ``frame_esta_desatualizado`` continua valendo pra todas — a CET pode
-travar qualquer outra do mesmo jeito, e foi assim que esta foi descoberta.
-
-As coordenadas foram geocodificadas a partir do nome do cruzamento (Nominatim/
-OpenStreetMap) — são aproximações de rua/quarteirão, não o ponto exato do
-poste da câmera. Suficiente para achar "câmera mais próxima dentro de X km",
-não para navegação de precisão.
+A CET não tem uma API com a lista de câmeras, então elas foram tiradas do site
+cameras.cetsp.com.br. São 10 câmeras. As coordenadas foram calculadas a partir
+do nome do cruzamento, então são aproximadas.
 """
 
 from __future__ import annotations
@@ -58,7 +42,7 @@ CAMERAS: tuple[CameraCET, ...] = (
 
 
 def _distancia_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Distância aproximada em linha reta (haversine), raio da Terra 6371 km."""
+    """Distância aproximada em linha reta entre dois pontos, em km."""
     r = 6371.0
     dlat = radians(lat2 - lat1)
     dlon = radians(lon2 - lon1)
@@ -77,18 +61,11 @@ def camera_mais_proxima(latitude: float, longitude: float, raio_km: float) -> Ca
 
 
 def frame_esta_desatualizado(headers, max_idade_segundos: float) -> bool:
-    """``True`` se o snapshot HTTP não é realmente ao vivo.
+    """Diz se a imagem da câmera está velha, ou seja, se a câmera travou.
 
-    Descoberto na prática (26/08/2026, câmera 22 "Paulista - Metrô
-    Consolação"): a CET às vezes trava numa câmera e o endpoint
-    ``.../Cams/{id}/1.jpg`` passa a devolver sempre o mesmo JPEG antigo — 200
-    OK, bytes válidos, mas com ``Last-Modified`` de meses atrás (nesse caso,
-    imagem de meio-dia sendo processada às 22h como se fosse agora). Sem essa
-    checagem, o sistema cria um evento de "trânsito ao vivo" com timestamp de
-    agora a partir de uma foto de outra época — o oposto do que o usuário
-    pediu (tempo real). Câmeras sem o cabeçalho ``Last-Modified`` (não é
-    garantido por HTTP) são tratadas como frescas, já que não dá pra provar
-    o contrário.
+    A CET às vezes trava uma câmera e ela continua mandando a mesma foto antiga.
+    A data da imagem vem no cabeçalho Last-Modified. Se ele não vier, a imagem
+    é considerada atual.
     """
     valor = headers.get("last-modified")
     if not valor:

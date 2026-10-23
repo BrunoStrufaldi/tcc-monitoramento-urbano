@@ -1,6 +1,7 @@
-"""Consulta de eventos. Eventos nascem da detecção automática
-(``services/detection_events.py``); o painel é somente leitura e não cria,
-altera nem remove evento por requisição."""
+"""Consulta de eventos.
+
+O painel só lê os eventos. Quem cria é a detecção automática nas câmeras.
+"""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
@@ -31,8 +32,7 @@ def listar_eventos(
 ) -> list[Evento]:
     query = db.query(Evento).options(*_EVENTO_LOAD_OPTIONS)
 
-    # Quadro em tempo real: por padrão só retorna eventos detectados dentro da
-    # janela configurada. janela_minutos=0 desliga o corte (auditoria/debug).
+    # Por padrão só devolve os eventos recentes. Com janela_minutos=0 devolve todos.
     minutos = settings.gx_evento_janela_minutos if janela_minutos is None else janela_minutos
     if minutos > 0:
         query = query.filter(Evento.detectado_em >= limite_da_janela(minutos))

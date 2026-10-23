@@ -1,17 +1,12 @@
-"""Especializa o modelo de contagem de veículos nas câmeras da CET-SP.
+"""Ajusta o modelo de veículos para as câmeras da CET-SP.
 
-O yolo11m (COCO) aprendeu com fotos genéricas da internet; as câmeras da CET
-entregam JPEG 480x270, comprimido, com fila de carro pequeno ao fundo e cena
-noturna. Aqui ele é ajustado (fine-tuning) com esses próprios frames.
+O YOLO padrão foi treinado com fotos comuns, e as câmeras da CET mandam
+imagens pequenas, comprimidas e muitas vezes noturnas. Aqui ele é ajustado com
+imagens das próprias câmeras.
 
-Ninguém marca carro à mão: um modelo "professor" maior e lento demais para o
-tempo real (yolo11x + TTA) rotula os frames, e o yolo11m — o "aluno", rápido —
-aprende a imitá-lo nesse cenário (destilação por pseudo-rótulos). As 80 classes
-COCO são mantidas, para o mapeamento de ``ml/detector.py`` continuar valendo.
-
-Seguro por construção: o peso novo vai para outro arquivo e o atual não é
-tocado. ``avaliar`` compara os dois em frames separados que o aluno nunca viu;
-só se o novo vencer é que ``GX_YOLO_MODEL`` passa a apontar para ele.
+Ninguém marca os carros à mão: um modelo maior e mais lento marca as imagens e
+o modelo menor aprende com essas marcações. O modelo novo é salvo em outro
+arquivo, e o comando avaliar compara os dois antes de trocar.
 
     python ml/train_vehicle_model.py rotular
     python ml/train_vehicle_model.py treinar
@@ -42,17 +37,17 @@ DATASET = RAIZ / "ml" / "datasets" / "veiculos_cet"
 MODELO_ATUAL = RAIZ / "ml" / "models" / "yolo11m.pt"
 PROFESSOR = RAIZ / "ml" / "models" / "yolo11x.pt"
 IMGSZ = 1280
-# Mesmo limiar de produção (YOLO_THRESHOLD) para as métricas de contagem.
+# Mesma confiança mínima usada no sistema, para comparar as contagens.
 CONF_PRODUCAO = 0.45
-# Pseudo-rótulo: um pouco abaixo do de produção para o aluno também aprender
-# os carros pequenos/distantes que o professor acha com score médio.
+# Confiança para marcar as imagens. É um pouco menor para pegar também os
+# carros pequenos ao fundo.
 CONF_PROFESSOR = 0.40
 FRACAO_TESTE = 0.2
 CLASSES_VEICULO = {2, 3, 5, 7}  # car, motorcycle, bus, truck
 
 
 def _frames_unicos() -> list[Path]:
-    """Frames originais das câmeras, sem duplicatas (câmera parada repete JPEG)."""
+    """Imagens das câmeras, sem repetidas."""
     vistos: set[str] = set()
     frames = []
     for caminho in sorted(EVIDENCIAS.glob("*-original.jpg")):
@@ -109,9 +104,8 @@ def cmd_treinar(args: argparse.Namespace) -> None:
         imgsz=IMGSZ,
         epochs=args.epochs,
         batch=args.batch,
-        # Ajuste fino, não treino do zero: taxa baixa e as primeiras camadas
-        # (que já sabem ver bordas/formas) congeladas, para o modelo não
-        # esquecer o que sabia com só algumas centenas de frames.
+        # É só um ajuste, não um treino do zero. Por isso a taxa de aprendizado é
+        # baixa e as primeiras camadas ficam congeladas.
         lr0=0.002,
         freeze=10,
         patience=15,

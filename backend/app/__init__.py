@@ -1,1 +1,1 @@
-"""API do MotSP — Monitoramento Urbano de São Paulo em tempo real."""
+"""API do MotSP, monitoramento urbano de São Paulo em tempo real."""

@@ -1,4 +1,4 @@
-"""Fonte climática externa para enriquecer o centro operacional."""
+"""Busca o clima atual e a qualidade do ar no Open-Meteo."""
 
 import json
 from urllib.parse import urlencode

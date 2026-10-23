@@ -1,19 +1,16 @@
-"""Mede a latência real de cada etapa do pipeline do MotSP.
+"""Mede quanto tempo leva cada etapa do MotSP.
 
-Nada aqui é estimativa: roda os pesos do projeto (``ml/models``) sobre frames
-reais das câmeras da CET-SP (``ml/datasets/holdout_0902``) e cronometra etapa
-por etapa, do JPEG que chega até o evento aparecer no painel via WebSocket.
-
-O banco e a pasta de evidências são redirecionados para um diretório
-temporário — a medição não escreve no ``gx.db`` nem em
-``backend/app/data/evidencias``.
+Usa os modelos do projeto em imagens reais das câmeras da CET-SP e mede cada
+etapa, da imagem chegando até o evento aparecer no painel. O banco e as
+evidências vão para uma pasta temporária, então a medição não mexe nos dados
+do projeto.
 
 Uso (a partir da raiz do projeto):
     backend\\venv\\Scripts\\python.exe backend\\benchmark_latencia.py
-    ... --repeticoes 5             # nº de passadas sobre o conjunto de frames
+    ... --repeticoes 5             # quantas vezes passa pelas imagens
     ... --json backend/data/latencia.json
-    ... --cpu                      # inclui a comparação CPU x GPU (lento)
-    ... --rede                     # baixa snapshot real da CET (usa internet)
+    ... --cpu                      # também compara CPU com GPU (lento)
+    ... --rede                     # baixa uma imagem real da CET (usa internet)
 """
 
 from __future__ import annotations
@@ -39,8 +36,7 @@ for _caminho in (str(BACKEND_DIR), str(PROJECT_ROOT)):
     if _caminho not in sys.path:
         sys.path.insert(0, _caminho)
 
-# Precisa vir antes de importar app.config: o pydantic-settings lê o ambiente
-# na instanciação, e variável de ambiente tem precedência sobre o .env.
+# Precisa vir antes de importar app.config, senão a configuração já foi lida.
 _TEMP_DIR = Path(tempfile.mkdtemp(prefix="motsp-latencia-"))
 os.environ["DATABASE_URL"] = "sqlite:///" + (_TEMP_DIR / "bench.db").as_posix()
 os.environ["GX_MONITORAMENTO_ATIVO"] = "false"
@@ -66,7 +62,7 @@ PORTA = 8931
 # --------------------------------------------------------------------------- #
 
 def _percentil(ordenado: list[float], p: float) -> float:
-    """Percentil por posto mais próximo — sem interpolação, amostra pequena."""
+    """Percentil simples, sem interpolação, porque a amostra é pequena."""
     if not ordenado:
         return float("nan")
     indice = max(0, math.ceil(p / 100 * len(ordenado)) - 1)
@@ -103,7 +99,7 @@ def _cronometrar(funcao, argumentos: list, repeticoes: int) -> list[float]:
 # --------------------------------------------------------------------------- #
 
 def _frames(limite: int | None) -> list[tuple[str, bytes]]:
-    """Frames reais de câmera pública da CET — mesma origem que a produção."""
+    """Imagens reais das câmeras da CET, as mesmas que o sistema usa."""
     candidatos = [
         PROJECT_ROOT / "ml" / "datasets" / "holdout_0902",
         PROJECT_ROOT / "ml" / "datasets" / "negativos_cet",
@@ -180,7 +176,7 @@ def _subir_servidor():
 # --------------------------------------------------------------------------- #
 
 def bloco_carga_modelos() -> list[dict]:
-    """Custo de partida a frio: acontece uma vez, na primeira inferência."""
+    """Tempo para carregar o modelo. Só acontece na primeira detecção."""
     linhas: list[dict] = []
 
     inicio = time.perf_counter()
@@ -196,7 +192,7 @@ def bloco_carga_modelos() -> list[dict]:
 
 
 def bloco_inferencia(frames: list[tuple[str, bytes]], repeticoes: int) -> list[dict]:
-    """Inferência YOLO isolada — a etapa que domina a latência do pipeline."""
+    """Tempo só do YOLO, que é a etapa mais demorada."""
     linhas: list[dict] = []
     caminhos = []
     for nome, conteudo in frames:
@@ -204,7 +200,7 @@ def bloco_inferencia(frames: list[tuple[str, bytes]], repeticoes: int) -> list[d
         destino.write_bytes(conteudo)
         caminhos.append(str(destino))
 
-    # Primeira inferência separada: inclui alocação de CUDA e warm-up do grafo.
+    # A primeira detecção é medida à parte, porque inclui a preparação da GPU.
     inicio = time.perf_counter()
     ml_detector.detectar_imagem_real(caminhos[0], settings.yolo_threshold)
     linhas.append(_resumir("Primeira inferencia apos a carga (warm-up CUDA, 1x)", [(time.perf_counter() - inicio) * 1000], "nao se repete"))
@@ -221,7 +217,7 @@ def bloco_inferencia(frames: list[tuple[str, bytes]], repeticoes: int) -> list[d
 
 
 def bloco_cpu(frames: list[tuple[str, bytes]], amostras_cpu: int) -> list[dict]:
-    """Mesma chamada de predict em GPU e em CPU, para comparação de hardware."""
+    """A mesma detecção na GPU e na CPU, para comparar."""
     from ultralytics import YOLO
 
     caminhos = [str(_TEMP_DIR / nome) for nome, _ in frames[:amostras_cpu]]
@@ -232,8 +228,7 @@ def bloco_cpu(frames: list[tuple[str, bytes]], amostras_cpu: int) -> list[dict]:
     def _predizer(modelo, dispositivo):
         def _executar(caminho):
             resultado = modelo.predict(source=caminho, conf=conf, imgsz=imgsz, device=dispositivo, verbose=False)
-            # Força a sincronização com a GPU: sem ler as caixas o predict
-            # retorna antes de o kernel terminar e o tempo sai menor que o real.
+            # Lê as caixas para esperar a GPU terminar, senão o tempo sai menor.
             for item in resultado:
                 _ = len(item.boxes)
         return _executar
@@ -251,8 +246,7 @@ def bloco_cpu(frames: list[tuple[str, bytes]], amostras_cpu: int) -> list[dict]:
 
 
 def _inferir_como_no_monitoramento(conteudo: bytes) -> list:
-    """Mesmo preparo de ``live_detection._processar_frame``: grava o JPEG em
-    arquivo temporário, roda o YOLO e apaga o arquivo."""
+    """Faz o mesmo que o monitoramento: salva a imagem, roda o YOLO e apaga a imagem."""
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg", dir=_TEMP_DIR) as arquivo:
         arquivo.write(conteudo)
         caminho = arquivo.name
@@ -263,7 +257,7 @@ def _inferir_como_no_monitoramento(conteudo: bytes) -> list:
 
 
 def bloco_pipeline(frames: list[tuple[str, bytes]], repeticoes: int) -> list[dict]:
-    """Frame da câmera até a lista de detecções: arquivo temporário + inferência."""
+    """Da imagem da câmera até a lista de detecções."""
     def _validar(par):
         _, conteudo = par
         _inferir_como_no_monitoramento(conteudo)
@@ -274,7 +268,7 @@ def bloco_pipeline(frames: list[tuple[str, bytes]], repeticoes: int) -> list[dic
 
 
 def bloco_persistencia(frames: list[tuple[str, bytes]], repeticoes: int) -> list[dict]:
-    """Gravação da evidência e do evento, e recálculo da fusão de dados."""
+    """Gravação da evidência e do evento, e cálculo do Data Fusion."""
     from app.database import Base, SessionLocal, engine
     from ml.detector import Deteccao
 
@@ -303,7 +297,7 @@ def bloco_persistencia(frames: list[tuple[str, bytes]], repeticoes: int) -> list
 
 
 def bloco_http(frames: list[tuple[str, bytes]], repeticoes: int) -> list[dict]:
-    """Ida e volta HTTP contra o uvicorn local, incluindo upload multipart."""
+    """Ida e volta de uma requisição HTTP no servidor local, com envio de imagem."""
     linhas: list[dict] = []
     with httpx.Client(base_url="http://127.0.0.1:%d" % PORTA, timeout=120.0) as cliente:
         cliente.get("/health")
@@ -337,9 +331,10 @@ def bloco_http(frames: list[tuple[str, bytes]], repeticoes: int) -> list[dict]:
 
 
 def _frame_ate_evento(conteudo: bytes) -> bool:
-    """Caminho do monitoramento contínuo de trânsito, sem a rede: frame -> YOLO
-    -> contagem -> evento gravado e publicado. Fica de fora a decisão do gatilho
-    (contagem mínima / TomTom), que depende de rede e do cenário do frame."""
+    """Caminho completo do trânsito sem usar a internet: imagem, YOLO, contagem e evento.
+
+    A consulta à TomTom fica de fora, porque depende da rede.
+    """
     from app.database import SessionLocal
 
     veiculos = [d for d in _inferir_como_no_monitoramento(conteudo) if d.nome in _CLASSES_VEICULO]
@@ -352,7 +347,7 @@ def _frame_ate_evento(conteudo: bytes) -> bool:
 
 
 async def _medir_ponta_a_ponta(frames: list[tuple[str, bytes]], quantidade: int) -> tuple[list[float], list[float]]:
-    """Frame -> inferência -> evento gravado -> mensagem no painel via WebSocket."""
+    """Da imagem até a mensagem chegar no painel pelo WebSocket."""
     totais: list[float] = []
     propagacoes: list[float] = []
     async with websockets.connect("ws://127.0.0.1:%d/ws" % PORTA, max_size=None) as ws:
@@ -374,7 +369,7 @@ async def _medir_ponta_a_ponta(frames: list[tuple[str, bytes]], quantidade: int)
 
 
 def bloco_rede(quantidade: int) -> list[dict]:
-    """Download do snapshot público da CET — a única etapa fora da máquina."""
+    """Download da imagem da CET, a única etapa que depende da internet."""
     from app.services.cet_camera_catalog import CAMERAS
 
     linhas: list[dict] = []

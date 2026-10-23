@@ -1,16 +1,7 @@
-"""Router WebSocket para atualizações em tempo real.
+"""WebSocket que avisa o painel em tempo real.
 
-Protocolo:
-  Servidor → Cliente:
-    {"tipo": "evento_criado",    "timestamp": "...", "dados": {...}}
-    {"tipo": "evento_atualizado","timestamp": "...", "dados": {...}}
-    {"tipo": "evento_removido",  "timestamp": "...", "dados": {...}}
-
-  Cliente → Servidor:
-    {"tipo": "ping"}  → responde {"tipo": "pong"}
-
-Sem autenticação: o canal é aberto assim que a conexão é aceita e o servidor
-anuncia {"tipo": "pronto"} — o cliente não precisa enviar nada antes.
+O servidor manda uma mensagem quando um evento é criado, atualizado ou
+removido. Se o painel mandar "ping", o servidor responde "pong".
 """
 
 import json
@@ -27,7 +18,7 @@ router = APIRouter(tags=["websocket"])
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
-    """Canal operacional: aberto na conexão, sem handshake prévio."""
+    """Abre o canal assim que o painel se conecta."""
     await websocket.accept()
     try:
         await manager.register(websocket)

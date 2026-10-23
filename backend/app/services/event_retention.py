@@ -1,13 +1,8 @@
-"""Retenção de eventos em tempo real.
+"""Apaga os eventos que já passaram do tempo.
 
-O painel do MotSP é um quadro operacional "ao vivo": um evento só faz sentido
-enquanto a detecção que o originou é recente. Este módulo apaga em definitivo
-tudo que passou da janela (``GX_EVENTO_JANELA_MINUTOS``) — evento, evidências,
-dados contextuais e a localização 1:1 criada para ele.
-
-Toda remoção é propagada como ``evento_removido`` em WS/SSE: o painel só tira um
-evento da lista quando recebe essa mensagem, então apagar em silêncio deixava
-cópias fantasma acumulando na tela (contador acima do que existe no banco).
+O painel mostra só o que está acontecendo agora, então os eventos antigos são
+apagados junto com as evidências e os dados ligados a eles. Cada remoção é
+avisada ao painel, para ele tirar o evento da tela.
 """
 
 from __future__ import annotations
@@ -60,11 +55,7 @@ def _apagar_eventos(db: Session, ids: list[int]) -> None:
 
 
 def colapsar_eventos_duplicados(db: Session) -> int:
-    """Mantém, por (tipo + ponto ~5 casas), apenas o evento mais recente.
-
-    Rede de segurança para pilhas criadas antes do dedup em ``detection_events``
-    (ex.: reinícios seguidos do servidor zerando o cooldown em memória).
-    """
+    """Deixa só o evento mais recente de cada tipo em cada ponto."""
     vivos = (
         db.query(Evento.id, Evento.tipo, Evento.detectado_em, Localizacao.latitude, Localizacao.longitude)
         .join(Localizacao, Evento.localizacao_id == Localizacao.id)

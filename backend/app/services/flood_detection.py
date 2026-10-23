@@ -1,41 +1,9 @@
-"""Detecção contínua de alagamento nas câmeras públicas CET-SP, sem operador
-no loop e sem depender de dataset em lote.
+"""Monitora as câmeras da CET-SP e detecta alagamento.
 
-Antes disso, a única detecção de alagamento era reativa: rodava só quando o
-GeoSampa (``context_monitor.py``, removido) notava um registro da Defesa
-Civil — que podia ter semanas ou meses de defasagem entre o ocorrido e a
-publicação. Decisão do grupo foi manter só dado em tempo real; sem GeoSampa,
-a única forma de continuar detectando alagamento de forma autônoma é rodar o
-modelo dedicado de incidentes direto nas câmeras, do mesmo jeito que
-``live_detection.py`` já faz pra trânsito (mesmo catálogo de 10 câmeras,
-mesma checagem de frescor de frame via
-``cet_camera_catalog.frame_esta_desatualizado`` — sem ela um evento "ao
-vivo" podia sair de uma foto de meses atrás, foi exatamente o bug achado na
-câmera 22 "Paulista - Metrô Consolação").
-
-Exige ``GX_YOLO_INCIDENT_MODEL`` configurado (o peso COCO padrão não tem
-classe de alagamento — ver ``ml/detector.py``). Sem o modelo dedicado, o loop
-sobe mas cada frame é descartado silenciosamente (mesmo comportamento
-defensivo do resto do sistema quando falta peso treinado).
-
-Ativado por ``GX_ALAGAMENTO_MONITORAR_CATALOGO=true``, opt-in — decisão
-explícita de quem opera o backend, ciente de que aqui não há confirmação
-humana por evento. Eventos são publicados no loop assíncrono principal via
-``app.broadcast.schedule_coroutine``.
-
-Cada detecção também busca duas fontes climáticas independentes e grava como
-dado contextual: a chuva atual no ponto exato (Open-Meteo, via
-``weather_source`` — sensor bruto, dado ao vivo) e um aviso oficial ativo do
-INMET pra São Paulo (``inmet_alert_source`` — julgamento institucional, só
-gravado quando o aviso menciona risco de alagamento). Mesmo padrão do
-trânsito (índice de veículos + TomTom): quando as duas existem,
-``data_fusion.scores`` faz a média em vez de confiar só numa.
-
-Grava ainda um terceiro insumo, agora estático: o histórico de alagamento da
-via (``data_fusion.historico_alagamento``, lookup local sem rede). É prior
-espacial, não gatilho nem fonte ao vivo — reforça a confiabilidade quando já
-há chuva/aviso e a derruba quando não há sinal algum numa via que nunca
-alagou (falso positivo provável do modelo de incidentes).
+Funciona como o monitoramento de trânsito, mas usa o modelo de alagamento.
+Quando ele encontra água na pista, o sistema também busca a chuva no local, o
+aviso do INMET e o histórico de alagamento da via, e esses dados ajudam a
+decidir se o alerta é confiável. Só roda se estiver ativado na configuração.
 """
 
 from __future__ import annotations
@@ -127,9 +95,8 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
                     unidade="indice_0_10",
                 ))
 
-            # Prior espacial estático (lookup local, sem rede): histórico de
-            # alagamento da via. Gravado sempre — inclusive 0.0 — para o Data
-            # Fusion distinguir "via sem histórico" de "sem informação".
+            # O histórico é gravado mesmo quando é zero, para separar uma via
+            # que nunca alagou de uma via sem informação.
             indice_hist, descricao_hist = indice_historico(latitude, longitude)
             db.add(DadoContextual(
                 evento_id=evento.id,
@@ -143,7 +110,7 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
             aplicar_fusao_evento(db, evento.id, persistir=True)
             publicar_evento(db, evento.id)
             logger.info(
-                "Alagamento sinalizado em %s (confiança %.0f%%) — histórico da via: %s",
+                "Alagamento sinalizado em %s (confiança %.0f%%), histórico da via: %s",
                 nome_camera, alagamento.confianca * 100, descricao_hist,
             )
         except Exception:
@@ -168,7 +135,7 @@ def _loop(snapshot_url: str, latitude: float, longitude: float, interval: float,
 
             if cet_camera_catalog.frame_esta_desatualizado(response.headers, settings.gx_camera_frescor_maximo_segundos):
                 logger.warning(
-                    "Câmera %s travada num frame antigo (Last-Modified: %s) — ignorando, não é tempo real",
+                    "Câmera %s travada num frame antigo (Last-Modified: %s), frame ignorado",
                     nome_camera, response.headers.get("last-modified"),
                 )
                 _stop_event.wait(interval)
@@ -183,7 +150,7 @@ def _loop(snapshot_url: str, latitude: float, longitude: float, interval: float,
 
 
 def iniciar() -> None:
-    """Sobe uma thread de detecção de alagamento por câmera do catálogo, se ativado."""
+    """Começa a procurar alagamento em cada câmera, uma thread para cada."""
     global _threads
     if not settings.gx_alagamento_monitorar_catalogo:
         return

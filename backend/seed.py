@@ -1,7 +1,6 @@
-"""Inicializa apenas cadastros de referência; nunca cria eventos operacionais.
+"""Cria os cadastros básicos do sistema. Não cria eventos.
 
-Eventos só nascem da detecção contínua nas câmeras (fluxo YOLO com evidência).
-Este script é idempotente e não apaga dados existentes.
+Pode rodar várias vezes e não apaga nada que já existe.
 """
 
 from app.database import Base, SessionLocal, engine

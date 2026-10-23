@@ -30,9 +30,11 @@ from app.services.event_retention import colapsar_eventos_duplicados, purgar_eve
 
 
 async def _manutencao_periodica() -> None:
-    """Mantém o quadro em tempo real: remove eventos fora da janela, colapsa
-    pilhas do mesmo tipo no mesmo ponto e promove para "ativo" os eventos que
-    já batem o limiar de confiabilidade."""
+    """Mantém o painel em tempo real.
+
+    Apaga os eventos velhos, junta eventos repetidos no mesmo ponto e promove os
+    que já passaram do limite de confiabilidade.
+    """
     while True:
         try:
             with SessionLocal() as db:
@@ -46,8 +48,7 @@ async def _manutencao_periodica() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # O SQLite local permite executar o projeto sem depender de um MySQL externo.
-    # Em produção, o schema MySQL continua sendo aplicado via database/schema.sql.
+    # Localmente o projeto usa SQLite. O schema do MySQL fica em database/schema.sql.
     if settings.database_url.startswith("sqlite"):
         Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
@@ -57,8 +58,8 @@ async def lifespan(_app: FastAPI):
         promover_eventos_por_confiabilidade(db)
     set_main_loop(asyncio.get_running_loop())
     manutencao_task = asyncio.create_task(_manutencao_periodica())
-    # Desligado por padrão (inclusive em testes) — evita threads de rede reais
-    # subindo sozinhas. Ative com GX_MONITORAMENTO_ATIVO=true no .env.
+    # Vem desligado por padrão, inclusive nos testes. Para ligar, use
+    # GX_MONITORAMENTO_ATIVO=true no .env.
     if settings.gx_monitoramento_ativo:
         live_detection.iniciar()
         flood_detection.iniciar()
@@ -100,8 +101,7 @@ def _status() -> dict[str, str]:
     return {"status": "online", "message": "API do TCC rodando com sucesso"}
 
 
-# Sempre disponível: no deploy o "/" é o painel, e sobrou este endereço para
-# checar a API sem depender do HTML.
+# Endereço para checar se a API está no ar, já que "/" mostra o painel.
 app.add_api_route("/api/status", _status, methods=["GET"])
 
 
@@ -110,24 +110,16 @@ def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# Painel estático servido pela própria API (deploy em container).
-#
-# O mount tem que ser a ÚLTIMA rota registrada: ele responde por "/" inteiro e
-# engoliria /eventos, /ws e /docs se viesse antes dos routers. Pela mesma razão
-# o "/" JSON só existe quando o painel NÃO está sendo servido — com o mount
-# ativo, quem abre o link recebe o index.html, não um dicionário.
+# Painel servido pela própria API. Precisa ser a última rota registrada,
+# senão ele responderia no lugar das outras.
 _FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 
 
 class _PainelStaticFiles(StaticFiles):
-    """StaticFiles com ``Cache-Control: no-cache`` no HTML e no JavaScript.
+    """Arquivos do painel com cache desligado no HTML e no JavaScript.
 
-    O index.html é quem aponta para o CSS/JS versionados pelo ``?v=``. Sem
-    cabeçalho de cache o Safari do iOS reaproveitava o HTML antigo por horas
-    (cache heurístico) e continuava carregando o CSS antigo mesmo depois de um
-    deploy. ``no-cache`` obriga a revalidar pelo ETag a cada abertura — um 304
-    barato. O JS entra junto porque ``app.js`` importa ``fusion-format.js``
-    sem ``?v=``: um módulo velho em cache ao lado do novo quebraria o painel.
+    Sem isso o Safari do iPhone continuava mostrando a versão antiga do painel
+    mesmo depois de um deploy.
     """
 
     _SEM_CACHE = ("text/html", "text/javascript", "application/javascript")

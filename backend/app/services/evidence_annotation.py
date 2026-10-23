@@ -1,4 +1,4 @@
-"""Gera uma cópia visual da evidência com caixas YOLO, preservando o original."""
+"""Cria uma cópia da imagem com as caixas do YOLO, sem mexer na original."""
 
 from __future__ import annotations
 

@@ -1,6 +1,7 @@
-"""Testes da detecção contínua de alagamento (câmera CET) — processamento de
-frame, correção de Evento.tipo, cooldown e o filtro de frame desatualizado
-(``_loop``, HTTP mockado); download HTTP de verdade não é exercitado aqui."""
+"""Testes do monitoramento de alagamento nas câmeras.
+
+O download das imagens é simulado, sem acessar a internet.
+"""
 
 from contextlib import contextmanager
 
@@ -18,9 +19,7 @@ def _sessao_de_teste(session: Session):
 
 @pytest.fixture(autouse=True)
 def _sem_clima_por_padrao(monkeypatch):
-    """A maioria dos testes aqui não é sobre chuva/aviso oficial/histórico —
-    evita rede real (Open-Meteo, INMET) e fixa o prior histórico em 0.0 para os
-    testes que não são sobre ele."""
+    """Evita chamar o Open-Meteo e o INMET de verdade e zera o histórico da via."""
     monkeypatch.setattr(flood_detection, "obter_condicoes_atuais", lambda _lat, _lon: {"disponivel": False})
     monkeypatch.setattr(flood_detection, "obter_aviso_ativo", lambda: {"disponivel": False})
     monkeypatch.setattr(flood_detection, "indice_historico", lambda _lat, _lon: (0.0, "sem histórico (fixture de teste)"))
@@ -55,10 +54,8 @@ def test_processar_frame_sinaliza_alagamento_com_tipo_corrigido(db_session: Sess
     assert len(eventos) == 1
     # Evento.tipo é o que data_fusion.scores usa para escolher o cálculo.
     assert eventos[0].tipo == "alagamento"
-    # A confiança persistida é a da fusão, não a bruta do YOLO (0.81): sem chuva,
-    # sem aviso INMET e fora de qualquer ponto com histórico de alagamento
-    # (fixture fixa o prior em 0.0), a dimensão de contexto cai para 0.25 e derruba
-    # o score — falso positivo provável fica em análise.
+    # A confiança salva é a do Data Fusion, não a do YOLO. Sem chuva, sem aviso
+    # e sem histórico, a nota cai e o evento fica em análise.
     assert float(eventos[0].confianca) == 0.57
     assert eventos[0].status == "em_analise"
     assert "câmera teste" in eventos[0].fonte.nome
@@ -96,8 +93,7 @@ def test_processar_frame_sem_chuva_disponivel_nao_registra_contexto(db_session: 
     monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
     monkeypatch.setattr(detection_events, "annotate_evidence", lambda content, _detections: (content, 10, 10))
     monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: _deteccao_alagamento())
-    # fixture autouse já cobre "disponivel": False; aqui é o caso "disponivel"
-    # mas sem o campo de chuva, defensivo contra resposta parcial da API.
+    # Aqui a API responde, mas sem o dado de chuva.
     monkeypatch.setattr(
         flood_detection,
         "obter_condicoes_atuais",
@@ -146,8 +142,7 @@ def test_processar_frame_com_aviso_inmet_sem_mencao_a_alagamento_nao_registra(db
     monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
     monkeypatch.setattr(detection_events, "annotate_evidence", lambda content, _detections: (content, 10, 10))
     monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: _deteccao_alagamento())
-    # Aviso ativo existe, mas não fala de alagamento (ex.: só vento) — não
-    # deve virar corroboração de um evento de alagamento.
+    # Existe um aviso, mas ele não fala de alagamento, então não conta.
     monkeypatch.setattr(
         flood_detection,
         "obter_aviso_ativo",
@@ -198,7 +193,7 @@ def test_processar_frame_registra_indice_historico_de_alagamento(db_session: Ses
     monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
     monkeypatch.setattr(detection_events, "annotate_evidence", lambda content, _detections: (content, 10, 10))
     monkeypatch.setattr(flood_detection, "detectar_incidentes_imagem", lambda _path, _threshold: _deteccao_alagamento())
-    # Sobrepõe o stub da fixture: aqui a coordenada cai sobre um ponto crônico.
+    # Aqui a coordenada cai num ponto que alaga sempre.
     monkeypatch.setattr(flood_detection, "indice_historico", lambda _lat, _lon: (8.5, "Av. Exemplo (~80 m, recorrência cronico)"))
 
     flood_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {}, "câmera teste")
@@ -241,8 +236,7 @@ def test_processar_frame_ignora_quando_modelo_indisponivel(db_session: Session, 
 
 
 def test_loop_ignora_frame_desatualizado_e_nao_processa(monkeypatch):
-    """Mesmo bug real da câmera 22 achado no trânsito: sem o filtro, um frame
-    de meses atrás vira evento "ao vivo" de alagamento também."""
+    """Câmera travada mandando sempre a mesma foto antiga: a imagem é ignorada."""
     import httpx as httpx_module
 
     class _RespostaFalsa:
@@ -291,8 +285,7 @@ def test_iniciar_ativo_sobe_uma_thread_por_camera(monkeypatch):
     from app.services import cet_camera_catalog
 
     monkeypatch.setattr(settings, "gx_alagamento_monitorar_catalogo", True)
-    # Substitui o loop real (que faria HTTP GET nas câmeras da CET-SP de
-    # verdade) por um stub que só aguarda o sinal de parada.
+    # Troca o loop real, que acessaria as câmeras, por um que só espera o sinal de parada.
     monkeypatch.setattr(flood_detection, "_loop", lambda *_args: flood_detection._stop_event.wait())
     try:
         flood_detection.iniciar()

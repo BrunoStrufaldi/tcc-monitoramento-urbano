@@ -1,4 +1,4 @@
-"""Módulo de fusão de dados — confiabilidade de eventos urbanos."""
+"""Data Fusion: cálculo da confiabilidade dos eventos."""
 
 from data_fusion.fusion import calcular_confiabilidade
 from data_fusion.models import EventoFusionInput, ResultadoFusao

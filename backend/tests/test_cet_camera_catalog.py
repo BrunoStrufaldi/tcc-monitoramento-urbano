@@ -1,4 +1,4 @@
-"""Testes do catálogo de câmeras CET, busca por proximidade e frescor de frame."""
+"""Testes do catálogo de câmeras da CET, da busca por proximidade e da imagem travada."""
 
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
@@ -36,13 +36,13 @@ def test_frame_recente_nao_e_desatualizado():
 
 
 def test_frame_antigo_e_desatualizado():
-    # Caso real que motivou isso: câmera 22 travada num JPEG de meses atrás.
+    # Câmera travada mandando a mesma foto de meses atrás.
     seis_meses_atras = format_datetime(datetime.now(UTC) - timedelta(days=180), usegmt=True)
     assert frame_esta_desatualizado(_headers(seis_meses_atras), max_idade_segundos=300) is True
 
 
 def test_frame_sem_header_nao_e_tratado_como_desatualizado():
-    """Last-Modified não é garantido por HTTP; sem ele, não dá pra provar que é velho."""
+    """Sem o cabeçalho Last-Modified não dá para saber se a imagem é velha."""
     assert frame_esta_desatualizado(_headers(None), max_idade_segundos=300) is False
 
 

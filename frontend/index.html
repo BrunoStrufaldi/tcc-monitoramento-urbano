@@ -15,7 +15,7 @@
 <body>
   <a href="#view-dashboard" class="skip-link">Pular para o painel de eventos</a>
   <div class="app-shell">
-    <!-- TOPBAR — 56px -->
+    <!-- BARRA SUPERIOR -->
     <header class="topbar">
       <div class="brand-block">
         <svg class="gx-wordmark" viewBox="0 0 92 40" role="img" aria-label="MotSP" focusable="false">
@@ -54,11 +54,11 @@
       </div>
     </header>
 
-    <!-- WORKSPACE -->
+    <!-- ÁREA DE TRABALHO -->
     <main class="workspace">
-      <!-- SIDEBAR (rail + left panel) -->
+      <!-- BARRA LATERAL -->
       <aside class="sidebar" id="sidebar-shell" aria-label="Painel de operações">
-        <!-- NAVIGATION RAIL -->
+        <!-- BARRA DE ÍCONES -->
         <nav class="rail" aria-label="Navegação por seções">
           <button type="button" class="rail-btn active" id="rail-inicio" aria-label="Início" aria-pressed="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/></svg>
@@ -70,15 +70,14 @@
           </button>
         </nav>
 
-        <!-- LEFT PANEL (operational views) -->
+        <!-- PAINEL ESQUERDO -->
         <div class="left-panel">
           <div class="sidebar-content">
 
-            <!-- Dashboard -->
+            <!-- Visão geral -->
             <section class="view" id="view-dashboard">
               <div class="criticality-heading"><span>Eventos no mapa</span><strong id="kpi-ativos">--</strong></div>
-              <!-- Mobile/tablet: o filtro de status do mapa (.map-controls) fica oculto,
-                   então o mesmo filtro aparece aqui, sincronizado com o <select>. -->
+              <!-- No celular e no tablet o filtro do mapa fica escondido, então ele aparece aqui. -->
               <div class="status-filter" id="filtro-status-mobile" role="tablist" aria-label="Filtrar eventos por status">
                 <button type="button" class="sev-btn active" data-status="" role="tab" aria-selected="true">Todos</button>
                 <button type="button" class="sev-btn status-ativo" data-status="ativo" role="tab" aria-selected="false"><span class="sev-dot"></span>Ativos</button>
@@ -135,7 +134,7 @@
                 <div class="fusion-explain-body" id="fusion-explain-body"></div>
               </section>
 
-              <!-- No layout vertical, a "Evidência visual" do painel direito é movida para cá. -->
+              <!-- Com o celular em pé, a evidência visual do painel direito vem para cá. -->
               <div id="left-evidence-dock" hidden></div>
             </section>
 
@@ -175,7 +174,7 @@
         </div>
       </aside>
 
-      <!-- MAP -->
+      <!-- MAPA -->
       <section class="map-stage" aria-label="Mapa de eventos urbanos">
         <div id="mapa" role="application" aria-label="Mapa de São Paulo com eventos urbanos"></div>
 
@@ -202,7 +201,7 @@
 
       </section>
 
-      <!-- RIGHT PANEL (evidence) — 330px -->
+      <!-- PAINEL DIREITO (evidência) -->
       <aside class="right-panel" id="right-panel" aria-label="Evidência do evento">
         <div class="right-panel-header">
           <h2 class="right-panel-title">Evidência visual</h2>

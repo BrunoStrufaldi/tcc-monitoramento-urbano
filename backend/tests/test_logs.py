@@ -10,11 +10,7 @@ def test_listar_logs_vazio(client: TestClient):
 
 
 def test_logs_apos_criar_evento(client: TestClient):
-    """Cria evento via API e verifica se o endpoint de logs retorna vazio (logs não são criados automaticamente)."""
-    client.post(
-        "/eventos",
-        json={"titulo": "Evento", "tipo": "transito", "latitude": -23.55, "longitude": -46.63},
-    )
+    """A rota de logs responde com uma lista."""
     response = client.get("/logs")
     assert response.status_code == 200
     assert isinstance(response.json(), list)

@@ -1,7 +1,7 @@
-"""Testes da detecção contínua (câmera IP/RTSP) — cobre o processamento de
-frame, a contagem de veículos para sinalizar trânsito, o cooldown e o filtro
-de frame desatualizado (``_loop``, HTTP mockado); download HTTP de verdade
-não é exercitado aqui."""
+"""Testes do monitoramento de trânsito nas câmeras.
+
+O download das imagens é simulado, sem acessar a internet.
+"""
 
 from contextlib import contextmanager
 
@@ -26,7 +26,7 @@ def _veiculos(quantidade: int) -> list[Deteccao]:
 
 @pytest.fixture(autouse=True)
 def _sem_tomtom_por_padrao(monkeypatch):
-    """A maioria dos testes aqui não é sobre o TomTom — evita rede real."""
+    """Evita chamar a TomTom de verdade nos testes."""
     monkeypatch.setattr(live_detection, "obter_fluxo_transito", lambda _lat, _lon: {"disponivel": False})
 
 
@@ -125,9 +125,7 @@ def test_avaliar_gatilho_tomtom_veta_trecho_fluindo():
 
 
 def test_avaliar_gatilho_tomtom_sustenta_contagem_baixa():
-    """Faixa corroborada: 6 veículos é pouco para criar sozinho (mínimo 12),
-    mas a TomTom mede o trecho parado — caso do rush noturno, em que o JPEG
-    escuro da câmera derruba a contagem do YOLO."""
+    """6 veículos é pouco para criar sozinho, mas a TomTom diz que a via está parada."""
     criar, motivo = live_detection._avaliar_gatilho_transito(
         6, {"disponivel": True, "indice_congestionamento": 5.5}
     )
@@ -136,8 +134,7 @@ def test_avaliar_gatilho_tomtom_sustenta_contagem_baixa():
 
 
 def test_avaliar_gatilho_contagem_baixa_sem_tomtom_nao_cria():
-    """Sem a fonte que corrobora, a faixa baixa não pode cair na contagem —
-    seria criar evento de trânsito com 6 carros e nada confirmando."""
+    """Sem a TomTom, 6 veículos não bastam para criar o evento."""
     criar, motivo = live_detection._avaliar_gatilho_transito(6, {"disponivel": False})
     assert criar is False
     assert "nada a corroborar" in motivo
@@ -168,8 +165,7 @@ def _monta_camera_transito(db_session, tmp_path, monkeypatch, veiculos: int, flu
 
 
 def test_processar_frame_veta_transito_quando_tomtom_indica_fluxo(db_session: Session, tmp_path, monkeypatch):
-    # 13 veículos (faixa intermediária) mas a TomTom diz que o trecho flui —
-    # provável contagem dos dois sentidos numa avenida larga. Não vira evento.
+    # 13 veículos, mas a TomTom diz que a via está fluindo. Não vira evento.
     _monta_camera_transito(db_session, tmp_path, monkeypatch, 13, {"disponivel": True, "indice_congestionamento": 1.0})
 
     from app.models.evento import Evento
@@ -193,8 +189,7 @@ def test_processar_frame_cria_transito_quando_tomtom_confirma(db_session: Sessio
 
 
 def test_processar_frame_cria_na_faixa_corroborada_pela_tomtom(db_session: Session, tmp_path, monkeypatch):
-    """6 veículos (abaixo do mínimo de 12) numa via que a TomTom mede parada:
-    antes o portão de contagem barrava o frame antes de consultá-la."""
+    """6 veículos numa via que a TomTom diz estar parada: a TomTom precisa ser consultada."""
     _monta_camera_transito(db_session, tmp_path, monkeypatch, 6, {"disponivel": True, "indice_congestionamento": 5.5})
 
     from app.models.evento import Evento
@@ -207,8 +202,7 @@ def test_processar_frame_cria_na_faixa_corroborada_pela_tomtom(db_session: Sessi
 
 
 def test_processar_frame_ignora_contagem_abaixo_do_piso(db_session: Session, tmp_path, monkeypatch):
-    """3 veículos: abaixo do piso nem a TomTom é consultada, por mais parado
-    que ela diga que o trecho está — não há evidência visual que sustente."""
+    """Com 3 veículos a TomTom nem é consultada."""
     consultas: list[int] = []
 
     def _tomtom(_lat, _lon):
@@ -227,8 +221,7 @@ def test_processar_frame_ignora_contagem_abaixo_do_piso(db_session: Session, tmp
 
 
 def test_processar_frame_veto_da_tomtom_nao_queima_cooldown_longo(db_session: Session, tmp_path, monkeypatch):
-    """Veto da TomTom só aplica o cooldown curto: a via pode travar dez minutos
-    depois e a câmera precisa poder falar de novo antes da meia hora."""
+    """Depois de uma recusa da TomTom a câmera espera pouco tempo, não meia hora."""
     _monta_camera_transito(db_session, tmp_path, monkeypatch, 6, {"disponivel": True, "indice_congestionamento": 1.0})
 
     from app.models.evento import Evento
@@ -242,8 +235,7 @@ def test_processar_frame_veto_da_tomtom_nao_queima_cooldown_longo(db_session: Se
 
 
 def test_processar_frame_contagem_alta_cria_mesmo_com_tomtom_baixo(db_session: Session, tmp_path, monkeypatch):
-    # 18 >= gx_transito_min_veiculos_confirmado (16): frame muito cheio dispensa
-    # a corroboração da TomTom.
+    # 18 veículos é bastante, então nem precisa da TomTom.
     _monta_camera_transito(db_session, tmp_path, monkeypatch, 18, {"disponivel": True, "indice_congestionamento": 1.0})
 
     from app.models.evento import Evento
@@ -282,9 +274,7 @@ def test_processar_frame_ignora_quando_modelo_indisponivel(db_session: Session, 
 
 
 def test_loop_ignora_frame_desatualizado_e_nao_processa(monkeypatch):
-    """Caso real que motivou o filtro: câmera CET travada, sempre devolvendo
-    o mesmo JPEG de meses atrás — precisa ser descartado antes de virar
-    Deteccao, senão vira evento "ao vivo" com foto de outra hora do dia."""
+    """Câmera travada mandando sempre a mesma foto antiga: a imagem é ignorada."""
     import httpx as httpx_module
 
     class _RespostaFalsa:
@@ -335,8 +325,7 @@ def test_iniciar_com_catalogo_ativo_sobe_uma_thread_por_camera(monkeypatch):
 
     monkeypatch.setattr(settings, "gx_camera_snapshot_url", None)
     monkeypatch.setattr(settings, "gx_transito_monitorar_catalogo", True)
-    # Substitui o loop real (que faria HTTP GET nas câmeras da CET-SP de
-    # verdade) por um stub que só aguarda o sinal de parada.
+    # Troca o loop real, que acessaria as câmeras, por um que só espera o sinal de parada.
     monkeypatch.setattr(live_detection, "_loop", lambda *_args: live_detection._stop_event.wait())
     try:
         live_detection.iniciar()

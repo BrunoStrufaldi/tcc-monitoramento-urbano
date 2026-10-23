@@ -1,9 +1,6 @@
 /**
- * Configuração do painel. API e painel moram na mesma origem — o FastAPI serve
- * os dois, local (start.ps1) e no container — então a URL da API sai de
- * window.location em vez de ser fixa: vale para qualquer porta ou domínio, e o
- * WebSocket vira wss:// sozinho sob HTTPS (app.ts monta a URL com
- * API_BASE_URL.replace(/^http/, "ws")).
+ * Configuração do painel. A API e o painel ficam no mesmo endereço, então a
+ * URL da API vem do próprio navegador.
  */
 window.CONFIG = {
   API_BASE_URL: window.location.origin,

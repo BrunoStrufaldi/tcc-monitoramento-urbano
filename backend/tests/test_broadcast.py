@@ -1,4 +1,4 @@
-"""Testes de broadcast sync→async e cleanup SSE."""
+"""Testes do envio de mensagens em tempo real e da limpeza do SSE."""
 
 import asyncio
 import threading
@@ -65,7 +65,7 @@ async def test_event_stream_cleanup_removes_client() -> None:
 
 
 def test_evento_detectado_envia_sse(client: TestClient, db_session, criar_evento) -> None:
-    """O SSE é alimentado pela detecção (``publicar_evento``), não por rota."""
+    """O SSE recebe os eventos da detecção, não de uma rota."""
     from app.services import detection_events
 
     evento = criar_evento(titulo="SSE Broadcast", tipo="alagamento", severidade="alta")

@@ -4,13 +4,14 @@
 
 ## 6. Banco de dados
 
-SQLite em tudo que roda hoje: local, testes e Cloud Run (lá o banco mora dentro do container e
-recomeça vazio a cada revisão — ver [§21](deploy.md#21-deploy-no-google-cloud-run)).
-`database/schema.sql` e `database/migrations/` descrevem o mesmo schema em MySQL 8, que
-continua suportado via `DATABASE_URL`. Com SQLite,
-`main.py` cria as tabelas no startup e `database.py` liga `PRAGMA journal_mode=WAL` +
-`busy_timeout=30000` — as threads de monitoramento escrevem em paralelo com as requisições
-HTTP e sem isso o SQLite erra `database is locked`.
+Tudo o que roda hoje usa SQLite: o ambiente local, os testes e o Cloud Run (lá o banco
+fica dentro do container e começa vazio a cada nova versão, ver
+[§21](deploy.md#21-deploy-no-google-cloud-run)). O `database/schema.sql` e o
+`database/migrations/` descrevem o mesmo schema em MySQL 8, que continua funcionando pelo
+`DATABASE_URL`. Com SQLite, o `main.py` cria as tabelas quando o sistema inicia e o
+`database.py` liga `PRAGMA journal_mode=WAL` e `busy_timeout=30000`. Isso é preciso porque
+as threads de monitoramento gravam no banco junto com as requisições HTTP, e sem isso o
+SQLite dá o erro `database is locked`.
 
 ### Diagrama entidade-relacionamento
 
@@ -32,34 +33,36 @@ erDiagram
 
 | Tabela | Model | Função |
 |---|---|---|
-| `regioes` | `Regiao` | Divisão geográfica da cidade (nome, código, polígono GeoJSON opcional). |
-| `localizacoes` | `Localizacao` | Coordenadas + endereço. A detecção cria uma localização 1:1 por evento; a retenção apaga as órfãs. |
-| `fontes_dados` | `FonteDados` | Origem do evento — na prática, uma fonte `yolo` por câmera. O **tipo** `yolo` é o que permite rebaixar automaticamente um evento `ativo`. |
-| `eventos` | `Evento` | Ocorrência urbana. Campos-chave: `tipo`, `severidade`, `status`, `confianca` (score do Data Fusion), `detectado_em`. |
-| `evidencias_visuais` | `EvidenciaVisual` | Imagem/frame + `modelo_ia`, `classe_detectada`, `confianca`, `bbox` e SHA-256 do original em `metadados`. |
-| `dados_contextuais` | `DadoContextual` | Pares chave/valor por evento. Categoria `contexto` alimenta a dimensão de contexto da fusão. |
-| `logs_sistema` | `LogSistema` | Diagnóstico. A fusão grava aqui (com os componentes) só quando promove ou rebaixa um evento. |
+| `regioes` | `Regiao` | Divisão geográfica da cidade (nome, código e um polígono GeoJSON opcional). |
+| `localizacoes` | `Localizacao` | Coordenadas e endereço. A detecção cria uma localização para cada evento, e a limpeza apaga as que ficam sem uso. |
+| `fontes_dados` | `FonteDados` | Origem do evento. Na prática, uma fonte `yolo` por câmera. É o tipo `yolo` que permite devolver um evento `ativo` para análise automaticamente. |
+| `eventos` | `Evento` | O evento urbano. Campos principais: `tipo`, `severidade`, `status`, `confianca` (nota do Data Fusion) e `detectado_em`. |
+| `evidencias_visuais` | `EvidenciaVisual` | Imagem, com `modelo_ia`, `classe_detectada`, `confianca`, `bbox` e o SHA-256 da original em `metadados`. |
+| `dados_contextuais` | `DadoContextual` | Pares de chave e valor por evento. A categoria `contexto` alimenta a dimensão de contexto do Data Fusion. |
+| `logs_sistema` | `LogSistema` | Diagnóstico. O Data Fusion grava aqui (com as notas) só quando muda o status de um evento. |
 
 ### Enums do domínio
 
-- **Severidade**: `baixa` · `media` · `alta` · `critica`
-- **Status do evento**: `em_analise` · `ativo`
-- **Tipo de evidência**: `imagem` · `video` · `frame` · `thumbnail`
-- **Nível de log**: `DEBUG` · `INFO` · `WARN` · `ERROR` · `CRITICAL`
+- Severidade: `baixa` · `media` · `alta` · `critica`
+- Status do evento: `em_analise` · `ativo`
+- Tipo de evidência: `imagem` · `video` · `frame` · `thumbnail`
+- Nível de log: `DEBUG` · `INFO` · `WARN` · `ERROR` · `CRITICAL`
 
-Validados como `Literal[...]` nos schemas Pydantic (`backend/app/schemas/evento.py`), então
-um valor fora da lista é rejeitado com 422 antes de chegar ao banco.
+Esses valores são validados como `Literal[...]` nos schemas do Pydantic
+(`backend/app/schemas/evento.py`), então um valor fora da lista é recusado com 422 antes
+de chegar ao banco.
 
 ### Migrações (`database/migrations/`)
 
 | Arquivo | Tipo | O que faz |
 |---|---|---|
-| `001_security.sql` | aditiva | Criava `usuarios` e `auditoria_acoes`. **Histórica** — a camada de autenticação foi removida depois. |
-| `002_ocorrencias_externas.sql` | aditiva | Cria `ocorrencias_externas` (dedup de datasets externos). |
-| `003_remove_auth.sql` | **destrutiva** | Dropa `auditoria_acoes` e depois `usuarios` (nessa ordem — FK). Reverter = reaplicar a `001`; os dados não voltam. |
-| `004_painel_somente_leitura.sql` | **destrutiva** | Dropa `logs_sistema.ip_origem`, que existia para rastrear ação de usuário e nunca foi preenchida. |
-| `005_remove_notificacoes.sql` | **destrutiva** | Dropa `notificacoes`. Nada no sistema jamais a preencheu. |
-| `006_remove_legado_geosampa_e_resolvido.sql` | **destrutiva** | Dropa `ocorrencias_externas` (sem produtor desde a saída do GeoSampa) e `eventos.resolvido_em` (evento expira e é apagado, nunca é "resolvido"). |
+| `001_security.sql` | aditiva | Criava `usuarios` e `auditoria_acoes`. Ficou só como histórico, porque o login foi removido depois. |
+| `002_ocorrencias_externas.sql` | aditiva | Cria `ocorrencias_externas` (para não repetir registros de fontes externas). |
+| `003_remove_auth.sql` | destrutiva | Apaga `auditoria_acoes` e depois `usuarios` (nessa ordem, por causa da chave estrangeira). Para reverter, reaplique a `001`; os dados não voltam. |
+| `004_painel_somente_leitura.sql` | destrutiva | Apaga `logs_sistema.ip_origem`, que era para registrar ações de usuário e nunca foi preenchida. |
+| `005_remove_notificacoes.sql` | destrutiva | Apaga `notificacoes`, que nunca recebeu nenhum registro. |
+| `006_remove_legado_geosampa_e_resolvido.sql` | destrutiva | Apaga `ocorrencias_externas` (sem uso desde que o GeoSampa saiu) e `eventos.resolvido_em` (o evento é apagado quando passa o tempo, nunca "resolvido"). |
+| `007_categoria_contexto.sql` | dados | Troca a categoria "clima" dos dados contextuais por "contexto". |
 
-O `schema.sql` **não popula eventos, evidências nem dados contextuais** — só regiões, três
-fontes de dados e uma linha de log. Registros de ocorrência só entram por detecção real.
+O `schema.sql` não cria eventos, evidências nem dados de contexto, só as regiões, três
+fontes de dados e uma linha de log. Os eventos só entram pela detecção real.

@@ -1,4 +1,4 @@
-"""Router de Server-Sent Events para atualizações em tempo real."""
+"""Canal SSE que avisa o painel em tempo real."""
 
 import asyncio
 import json
@@ -29,9 +29,9 @@ async def _broadcast(event_type: str, data: dict) -> None:
 
 
 async def _event_stream(queue: asyncio.Queue[str]) -> AsyncGenerator[str, None]:
-    """Generator que yields eventos SSE de uma fila."""
+    """Vai entregando ao cliente os eventos que chegam na fila."""
     try:
-        # Heartbeat a cada 15s para manter conexão viva
+        # A cada 15 s manda um sinal para a conexão não cair
         while True:
             try:
                 data = await asyncio.wait_for(queue.get(), timeout=15.0)
@@ -48,13 +48,7 @@ async def _event_stream(queue: asyncio.Queue[str]) -> AsyncGenerator[str, None]:
 
 @router.get("/events/stream")
 async def stream_events(request: Request) -> StreamingResponse:
-    """Endpoint SSE — cliente recebe eventos em tempo real.
-
-    Eventos enviados:
-    - evento_criado: quando um novo evento é registrado
-    - evento_atualizado: quando evento é modificado (PATCH)
-    - evento_removido: quando evento é deletado
-    """
+    """Canal SSE: o painel recebe aqui os eventos criados, atualizados e removidos."""
     queue: asyncio.Queue[str] = asyncio.Queue(maxsize=100)
     async with _lock:
         _clients.append(queue)
@@ -72,5 +66,5 @@ async def stream_events(request: Request) -> StreamingResponse:
 
 @router.get("/events/connected")
 async def connected_clients() -> dict[str, int]:
-    """Retorna número de clientes SSE conectados."""
+    """Quantos clientes SSE estão conectados."""
     return {"connected": len(_clients)}

@@ -1,9 +1,7 @@
-"""Garantias de concorrência de ml/detector.py.
+"""Testes de concorrência do ml/detector.py.
 
-Motivação (Cloud Run, 20/09/2026): com o catálogo ligado, 20 threads chamam o
-YOLO ao mesmo tempo. Sem trava, cada uma carregava sua própria cópia do peso;
-sem semáforo, todas inferiam juntas. Em CPU com 4 GiB o container morria por
-OOM 19 s depois de carregar o modelo, levando o SQLite junto.
+Com várias câmeras ligadas, muitas threads chamam o YOLO ao mesmo tempo. Sem os
+limites do detector, o servidor na nuvem ficava sem memória.
 """
 
 import sys
@@ -21,8 +19,7 @@ from ml import detector  # noqa: E402
 
 
 class _ModeloLento:
-    """Simula um peso carregado: predict segura o semáforo por um instante e
-    registra quantas chamadas estão vivas ao mesmo tempo."""
+    """Modelo falso que conta quantas detecções estão rodando ao mesmo tempo."""
 
     def __init__(self) -> None:
         self.ativas = 0
@@ -41,8 +38,7 @@ class _ModeloLento:
 
 @pytest.fixture
 def detector_limpo(monkeypatch):
-    """Zera o estado global do módulo e substitui o construtor YOLO por um
-    contador, para o teste não depender de peso nem de ultralytics."""
+    """Limpa o estado do detector e troca o YOLO por um modelo falso."""
     cargas = {"n": 0}
     modelo = _ModeloLento()
 
@@ -94,9 +90,7 @@ def test_inferencias_simultaneas_respeitam_o_semaforo(detector_limpo, monkeypatc
 
 
 def test_cada_modelo_infere_uma_vez_por_vez(detector_limpo, monkeypatch):
-    """Regressão do "'Conv' object has no attribute 'bn'": duas threads no mesmo
-    objeto YOLO disputavam o fuse da primeira predict. Mesmo com o semáforo
-    liberando 2, um modelo nunca atende duas chamadas ao mesmo tempo."""
+    """Duas threads nunca usam o mesmo modelo ao mesmo tempo."""
     _, modelo = detector_limpo
     monkeypatch.setattr(detector, "_inferencia_semaforo", threading.BoundedSemaphore(2))
 
@@ -109,7 +103,7 @@ def test_cada_modelo_infere_uma_vez_por_vez(detector_limpo, monkeypatch):
 
 
 def test_transito_e_alagamento_seguem_em_paralelo(detector_limpo, monkeypatch):
-    """Os locks são por modelo: o de trânsito não bloqueia o de alagamento."""
+    """Cada modelo tem sua trava: o de trânsito não bloqueia o de alagamento."""
     _, modelo = detector_limpo
     monkeypatch.setattr(detector, "_inferencia_semaforo", threading.BoundedSemaphore(2))
     alvos = [lambda: detector.detectar_imagem_real("a.jpg"), lambda: detector.detectar_incidentes_imagem("b.jpg")] * 10
@@ -129,7 +123,7 @@ def test_limite_de_concorrencia_vem_do_settings(monkeypatch):
 
 
 def test_caminho_relativo_do_modelo_vale_a_partir_da_raiz(monkeypatch):
-    """O uvicorn sobe de backend/; "ml/models/x.pt" não pode virar backend/ml/..."""
+    """Caminhos relativos dos modelos partem da raiz do projeto, não de backend/."""
     monkeypatch.setattr(settings, "gx_yolo_incident_model", "ml/models/gx-incident.pt")
     assert Path(detector._incident_model_path()) == PROJECT_ROOT / "ml" / "models" / "gx-incident.pt"
     absoluto = str(PROJECT_ROOT / "outro.pt")
@@ -138,7 +132,7 @@ def test_caminho_relativo_do_modelo_vale_a_partir_da_raiz(monkeypatch):
 
 
 def test_config_do_yolo_vem_do_env_via_settings(monkeypatch):
-    """Antes era os.getenv, que não enxerga o .env (pydantic não exporta)."""
+    """A configuração do detector vem do .env."""
     from app.config import Settings
 
     monkeypatch.setenv("GX_YOLO_IMGSZ", "960")

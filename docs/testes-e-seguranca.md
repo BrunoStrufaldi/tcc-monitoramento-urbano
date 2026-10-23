@@ -5,94 +5,96 @@
 ## 17. Testes
 
 ```bash
-# Backend — SQLite em memória
+# Backend (SQLite em memória)
 cd backend
 venv\Scripts\python -m pytest tests -q
 
-# Frontend — testes do módulo puro de formatação
+# Frontend (testes do módulo de formatação)
 npm run test:frontend
 
-# Data Fusion isolado
+# Data Fusion sozinho
 python -m data_fusion.test_fusion
 python -m data_fusion.test_historico_alagamento
 ```
 
 ### Distribuição da suíte de backend
 
-| Arquivo | Cobre |
+| Arquivo | O que testa |
 |---|---|
-| `test_live_detection.py` | Gatilho de três faixas, veto/corroboração TomTom, cooldowns, dedup |
-| `test_websocket.py` | Protocolo, broadcast, conexões mortas, ping/pong |
-| `test_flood_detection.py` | Loop de alagamento, contexto climático, prior histórico |
-| `test_deteccao.py` | Status e testador YOLO, limites de upload, rotas de escrita ausentes |
+| `test_live_detection.py` | Gatilho de três faixas, recusa e confirmação da TomTom, tempos de espera e eventos repetidos |
+| `test_websocket.py` | Protocolo, envio das mensagens, conexões que caíram e ping/pong |
+| `test_flood_detection.py` | Loop de alagamento, dados de clima e histórico da via |
+| `test_deteccao.py` | Status e testador do YOLO, limites de upload e ausência das rotas de escrita |
 | `test_localizacoes.py` | Consulta, filtro por região e escrita bloqueada (405) |
 | `test_dados_contextuais.py` | Consulta, filtros e escrita bloqueada (405) |
 | `test_eventos.py` · `test_evidencias.py` · `test_regioes.py` · `test_fontes.py` | Consulta e filtros |
-| `test_cet_camera_catalog.py` | Distância, câmera mais próxima, frame desatualizado |
-| `test_data_fusion_service.py` | Promoção, rebaixamento, arredondamento do limiar, log só na mudança, migração de categoria |
-| `test_detector_concorrencia.py` | Trava de carga, semáforo e lock por modelo; config do YOLO via `Settings` |
-| `test_e2e.py` | Fluxos ponta a ponta |
-| `test_inmet_alert_source.py` | Parsing de aviso |
-| `test_broadcast.py` · `test_logs.py` | Agendamento entre threads; consulta de logs |
-| `test_event_retention.py` | Purga, colapso, propagação de remoção |
-| `test_tomtom_traffic_source.py` | Índice, indisponibilidade, via fechada |
+| `test_cet_camera_catalog.py` | Distância, câmera mais próxima e imagem travada |
+| `test_data_fusion_service.py` | Promoção, rebaixamento, arredondamento do limite, log só quando o status muda e troca de categoria |
+| `test_detector_concorrencia.py` | Trava de carregamento, limite de detecções e trava por modelo; configuração do YOLO pelo `Settings` |
+| `test_e2e.py` | Fluxos de ponta a ponta |
+| `test_inmet_alert_source.py` | Leitura dos avisos |
+| `test_broadcast.py` · `test_logs.py` | Envio entre threads; consulta de logs |
+| `test_event_retention.py` | Limpeza, junção de repetidos e aviso de remoção |
+| `test_tomtom_traffic_source.py` | Índice, API indisponível e via fechada |
 
 ### Convenções da suíte
 
-- `conftest.py` força `settings.gx_monitoramento_ativo = False` — nenhuma thread de rede real
-  sobe durante os testes, por mais que o `.env` local esteja ligado
+- O `conftest.py` força `settings.gx_monitoramento_ativo = False`, então nenhuma thread
+  acessa a rede durante os testes, mesmo que o `.env` local esteja com o monitoramento
+  ligado
 - SQLite em memória com `StaticPool` e `PRAGMA foreign_keys=ON`
-- **Não existem rotas de criação de evento**, então as fixtures (`criar_evento`,
-  `criar_evidencia`) montam os dados direto no banco — que é como o sistema real os produz
-  (`detection_events.py` grava pelo mesmo caminho)
+- Não existem rotas de criação de evento, então as funções de apoio (`criar_evento`,
+  `criar_evidencia`) gravam os dados direto no banco, do mesmo jeito que o sistema real
+  faz (o `detection_events.py` grava pelo mesmo caminho)
 
 ---
 
 ## 18. Segurança e limitações
 
-### Sem autenticação — e por quê
+### Sem autenticação, e por quê
 
-O sistema **não tem login, cadastro, perfis nem sessão**. Qualquer cliente que alcance a API
-consulta os dados e chama as rotas. Isso é intencional: os eventos nascem de detecção
-automática em câmera, não de um operador humano que precise ser identificado, e o painel é
-de leitura.
+O sistema não tem login, cadastro, perfis nem sessão. Qualquer cliente que acesse a API
+consegue consultar os dados e chamar as rotas. Isso é de propósito: os eventos vêm da
+detecção automática nas câmeras, e não de um operador que precise ser identificado, e o
+painel só consulta.
 
-A consequência é que **a proteção é de rede, não de aplicação**. Rode em rede local ou atrás
-de um proxy reverso que faça o controle de acesso. `CORS_ORIGINS` restringe apenas quais
-origens de navegador podem chamar a API e **não substitui isso**.
+Por isso a proteção tem que ser feita na rede, e não na aplicação. Rode numa rede local ou
+atrás de um proxy reverso que controle o acesso. O `CORS_ORIGINS` só limita quais sites
+podem chamar a API pelo navegador e não substitui esse controle.
 
-O WebSocket `/ws` abre na conexão e anuncia `{"tipo":"pronto"}` — não há
-handshake de credencial.
+O WebSocket `/ws` abre assim que a conexão é feita e manda `{"tipo":"pronto"}`, sem pedir
+credenciais.
 
-Se a operação um dia exigir identificar quem agiu, a camada removida está no histórico:
-`database/migrations/001_security.sql` (tabelas `usuarios` e `auditoria_acoes`) e o commit
-que aplicou `003_remove_auth.sql`.
+Se um dia for preciso identificar quem fez cada ação, o código removido está no
+histórico: `database/migrations/001_security.sql` (tabelas `usuarios` e
+`auditoria_acoes`) e o commit que aplicou o `003_remove_auth.sql`.
 
 ### Riscos conhecidos
 
-- Quem alcança a porta da API tem acesso total, inclusive às rotas de escrita. **Não exponha
-  à internet aberta** sem uma camada de acesso na frente.
-- Não há trilha por usuário. O registro que sobra é de sistema, em `logs_sistema`.
-- Em produção: HTTPS, CORS restritivo, TLS no banco, gerenciador de segredos.
+- Quem acessa a porta da API pode usar todas as rotas, inclusive o recálculo do Data
+  Fusion. Não deixe a API aberta na internet sem um controle de acesso na frente.
+- Não há registro por usuário. O único registro é o do sistema, em `logs_sistema`.
+- Em produção: HTTPS, CORS restrito, TLS no banco e um gerenciador de segredos.
 
 ### Limitações técnicas assumidas
 
-- **YOLO COCO não é detector de incidente.** Ele reconhece objetos. Congestionamento é
-  inferido por contagem + corroboração externa; alagamento exige o peso próprio.
-- **O peso de alagamento ainda produz falso positivo.** Por isso `GX_YOLO_INCIDENT_CONF`
-  está em 0,6 (mais alto que o de veículos) e o prior histórico derruba a confiabilidade de
-  detecção sem chuva em via que nunca alagou.
-- **Coordenadas são aproximadas** — câmeras e pontos de alagamento estão em nível de
-  cruzamento, não do poste.
-- **Latência e FPS dependem do hardware.** CPU tem latência maior; GPU exige CUDA/Ultralytics
-  compatíveis. Meça com `backend/benchmark_latencia.py` (frames reais da CET), não por
-  estimativa.
-- **Privacidade:** só imagens de câmeras públicas da CET são gravadas, e apenas quando viram
-  evidência de um evento; o testador YOLO do painel apaga o upload logo após a inferência.
-- **Fontes públicas não substituem validação operacional humana.**
+- O YOLO padrão não detecta incidentes, só objetos. O congestionamento é calculado pela
+  contagem com a confirmação de outras fontes, e o alagamento precisa do modelo próprio.
+- O modelo de alagamento ainda erra às vezes. Por isso o `GX_YOLO_INCIDENT_CONF` fica em
+  0,6 (mais alto que o de veículos), e o histórico da via derruba a confiabilidade de uma
+  detecção sem chuva numa via que nunca alagou.
+- As coordenadas são aproximadas: câmeras e pontos de alagamento estão no nível do
+  cruzamento, e não do poste.
+- O tempo de resposta depende do hardware. Em CPU é mais lento, e a GPU precisa de versões
+  compatíveis de CUDA e Ultralytics. Para medir, use o `backend/benchmark_latencia.py`
+  (com imagens reais da CET).
+- Privacidade: só são gravadas imagens de câmeras públicas da CET, e só quando viram
+  evidência de um evento. O testador do YOLO no painel apaga a imagem enviada logo depois
+  da detecção.
+- As fontes públicas não substituem a validação feita por uma pessoa.
 
 ### Pendências
 
-- Decidir se `frontend/dist/` deve continuar versionado
-- Em produção MySQL: aplicar todas as migrações de `database/migrations/`, inclusive as
-  destrutivas `003`, `004`, `005` e `006`
+- Decidir se o `frontend/dist/` deve continuar no Git
+- Em produção com MySQL: aplicar todas as migrações de `database/migrations/`, inclusive
+  as destrutivas `003`, `004`, `005` e `006`

@@ -42,7 +42,7 @@ def test_filtrar_por_ativo(client: TestClient, db_session):
 
 
 def test_escrita_em_regioes_nao_existe(client: TestClient, db_session):
-    """Sem login no deploy, rota de escrita pública deixaria qualquer um alterar dados."""
+    """Sem login, uma rota pública de escrita deixaria qualquer um alterar os dados."""
     regiao = _criar_regiao(db_session)
 
     assert client.post("/regioes", json={"nome": "X"}).status_code == 405

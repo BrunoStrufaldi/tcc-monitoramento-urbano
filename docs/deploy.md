@@ -4,200 +4,198 @@
 
 ## 21. Deploy no Google Cloud Run
 
-O sistema sobe como **uma única imagem** (API + painel + YOLO) no Cloud Run. A
-escolha não é arbitrária: o Cloud Run escala a zero, então **não existe
-instância ligada enquanto ninguém está usando o link** — que é exatamente o
-regime de custo que um TCC hospedado com crédito gratuito precisa.
+O sistema sobe no Cloud Run como uma imagem só, com a API, o painel e o YOLO. A escolha
+tem um motivo: o Cloud Run desliga tudo quando ninguém está usando, então não existe
+instância ligada enquanto o link está fechado. É o tipo de custo que um TCC hospedado com
+crédito gratuito precisa.
 
 ### 21.1 Por que o sistema "só funciona quando alguém entra"
 
-Três mecanismos se somam, e vale entender a diferença entre eles:
+São três coisas que se somam:
 
 | Mecanismo | Efeito |
 |---|---|
-| `--min-instances 0` | Sem acesso, zero instâncias de pé. Zero cobrança. |
-| CPU alocada por requisição | O Cloud Run congela a CPU do container entre requisições. As threads de `live_detection` e `flood_detection` **não rodam** com o painel fechado, mesmo com `GX_MONITORAMENTO_ATIVO=true`. |
-| WebSocket do painel | Enquanto alguém tem o painel aberto, o `/ws` mantém uma requisição viva — e é durante ela que a CPU fica alocada e a detecção contínua efetivamente acontece. |
+| `--min-instances 0` | Sem acesso, nenhuma instância fica ligada e não há cobrança. |
+| CPU só durante requisições | O Cloud Run congela a CPU do container entre uma requisição e outra. As threads de `live_detection` e `flood_detection` não rodam com o painel fechado, mesmo com `GX_MONITORAMENTO_ATIVO=true`. |
+| WebSocket do painel | Enquanto alguém está com o painel aberto, o `/ws` mantém uma requisição aberta. É nesse tempo que a CPU fica disponível e a detecção contínua acontece. |
 
-Ou seja: o próprio acesso de uma pessoa é o "gatilho de ativação". Fechou o
-painel, o monitoramento para; ~15 minutos depois a instância é destruída.
+Ou seja, o próprio acesso de uma pessoa é o que liga o sistema. Fechou o painel, o
+monitoramento para, e uns 15 minutos depois a instância é desligada.
 
-`--max-instances 1` é igualmente proposital: o banco é um SQLite **dentro** do
-container, então duas instâncias simultâneas teriam estados divergentes. Serve
-também de teto de gasto — um pico de acessos não multiplica a conta.
+O `--max-instances 1` também é de propósito: o banco é um SQLite dentro do container, então
+duas instâncias ao mesmo tempo teriam dados diferentes. Ele também serve de limite de
+gasto, porque um pico de acessos não multiplica a conta.
 
 ### 21.2 O que sobe e o que não sobe
 
 | Vai para a imagem | Fica de fora (`.dockerignore` / `.gcloudignore`) |
 |---|---|
 | `backend/`, `ml/`, `data_fusion/`, `database/`, `frontend/` compilado | `backend/venv/` (4,8 GB), `ml/datasets/` (5,4 GB), `ml/runs/`, `runs/` |
-| `ml/models/gx-veiculos.pt`, `ml/models/yolo11m.pt` (volta atrás) e `ml/models/gx-incident.pt` | demais pesos (`-anterior`, `-backup`, `-v4-attempt`, `yolo11n/s`) |
-| torch **CPU** + ultralytics | `backend/.env`, `*.db`, `backend/app/data/` (evidências locais), testes |
+| `ml/models/gx-veiculos.pt`, `ml/models/yolo11m.pt` (reserva) e `ml/models/gx-incident.pt` | os outros modelos (`-anterior`, `-backup`, `-v4-attempt`, `yolo11n/s`) |
+| torch para CPU + ultralytics | `backend/.env`, `*.db`, `backend/app/data/` (evidências locais), testes |
 
-> **Armadilha do `.gcloudignore`.** Sem esse arquivo, o `gcloud` usa o
-> `.gitignore` como filtro de upload — e o `.gitignore` exclui `ml/models/*.pt`.
-> A imagem subiria sem peso nenhum e toda rota de detecção responderia
-> "modelo indisponível". O `.gcloudignore` existe para quebrar essa herança.
+> Cuidado com o `.gcloudignore`. Sem esse arquivo, o `gcloud` usa o `.gitignore` para
+> escolher o que enviar, e a imagem pode subir sem os modelos. Nesse caso toda rota de
+> detecção responde "modelo indisponível". O `.gcloudignore` deixa essa escolha separada
+> do Git.
 
-O `Dockerfile` instala o torch pelo índice de CPU
-(`--index-url https://download.pytorch.org/whl/cpu`). O wheel padrão do PyPI
-traz ~2,5 GB de CUDA que não tem uso no Cloud Run, que não oferece GPU no plano
+O `Dockerfile` instala a versão do torch só para CPU
+(`--index-url https://download.pytorch.org/whl/cpu`). A versão padrão do PyPI traz uns
+2,5 GB de CUDA, que não servem para nada no Cloud Run, já que ele não tem GPU no plano
 gratuito.
 
 ### 21.3 Passo a passo (primeira vez)
 
-**1. Criar a conta e o projeto**
+1. Criar a conta e o projeto
 
-1. Entre em <https://console.cloud.google.com> com uma conta Google.
-2. Aceite a **avaliação gratuita**: US$ 300 de crédito por 90 dias. Exige cartão
-   (há uma cobrança temporária de verificação, ~R$ 1, estornada). Ao fim do
-   período o Google **não** cobra automaticamente: é preciso fazer o upgrade
-   manual para conta paga.
-3. Crie um projeto — ex.: nome `MotSP TCC`, e **anote o Project ID** gerado
-   (algo como `motsp-tcc-473120`). É o ID, não o nome, que os comandos usam.
+   1. Entre em <https://console.cloud.google.com> com uma conta Google.
+   2. Aceite a avaliação gratuita: US$ 300 de crédito por 90 dias. Ela pede um cartão (há
+      uma cobrança de verificação de uns R$ 1, que é devolvida). No fim do período o
+      Google não cobra sozinho: é preciso mudar para conta paga manualmente.
+   3. Crie um projeto, por exemplo com o nome `MotSP TCC`, e anote o Project ID gerado
+      (algo como `motsp-tcc-473120`). Os comandos usam o ID, e não o nome.
 
-**2. Instalar o Google Cloud CLI**
+2. Instalar o Google Cloud CLI
 
-Baixe e instale o [GoogleCloudSDKInstaller.exe](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe),
-depois, num PowerShell novo:
+   Baixe e instale o [GoogleCloudSDKInstaller.exe](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe)
+   e depois, num PowerShell novo:
 
-```powershell
-gcloud init      # faz login no navegador e seleciona o projeto
-```
+   ```powershell
+   gcloud init      # faz login no navegador e seleciona o projeto
+   ```
 
-**3. Publicar**
+3. Publicar
 
-```powershell
-.\deploy.ps1 -ProjectId SEU-PROJECT-ID
-```
+   ```powershell
+   .\deploy.ps1 -ProjectId SEU-PROJECT-ID
+   ```
 
-O script habilita as APIs necessárias (Cloud Run, Cloud Build, Artifact
-Registry), lê a `TOMTOM_API_KEY` do `backend/.env` e a envia como variável de
-ambiente do serviço, e dispara o build. Na primeira execução o `gcloud` pergunta
-se pode criar o repositório `cloud-run-source-deploy` — responda `Y`.
+   O script ativa as APIs necessárias (Cloud Run, Cloud Build e Artifact Registry), lê a
+   `TOMTOM_API_KEY` do `backend/.env`, manda ela como variável do serviço e inicia o
+   build. Na primeira vez o `gcloud` pergunta se pode criar o repositório
+   `cloud-run-source-deploy`. Responda `Y`.
 
-A primeira build leva ~10 minutos (instalar o torch domina o tempo). No fim, o
-script imprime a URL pública, no formato
-`https://motsp-XXXXXXXX.southamerica-east1.run.app`. **Esse é o link para
-compartilhar** — o serviço sobe com `--allow-unauthenticated`, então qualquer
-pessoa com o endereço abre o painel, sem conta Google.
+   O primeiro build leva uns 10 minutos, quase tudo para instalar o torch. No fim, o
+   script mostra o endereço público, no formato
+   `https://motsp-XXXXXXXX.southamerica-east1.run.app`. Esse é o link para compartilhar.
+   O serviço sobe com `--allow-unauthenticated`, então qualquer pessoa com o endereço
+   abre o painel, sem precisar de conta Google.
 
-**4. Ligar o monitoramento contínuo (opcional)**
+4. Ligar o monitoramento contínuo (opcional)
 
-No primeiro deploy as threads de detecção sobem **desligadas** (padrão do
-`config.py`): o painel funciona, a inferência sob demanda funciona, e nada
-consome CPU sozinho. O script só mexe nesse estado quando você pede — um
-redeploy sem flag **preserva** o que está na nuvem (ele usa `--update-env-vars`,
-que mescla, e não `--set-env-vars`, que substituiria tudo).
+   No primeiro deploy as threads de detecção sobem desligadas (o padrão do `config.py`).
+   O painel funciona, o testador de imagens funciona e nada gasta CPU sozinho. O script
+   só muda isso quando é pedido. Um novo deploy sem a opção mantém o que já está na
+   nuvem, porque ele usa `--update-env-vars` (que junta as variáveis) e não
+   `--set-env-vars` (que trocaria todas).
 
-```powershell
-.\deploy.ps1 -ProjectId SEU-PROJECT-ID -Monitoramento -PularApis          # liga
-.\deploy.ps1 -ProjectId SEU-PROJECT-ID -DesligarMonitoramento -PularApis  # desliga
-```
+   ```powershell
+   .\deploy.ps1 -ProjectId SEU-PROJECT-ID -Monitoramento -PularApis          # liga
+   .\deploy.ps1 -ProjectId SEU-PROJECT-ID -DesligarMonitoramento -PularApis  # desliga
+   ```
 
-Ou, sem rebuildar a imagem:
+   Ou, sem montar a imagem de novo:
 
-```powershell
-gcloud run services update motsp --region southamerica-east1 --update-env-vars "GX_MONITORAMENTO_ATIVO=true,GX_TRANSITO_MONITORAR_CATALOGO=true"
-```
+   ```powershell
+   gcloud run services update motsp --region southamerica-east1 --update-env-vars "GX_MONITORAMENTO_ATIVO=true,GX_TRANSITO_MONITORAR_CATALOGO=true"
+   ```
 
-> As **aspas são obrigatórias no PowerShell**: sem elas, `a,b` vira uma lista e o
-> gcloud recebe um único valor `"true GX_TRANSITO_MONITORAR_CATALOGO=true"`. O
-> pydantic recusa o booleano, o container sai com `exit(1)` e o Cloud Run
-> reporta "failed to start and listen on the port" — a mensagem engana: a porta
-> não é o problema, o log da revisão mostra o `ValidationError` real.
+> As aspas são obrigatórias no PowerShell. Sem elas, `a,b` vira uma lista e o gcloud
+> recebe um valor só, `"true GX_TRANSITO_MONITORAR_CATALOGO=true"`. O pydantic recusa
+> esse valor, o container fecha com erro e o Cloud Run mostra "failed to start and
+> listen on the port". A mensagem engana: o problema não é a porta, e o log da revisão
+> mostra o `ValidationError` de verdade.
 
-> Em CPU, uma inferência do `yolo11m` a `imgsz=1280` custa alguns segundos —
-> ordens de grandeza acima da GPU local. Por isso o deploy usa
-> `GX_LIVE_DETECTION_INTERVAL_SECONDS=60` em vez dos 15s locais. Ligar as 20
-> threads do catálogo (10 trânsito + 10 alagamento) em 2 vCPU satura a
-> instância: para demonstração, prefira ligar só `GX_TRANSITO_MONITORAR_CATALOGO`,
-> ou apontar `GX_CAMERA_SNAPSHOT_URL` para uma câmera só.
+> Em CPU, uma detecção do YOLO com `imgsz=1280` leva alguns segundos, muito mais que na
+> GPU. Por isso o deploy usa `GX_LIVE_DETECTION_INTERVAL_SECONDS=60`, em vez do intervalo
+> curto usado localmente. Ligar as 20 threads do catálogo (10 de trânsito e 10 de
+> alagamento) em 2 vCPU sobrecarrega a instância. Para uma demonstração, é melhor ligar só
+> o `GX_TRANSITO_MONITORAR_CATALOGO` ou apontar o `GX_CAMERA_SNAPSHOT_URL` para uma câmera só.
 
 ### 21.4 Custo e proteção do crédito
 
-Cota gratuita mensal do Cloud Run: 180.000 vCPU-s, 360.000 GiB-s e 2 milhões de
-requisições. Com a configuração deste deploy (2 vCPU / 4 GiB), isso equivale a
-**~25 horas por mês de painel aberto, de graça**. Acima disso, ~US$ 0,30 por
-hora de uso efetivo — e o crédito de US$ 300 cobre ~1.000 horas. Com o painel
-fechado, o custo é o armazenamento da imagem no Artifact Registry: centavos.
+A cota gratuita mensal do Cloud Run é de 180.000 vCPU-segundos, 360.000 GiB-segundos e 2
+milhões de requisições. Com a configuração deste deploy (2 vCPU e 4 GiB), isso dá umas 25
+horas por mês de painel aberto de graça. Acima disso o custo é de uns US$ 0,30 por hora
+de uso, e o crédito de US$ 300 cobre umas 1.000 horas. Com o painel fechado, o único custo
+é guardar a imagem no Artifact Registry, que fica em centavos.
 
 Proteções recomendadas:
 
-1. **Orçamento com alerta**: Console → Faturamento → Orçamentos e alertas →
-   criar orçamento de, por exemplo, US$ 20 com alerta em 50%/90%/100%.
-2. **`--max-instances 1`**: já aplicado pelo script; é o teto físico do gasto.
-3. **Desligar de vez** quando a banca acabar:
+1. Orçamento com alerta: Console → Faturamento → Orçamentos e alertas → criar um orçamento
+   de, por exemplo, US$ 20 com alertas em 50%, 90% e 100%.
+2. `--max-instances 1`: o script já aplica, e é o limite real do gasto.
+3. Desligar de vez quando a banca acabar:
    ```powershell
    gcloud run services delete motsp --region southamerica-east1
    ```
 
 ### 21.5 Limitações conhecidas do ambiente de nuvem
 
-- **Primeiro acesso é lento.** A imagem tem ~2 GB (torch + pesos); o cold start
-  fica entre 30 e 60 segundos. Se for apresentar para a banca, abra o link
-  alguns minutos antes para "acordar" o serviço.
-- **O banco não persiste.** O SQLite vive no sistema de arquivos efêmero do
-  container: cada vez que o serviço acorda, começa vazio e as tabelas são
-  recriadas no startup. Coerente com a janela de 45 minutos dos eventos
-  ([§13](data-fusion.md#13-ciclo-de-vida-de-um-evento)), mas nada sobrevive ao sono. Para
-  persistir de verdade seria preciso montar um bucket do Cloud Storage ou usar
-  Cloud SQL — nenhum dos dois é gratuito de forma indefinida.
-- **Memória é o gargalo, não CPU.** No primeiro deploy com monitoramento ligado
-  o container foi morto por OOM (`4249 MiB` de `4096`) 19 s depois de carregar
-  o YOLO: as 10 threads de cada tipo chegavam juntas no carregamento e cada uma
-  subia a própria cópia do peso, e depois inferiam todas ao mesmo tempo. A
-  trava de carga e o semáforo de inferência (`GX_YOLO_MAX_CONCORRENCIA`, [§5](configuracao.md#modelos-yolo))
-  existem por causa disso. Quando o container morre, o SQLite morre junto —
-  o painel volta a zero sem nenhum aviso.
-- **Evidências ocupam memória.** Os JPEGs anotados são gravados em
-  `backend/app/data/evidencias/`, que no Cloud Run é um tmpfs contado dentro dos
-  4 GiB de RAM da instância.
+- O primeiro acesso é lento. A imagem tem uns 2 GB (torch e modelos), e o serviço leva de
+  30 a 60 segundos para ligar. Antes de apresentar para a banca, abra o link alguns
+  minutos antes.
+- O banco não fica salvo. O SQLite fica num disco temporário do container: cada vez que o
+  serviço liga, ele começa vazio e as tabelas são criadas de novo. Isso combina com a
+  janela de 45 minutos dos eventos ([§13](data-fusion.md#13-ciclo-de-vida-de-um-evento)),
+  mas nada sobrevive quando o serviço desliga. Para guardar os dados de verdade seria
+  preciso usar o Cloud Storage ou o Cloud SQL, e nenhum dos dois é gratuito para sempre.
+- A memória é o gargalo, não a CPU. No primeiro deploy com o monitoramento ligado o
+  container foi derrubado por falta de memória (`4249 MiB` de `4096`) 19 segundos depois
+  de carregar o YOLO. As 10 threads de cada tipo carregavam o modelo ao mesmo tempo, cada
+  uma com a sua cópia, e depois rodavam todas juntas. A trava de carregamento e o limite
+  de detecções simultâneas (`GX_YOLO_MAX_CONCORRENCIA`, [§5](configuracao.md#modelos-yolo))
+  existem por causa disso. Quando o container cai, o SQLite vai junto e o painel volta a
+  zero sem aviso.
+- As evidências ocupam memória. As imagens com as caixas são gravadas em
+  `backend/app/data/evidencias/`, que no Cloud Run fica na memória e conta dentro dos
+  4 GiB da instância.
 
 ### 21.6 Diferenças de execução entre local e container
 
-Nenhuma no painel: nos dois casos o FastAPI serve `frontend/` em `/` (flag
-`GX_SERVE_FRONTEND`, padrão `true`), `GET /api/status` responde o status da API e
-`frontend/js/config.js` usa `window.location.origin` como `API_BASE_URL` — mesma origem,
-sem CORS. O mount é registrado **depois** de todos os routers, senão engoliria
-`/eventos`, `/ws` e `/docs`. Com a flag desligada, `/` volta a ser o JSON de status.
+No painel não muda nada: nos dois casos o FastAPI serve o `frontend/` em `/` (opção
+`GX_SERVE_FRONTEND`, ligada por padrão), o `GET /api/status` responde o status da API e o
+`frontend/js/config.js` usa o `window.location.origin` como `API_BASE_URL`. É o mesmo
+endereço, então não precisa de CORS. O painel é registrado depois de todas as rotas,
+senão ele responderia no lugar de `/eventos`, `/ws` e `/docs`. Com a opção desligada, o
+`/` volta a mostrar o status em JSON.
 
-O que muda é só a configuração: local lê `backend/.env`; no Cloud Run vêm das variáveis
-de ambiente do serviço.
+O que muda é só de onde vem a configuração: localmente do `backend/.env`, e no Cloud Run
+das variáveis do serviço.
 
 ### 21.7 Deploy automático a cada push (Cloud Build)
 
-`cloudbuild.yaml` na raiz descreve o caminho automático: um gatilho do Cloud
-Build observa a branch `main` do GitHub e, a cada push, builda a imagem com o
-mesmo `Dockerfile`, envia ao Artifact Registry e publica uma revisão nova no
-Cloud Run. É o mesmo resultado do `deploy.ps1`, sem depender da máquina local.
+O `cloudbuild.yaml` da raiz descreve o caminho automático: um gatilho do Cloud Build olha
+a branch `main` do GitHub e, a cada push, monta a imagem com o mesmo `Dockerfile`, envia
+para o Artifact Registry e publica uma versão nova no Cloud Run. O resultado é o mesmo do
+`deploy.ps1`, mas sem depender da máquina local.
 
 | | `deploy.ps1` (manual) | Gatilho do Cloud Build (automático) |
 |---|---|---|
-| Fonte do código | pasta local, como está no disco (`.gcloudignore` filtra) | clone do GitHub (só o que está commitado) |
-| Pesos do YOLO | copiados do disco | **precisam estar no Git** — por isso `.gitignore` libera só `gx-veiculos.pt`, `yolo11m.pt` e `gx-incident.pt` |
-| Variáveis do serviço | mescla as que o script conhece (`--update-env-vars`) | não toca em nenhuma: memória, TomTom e monitoramento ficam como estão |
-| Quando usar | emergência, ou testar sem passar pelo GitHub | rotina: `git push` e pronto |
+| Origem do código | a pasta local, do jeito que está no disco (filtrada pelo `.gcloudignore`) | o repositório do GitHub (só o que está commitado) |
+| Modelos do YOLO | copiados do disco | precisam estar no Git. Por isso o `.gitignore` libera só `gx-veiculos.pt`, `yolo11m.pt` e `gx-incident.pt` |
+| Variáveis do serviço | atualiza as que o script conhece (`--update-env-vars`) | não mexe em nenhuma: memória, TomTom e monitoramento continuam como estão |
+| Quando usar | emergência, ou para testar sem passar pelo GitHub | no dia a dia: `git push` e pronto |
 
-Cada push na `main` é uma publicação real (~10 min de build; a cota gratuita
-do Cloud Build é de 120 min/dia). Trabalho em andamento fica em branch e só
-entra na `main` quando estiver pronto para o link público.
+Cada push na `main` é uma publicação real (uns 10 minutos de build, e a cota gratuita do
+Cloud Build é de 120 minutos por dia). Trabalho em andamento fica numa branch e só entra
+na `main` quando estiver pronto para o link público.
 
-**Ativação (uma vez).** Depois de commitar `cloudbuild.yaml` e os dois pesos:
+Para ativar (uma vez só), depois de commitar o `cloudbuild.yaml` e os modelos:
 
-1. Console → **Cloud Build → Gatilhos → Conectar repositório** (instala o app
-   do Cloud Build no GitHub e autoriza o repositório).
-2. **Criar gatilho**: evento *push para uma branch*, branch `^main$`, tipo de
-   configuração *arquivo de configuração do Cloud Build*, local `cloudbuild.yaml`,
-   conta de serviço a do Compute (`<número>-compute@developer.gserviceaccount.com`).
-3. Essa conta precisa, além de `cloudbuild.builds.builder` (o `deploy.ps1` já
-   concede), de **Cloud Run Admin** e **Service Account User** para o passo de
-   deploy — sem eles a build passa e a publicação falha com *permission denied*:
+1. Console → Cloud Build → Gatilhos → Conectar repositório (isso instala o app do Cloud
+   Build no GitHub e autoriza o repositório).
+2. Criar gatilho: evento "push para uma branch", branch `^main$`, configuração "arquivo
+   de configuração do Cloud Build", local `cloudbuild.yaml`, e a conta de serviço do
+   Compute (`<número>-compute@developer.gserviceaccount.com`).
+3. Essa conta precisa, além do `cloudbuild.builds.builder` (que o `deploy.ps1` já dá),
+   das permissões Cloud Run Admin e Service Account User para publicar. Sem elas o build
+   funciona, mas a publicação falha com "permission denied":
    ```powershell
    gcloud projects add-iam-policy-binding SEU-PROJECT-ID --member "serviceAccount:NUMERO-compute@developer.gserviceaccount.com" --role roles/run.admin
    gcloud projects add-iam-policy-binding SEU-PROJECT-ID --member "serviceAccount:NUMERO-compute@developer.gserviceaccount.com" --role roles/iam.serviceAccountUser
    ```
 
 O gatilho também pode ser criado por linha de comando
-(`gcloud builds triggers create github ...`), mas a conexão com o GitHub
-(passo 1) só existe pelo console.
+(`gcloud builds triggers create github ...`), mas a conexão com o GitHub (passo 1) só dá
+para fazer pelo console.

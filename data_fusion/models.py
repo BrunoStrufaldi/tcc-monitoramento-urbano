@@ -10,8 +10,7 @@ class EvidenciaIA:
 
 @dataclass
 class DadoContexto:
-    """Sinal independente da câmera: chuva (Open-Meteo), aviso INMET, histórico
-    de alagamento da via, índice de veículos do frame ou TomTom."""
+    """Dado de contexto do evento, como chuva, aviso do INMET ou trânsito da TomTom."""
 
     chave: str
     valor_numerico: float | None = None
@@ -33,8 +32,7 @@ class ComponenteConfiabilidade:
     peso: float
     contribuicao: float
     detalhe: str
-    # Peso antes do rateio entre as dimensões presentes (o de contexto já com
-    # o ajuste de concordância); `peso` é o efetivamente aplicado.
+    # Peso padrão da dimensão. O campo peso é o valor que realmente entrou na conta.
     peso_base: float = 0.0
 
 

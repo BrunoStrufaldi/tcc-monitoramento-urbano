@@ -1,8 +1,7 @@
-"""Testes de integração dos endpoints principais.
+"""Testes das rotas de eventos.
 
-O painel é somente leitura: ``/eventos`` só expõe consulta. Os eventos são
-montados direto no banco pelas fábricas do ``conftest`` — o mesmo caminho que
-``services/detection_events.py`` usa ao gravar uma detecção real.
+O painel só consulta. Os eventos são gravados direto no banco pelas funções do
+conftest, do mesmo jeito que a detecção faz.
 """
 
 from fastapi.testclient import TestClient
@@ -82,7 +81,7 @@ def test_filtrar_eventos_por_tipo(client: TestClient, criar_evento):
 
 
 def test_escrita_em_eventos_nao_existe(client: TestClient, criar_evento):
-    """O painel não cria, altera nem remove evento — as rotas não existem."""
+    """O painel não cria, altera nem remove eventos. Essas rotas não existem."""
     evento = criar_evento()
 
     assert client.post("/eventos", json={"titulo": "x", "tipo": "transito"}).status_code == 405

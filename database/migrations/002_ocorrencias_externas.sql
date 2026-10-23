@@ -1,6 +1,6 @@
 -- Migração aditiva: não remove nem modifica dados existentes.
--- Rastreia registros já processados de fontes externas (GeoSampa/Defesa
--- Civil) para não duplicar evento a cada nova consulta ao mesmo dataset.
+-- Guarda os registros do GeoSampa já processados, para não criar o mesmo
+-- evento duas vezes.
 CREATE TABLE IF NOT EXISTS ocorrencias_externas (
   id INT AUTO_INCREMENT PRIMARY KEY,
   fonte VARCHAR(60) NOT NULL,

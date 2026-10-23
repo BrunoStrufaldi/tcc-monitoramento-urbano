@@ -1,11 +1,7 @@
-"""Fluxo de trânsito ao vivo via TomTom Traffic API (Flow Segment Data).
+"""Velocidade do trânsito ao vivo pela API da TomTom.
 
-Diferente do GeoSampa (recarregado em lote — semanas a anos de defasagem;
-removido do sistema por decisão do grupo de manter só dado em tempo real),
-essa API responde com a velocidade média atual do trecho de via mais próximo
-do ponto pedido, comparada à velocidade livre esperada — dado genuinamente ao
-vivo. Cadastro self-service e gratuito em developer.tomtom.com (sem convênio
-institucional, ao contrário do Waze for Cities). Requer ``TOMTOM_API_KEY``.
+A API compara a velocidade atual do trecho com a velocidade normal dele, o que
+mostra se a via está lenta naquele momento. Precisa da TOMTOM_API_KEY.
 """
 
 import json
@@ -18,7 +14,7 @@ _URL = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/js
 
 
 def obter_fluxo_transito(latitude: float, longitude: float) -> dict:
-    """Consulta a velocidade atual x livre no trecho mais próximo do ponto."""
+    """Busca a velocidade atual e a normal do trecho mais perto do ponto."""
     api_key = settings.tomtom_api_key
     if not api_key:
         return {"disponivel": False, "fonte": "TomTom Traffic", "erro": "TOMTOM_API_KEY não configurada"}

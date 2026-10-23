@@ -1,17 +1,9 @@
-"""Prior espacial de alagamento: "essa via costuma alagar?".
+"""Histórico de alagamento das vias: "essa rua costuma alagar?".
 
-Camada de referência ESTÁTICA — não é gatilho de detecção nem fonte ao vivo. O
-grupo removeu o GeoSampa/Defesa Civil enquanto *fonte em lote que disparava
-evento* (dado defasado, carimbado com hora errada). Aqui o histórico entra só
-como prior: quando o modelo de incidentes suspeita de alagamento numa câmera, a
-fusão consulta se aquele trecho tem histórico de alagar e usa isso para
-calibrar a confiabilidade — reforça quando já há chuva/aviso ao vivo e derruba
-quando não há nenhum sinal e a via nunca alagou (falso positivo provável).
-
-Dados em ``data/pontos_alagamento_sp.json`` — pontos recorrentes no entorno das
-câmeras CET-SP (``cet_camera_catalog``), compilados do histórico do CGE-SP e
-da camada de Desastres do GeoSampa. Coordenadas aproximadas em nível de
-cruzamento (mesma limitação do catálogo de câmeras).
+Não cria alertas. Serve só para ajustar a confiabilidade quando o modelo vê
+alagamento: se a via costuma alagar a nota sobe, se nunca alagou a nota desce.
+Os pontos estão em data/pontos_alagamento_sp.json e foram montados a partir do
+histórico do CGE-SP e do GeoSampa.
 """
 
 from __future__ import annotations
@@ -23,7 +15,7 @@ from pathlib import Path
 
 _ARQUIVO_PONTOS = Path(__file__).resolve().parent / "data" / "pontos_alagamento_sp.json"
 
-# Índice base 0-10 por frequência histórica, antes do ajuste por distância.
+# Nota de 0 a 10 conforme a frequência com que o ponto alaga.
 _INDICE_POR_RECORRENCIA = {
     "cronico": 9.0,
     "frequente": 6.0,
@@ -38,7 +30,7 @@ def _carregar_pontos() -> tuple[dict, ...]:
 
 
 def _distancia_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Distância aproximada em linha reta (haversine), em metros."""
+    """Distância aproximada em linha reta entre dois pontos, em metros."""
     r = 6_371_000.0
     dlat = radians(lat2 - lat1)
     dlon = radians(lon2 - lon1)
@@ -52,13 +44,10 @@ def indice_historico(
     raio_total_m: float = 400.0,
     raio_pleno_m: float = 150.0,
 ) -> tuple[float, str]:
-    """``(indice 0-10, descrição)`` do ponto de alagamento conhecido mais
-    relevante em torno da coordenada.
+    """Nota de 0 a 10 do ponto de alagamento conhecido mais próximo.
 
-    Peso pleno até ``raio_pleno_m``; decai linearmente até zero em
-    ``raio_total_m``. Retorna ``(0.0, ...)`` quando não há nenhum ponto
-    conhecido dentro do raio — o motor de fusão trata isso como "via sem
-    histórico" (diferente de ausência da chave, que significa "sem informação").
+    Quanto mais longe o ponto, menor a nota. Se não houver nenhum ponto perto,
+    a nota é zero, o que quer dizer que a via não tem histórico.
     """
     melhor_indice = 0.0
     melhor_descricao = "via sem histórico de alagamento conhecido nas proximidades"

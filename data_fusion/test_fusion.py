@@ -1,4 +1,4 @@
-"""Testes rápidos do módulo (python -m data_fusion.test_fusion na raiz do projeto)."""
+"""Testes do Data Fusion (python -m data_fusion.test_fusion na raiz do projeto)."""
 
 from data_fusion.fusion import PESOS, calcular_confiabilidade
 from data_fusion.models import DadoContexto, EvidenciaIA, EventoFusionInput
@@ -66,7 +66,7 @@ def test_alagamento_sem_historico_na_chave_reproduz_comportamento_antigo():
     chuva = DadoContexto(chave="precipitacao_mm_h", valor_numerico=18.0, unidade="mm/h")
     r = calcular_confiabilidade(_entrada_alagamento([chuva]))
     componente_contexto = next(c for c in r.componentes if c.nome == "contexto")
-    # 18 mm/h -> rampa 15->30 mm/h (0.78 -> 0.93), sem nenhum ajuste.
+    # 18 mm/h fica entre 15 e 30 mm/h (nota entre 0.78 e 0.93), sem outro ajuste.
     assert componente_contexto.pontuacao == 0.81
     assert "precipitação elevada" in componente_contexto.detalhe
 
@@ -82,11 +82,11 @@ def test_transito_combina_indice_de_veiculos_e_tomtom():
         ],
     )
     r = calcular_confiabilidade(entrada)
-    # média dos dois índices = 5.5/10 -> âncora "moderado" da rampa
+    # A média dos dois índices dá 5.5/10, que é congestionamento moderado.
     componente_contexto = next(c for c in r.componentes if c.nome == "contexto")
     assert "média de 2 fontes" in componente_contexto.detalhe
     assert componente_contexto.pontuacao == 0.72
-    # 3 vs 8 é uma fonte desmentindo a outra: o contexto pesa menos que o base.
+    # 3 e 8 são fontes que se contradizem, então o contexto pesa menos.
     assert componente_contexto.peso_base == round(PESOS["contexto"] * 0.8, 4)
     assert "fontes divergem" in componente_contexto.detalhe
 
@@ -109,7 +109,7 @@ def _contexto(resultado):
 
 
 def test_transito_nota_contextual_e_continua_dentro_da_antiga_faixa():
-    # Antes 4.5, 5.5 e 6.5 davam todos 0.72 (mesma faixa) -> contribuição fixa.
+    # Índices diferentes precisam dar notas diferentes.
     notas = [_contexto(calcular_confiabilidade(_entrada_transito(i))).pontuacao for i in (4.5, 5.5, 6.5)]
     assert notas[0] < notas[1] < notas[2]
     contribuicoes = {_contexto(calcular_confiabilidade(_entrada_transito(i))).contribuicao for i in (4.5, 5.5, 6.5)}
@@ -125,7 +125,7 @@ def test_transito_peso_contextual_sobe_quando_fontes_concordam():
     assert contexto_concordam.peso_base == round(PESOS["contexto"] * 1.4, 4)
     assert contexto_concordam.peso > contexto_uma.peso
     assert "fontes concordam" in contexto_concordam.detalhe
-    # Mesma nota, mais peso: contexto corroborado empurra a confiabilidade.
+    # Mesma nota, mas com mais peso: as fontes concordando sobem a confiabilidade.
     assert contexto_concordam.pontuacao == contexto_uma.pontuacao
     assert concordam.confiabilidade > uma_fonte.confiabilidade
 
@@ -151,8 +151,7 @@ def test_dimensoes_ausentes_nao_inventam_contribuicao():
 
 
 def test_pesos_sao_4_para_3():
-    # Mesma proporção que o rateio dava quando havia a dimensão "fonte oficial"
-    # (sempre vazia): 0.40 / 0.70 e 0.30 / 0.70.
+    # IA com 4/7 e contexto com 3/7.
     assert round(PESOS["ia"], 4) == 0.5714
     assert round(PESOS["contexto"], 4) == 0.4286
     assert abs(sum(PESOS.values()) - 1.0) < 1e-9
@@ -160,4 +159,4 @@ def test_pesos_sao_4_para_3():
 
 if __name__ == "__main__":
     test_alagamento_so_com_chuva_forte()
-    print("OK — testes de fusão passaram")
+    print("OK, testes de fusão passaram")

@@ -1,7 +1,6 @@
-"""Testes de integração para dados contextuais (somente leitura).
+"""Testes dos dados de contexto (somente leitura).
 
-Quem grava dado contextual é a coleta automática (clima, INMET, trânsito) —
-nunca uma rota pública.
+Quem grava esses dados é a coleta automática, nunca uma rota pública.
 """
 
 from fastapi.testclient import TestClient
@@ -66,7 +65,7 @@ def test_filtrar_por_categoria(client: TestClient, db_session):
 
 
 def test_escrita_em_dados_contextuais_nao_existe(client: TestClient, db_session):
-    """Um POST público deixaria qualquer um injetar "chuva" e inflar a fusão."""
+    """Uma rota pública de escrita deixaria qualquer um inventar chuva e mudar a nota."""
     dado = _criar_dado(db_session)
 
     payload = {"categoria": "clima", "chave": "precipitacao", "valor_numerico": 99}

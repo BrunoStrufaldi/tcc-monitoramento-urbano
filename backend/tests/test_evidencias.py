@@ -1,17 +1,10 @@
-"""Testes de integração para evidências visuais.
-
-``/evidencias`` é somente consulta: as evidências são gravadas pela
-detecção (``services/detection_events.py``), nunca por requisição.
-"""
+"""Testes das evidências. A rota só consulta, quem grava é a detecção."""
 
 from fastapi.testclient import TestClient
 
 
 def test_pasta_de_arquivo_bate_com_a_pasta_onde_detection_events_grava():
-    """Regressão: o router já serviu arquivo de uma pasta diferente de onde
-    detection_events.py grava (parents[2] vs parents[1]) — toda evidência
-    criada por detecção real (câmera contínua) resultava
-    em 404 ao tentar exibir a imagem, mesmo o arquivo existindo de verdade."""
+    """A rota precisa ler as evidências da mesma pasta onde a detecção grava."""
     from app.routers import evidencias
     from app.services import detection_events
 
@@ -19,8 +12,7 @@ def test_pasta_de_arquivo_bate_com_a_pasta_onde_detection_events_grava():
 
 
 def test_registrar_deteccao_grava_evento_e_evidencia_auditavel(client: TestClient, db_session, tmp_path, monkeypatch):
-    """A detecção vira evento em análise com evidência anotada, original
-    preservado e SHA-256 do original para auditoria."""
+    """A detecção cria o evento em análise, com a imagem marcada, a original e o hash dela."""
     import hashlib
 
     from app.services import detection_events
@@ -109,7 +101,7 @@ def test_filtrar_por_tipo(client: TestClient, criar_evento, criar_evidencia):
 
 
 def test_escrita_em_evidencias_nao_existe(client: TestClient, criar_evento, criar_evidencia):
-    """O painel não registra evidência na mão — quem grava é a detecção."""
+    """O painel não grava evidências. Quem grava é a detecção."""
     evento = criar_evento()
     evidencia = criar_evidencia(evento.id)
 

@@ -1,4 +1,4 @@
-"""Fixtures compartilhadas para testes — usa SQLite em memória."""
+"""Fixtures compartilhadas pelos testes, com SQLite em memória."""
 
 from collections.abc import Generator
 from decimal import Decimal
@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import app.models  # noqa: F401 — garante que todos os models registram no Base.metadata
+import app.models  # noqa: F401  (registra todos os models no Base.metadata)
 from app.config import settings
 from app.database import Base, get_db
 from app.main import app as fastapi_app
@@ -18,9 +18,7 @@ from app.models.evidencia_visual import EvidenciaVisual
 from app.models.localizacao import Localizacao
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
-# Nunca deixa o .env local ligar as threads de monitoramento contínuo durante
-# os testes — elas fariam chamadas de rede reais (câmera CET) a cada
-# TestClient criado.
+# Os testes nunca ligam o monitoramento, senão ele acessaria as câmeras de verdade.
 settings.gx_monitoramento_ativo = False
 
 engine = create_engine(
@@ -54,7 +52,7 @@ def db_session() -> Generator[Session, None, None]:
 
 @pytest.fixture(scope="function")
 def client(db_session: Session) -> Generator[TestClient, None, None]:
-    """TestClient com override de dependência de banco."""
+    """Cliente de teste usando o banco de teste."""
 
     def _override_get_db():
         try:
@@ -69,9 +67,8 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
 
 
 # --- Fábricas -----------------------------------------------------------
-# O painel é somente leitura: não existem rotas de criação. Os testes montam
-# os dados direto no banco, que é como o sistema real os produz (a detecção
-# em ``services/detection_events.py`` grava pelo mesmo caminho).
+# O painel não tem rotas de criação, então os testes gravam os dados direto
+# no banco, do mesmo jeito que a detecção faz.
 
 
 @pytest.fixture

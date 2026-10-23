@@ -1,12 +1,9 @@
--- Remove duas sobras sem produtor.
+-- Remove duas coisas que não são mais usadas.
 --
--- `ocorrencias_externas` rastreava registros já importados do GeoSampa/Defesa
--- Civil quando esses datasets disparavam evento. Essa fonte saiu do escopo e
--- nada mais grava na tabela.
+-- A tabela ocorrencias_externas era do GeoSampa, que saiu do projeto.
 --
--- `eventos.resolvido_em` (e o status `resolvido`) nunca é atribuído: um evento
--- vive no máximo GX_EVENTO_JANELA_MINUTOS após a última detecção e então é
--- apagado (services/event_retention.py), não "resolvido".
+-- A coluna eventos.resolvido_em (e o status resolvido) nunca era preenchida:
+-- o evento é apagado quando passa o tempo, em vez de ser marcado como resolvido.
 --
 -- Reverter significa reaplicar a migração 002 e recriar a coluna.
 DROP TABLE IF EXISTS ocorrencias_externas;

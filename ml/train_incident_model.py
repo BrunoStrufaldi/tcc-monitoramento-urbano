@@ -1,32 +1,19 @@
-"""Treina o modelo dedicado a **alagamento** (ml/models/gx-incident.pt).
+"""Treina o modelo de alagamento (ml/models/gx-incident.pt).
 
-Uma classe só (`alagamento`). A classe `arvore_caida` foi tirada do escopo do
-TCC e o app já descartava qualquer detecção dela (`ml/detector.py`); mantê-la no
-treino só desbalanceava o dataset (era ~5% das instâncias) e confundia o
-classificador, então saiu daqui também.
-
-Fluxo em 4 passos — as classes reais de cada dataset do Roboflow só se sabe
-depois de baixar (a página não abre sem login), então primeiro inspeciona,
-decide o mapeamento, e só então funde e treina:
+O modelo tem uma classe só, alagamento. O treino é feito em quatro passos,
+porque só dá para saber as classes de cada dataset do Roboflow depois de
+baixar:
 
     python ml/train_incident_model.py inspect --workspace <ws> --project <proj>
     python ml/train_incident_model.py download --workspace <ws> --project <proj> --version <n> --out ml/datasets/flood
     python ml/train_incident_model.py merge --flood ml/datasets/flood --out ml/datasets/incidentes --negatives ml/datasets/negativos_cet
     python ml/train_incident_model.py train --data ml/datasets/incidentes/data.yaml --epochs 120
 
-`merge` aceita:
-- vários `--flood DIR` (repetível), cada um com um `--flood-classes` opcional
-  na mesma ordem; sem `--flood-classes` ou com `"*"`, todas as classes da
-  fonte viram `alagamento`.
-- vários `--negatives DIR` (repetível): imagens de rua **sem** alagamento
-  (frame de câmera CET em tempo seco, noite, chuva sem alagar). Entram com
-  label vazio — YOLO trata como fundo. Sem negativos o modelo aprende que
-  "toda imagem tem alagamento em algum canto" e passa a alucinar caixa no
-  nada (era o comportamento observado antes deste retreino).
+No merge dá para passar vários --flood e vários --negatives. Os negativos são
+imagens de rua sem alagamento e ensinam o modelo a não ver água onde não tem.
 
-Requer `pip install -r backend/requirements-yolo.txt` e, só para inspect/
-download, a variável de ambiente ROBOFLOW_API_KEY (roboflow.com/settings/api,
-plano gratuito).
+Precisa de backend/requirements-yolo.txt instalado e, para inspect e download,
+da variável ROBOFLOW_API_KEY.
 """
 
 from __future__ import annotations
@@ -40,8 +27,7 @@ from pathlib import Path
 
 import yaml
 
-# Windows: o console herda cp1252 e os prints com acento/seta quebram
-# (UnicodeEncodeError). Força UTF-8 na saída.
+# No Windows o console não mostra acentos direito, então a saída é forçada para UTF-8.
 for _fluxo in (sys.stdout, sys.stderr):
     try:
         _fluxo.reconfigure(encoding="utf-8")
@@ -68,7 +54,7 @@ def cmd_inspect(args: argparse.Namespace) -> None:
     project = rf.workspace(args.workspace).project(args.project)
     print(f"Projeto: {project.name}")
     for versao in project.versions():
-        print(f"  versão {versao.version} — {getattr(versao, 'images', '?')} imagens")
+        print(f"  versão {versao.version}, {getattr(versao, 'images', '?')} imagens")
 
 
 def cmd_download(args: argparse.Namespace) -> None:
@@ -93,13 +79,10 @@ def _iter_imagens(pasta: Path):
 
 
 def _linha_para_bbox(coords: list[str], indice_alvo: int) -> str | None:
-    """Normaliza uma linha de rótulo YOLO para detecção (`classe cx cy w h`).
+    """Converte uma linha de rótulo para o formato de caixa do YOLO.
 
-    Datasets do Roboflow marcados como segmentação exportam polígono
-    (`classe x1 y1 x2 y2 ...`); um arquivo com linha de bbox e linha de
-    polígono junto faz o Ultralytics descartar a imagem inteira como
-    "corrupt: labels mix segment and detection rows". Aqui todo polígono
-    vira sua caixa envolvente.
+    Alguns datasets vêm com polígonos, e o YOLO descarta a imagem se ela mistura
+    polígono com caixa. Aqui cada polígono vira a caixa em volta dele.
     """
     try:
         valores = [float(v) for v in coords]
@@ -131,9 +114,10 @@ def _fundir_split(
     classes_incluidas: set[str] | None,
     indice_alvo: int = 0,
 ) -> tuple[int, int]:
-    """Copia um split de uma fonte, remapeando toda classe incluída para
-    ``indice_alvo``. ``classes_incluidas=None`` inclui todas. Retorna
-    ``(imagens, imagens_sem_caixa)``."""
+    """Copia uma parte do dataset trocando as classes escolhidas por alagamento.
+
+    Devolve quantas imagens foram copiadas e quantas ficaram sem caixa.
+    """
     imagens_src = origem / split / "images"
     labels_src = origem / split / "labels"
     if not imagens_src.is_dir():
@@ -174,8 +158,7 @@ def _fundir_split(
 
 
 def _garantir_validacao(destino: Path, prefixo: str, fracao: float = 0.12) -> None:
-    """Se a fonte não trouxe split de validação, separa uma fatia determinística
-    do treino em vez de deixar a fonte sem métrica de val."""
+    """Se o dataset não tem imagens de validação, separa uma parte do treino para isso."""
     valid_imgs = destino / "valid" / "images"
     if valid_imgs.is_dir() and any(p.name.startswith(f"{prefixo}_") for p in valid_imgs.iterdir()):
         return
@@ -200,16 +183,18 @@ def _garantir_validacao(destino: Path, prefixo: str, fracao: float = 0.12) -> No
         label = train_labels / (imagem.stem + ".txt")
         if label.is_file():
             shutil.move(str(label), str(valid_labels / label.name))
-    print(f"  {prefixo}: sem split de validação na fonte — {quantidade} imagens movidas de train para valid")
+    print(f"  {prefixo}: sem split de validação na fonte, {quantidade} imagens movidas de train para valid")
 
 
 def _adicionar_negativos(destino: Path, pastas: list[Path], val_fraction: float, prefixo: str = "neg") -> tuple[int, int]:
-    """Copia imagens de fundo (rua sem alagamento) com label .txt vazio.
-    Uma fração vai para valid, o resto para train. Retorna (train, valid)."""
+    """Copia as imagens sem alagamento com rótulo vazio.
+
+    Uma parte vai para validação e o resto para treino.
+    """
     todas: list[Path] = []
     for pasta in pastas:
         if not pasta.is_dir():
-            print(f"  AVISO: pasta de negativos {pasta} não existe — ignorada")
+            print(f"  AVISO: pasta de negativos {pasta} não existe, ignorada")
             continue
         todas.extend(_iter_imagens(pasta))
     if not todas:
@@ -235,7 +220,7 @@ def _adicionar_negativos(destino: Path, pastas: list[Path], val_fraction: float,
 
 
 def _contar_instancias(destino: Path, split: str) -> tuple[int, int, int]:
-    """(imagens, imagens_com_caixa, total_caixas) de um split fundido."""
+    """Conta imagens, imagens com caixa e total de caixas de uma parte do dataset."""
     labels = destino / split / "labels"
     if not labels.is_dir():
         return 0, 0, 0
@@ -310,8 +295,7 @@ def cmd_merge(args: argparse.Namespace) -> None:
 
 
 def _resolver_base(nome: str) -> str:
-    """Aceita caminho de arquivo existente ou nome de peso oficial Ultralytics
-    (ex.: 'yolo11s.pt'). Nome oficial é salvo/reaproveitado em ml/models/."""
+    """Aceita um arquivo de modelo ou o nome de um modelo oficial (ex.: yolo11s.pt)."""
     caminho = Path(nome)
     if caminho.is_file():
         return str(caminho)
@@ -319,7 +303,7 @@ def _resolver_base(nome: str) -> str:
     local = modelos_dir / caminho.name
     if local.is_file():
         return str(local)
-    # Nome oficial: deixa o Ultralytics baixar dentro de ml/models/.
+    # Modelo oficial: o Ultralytics baixa dentro de ml/models/.
     from ultralytics import YOLO
 
     modelos_dir.mkdir(parents=True, exist_ok=True)
@@ -343,8 +327,7 @@ def cmd_train(args: argparse.Namespace) -> None:
         batch=args.batch,
         device=args.device,
         patience=args.patience,
-        # Fundo baked-erasing já aparece em alguns datasets de origem; não
-        # adicionamos mais oclusão sintética por cima.
+        # Sem oclusão artificial, porque alguns datasets já vêm com isso.
         erasing=0.0,
         close_mosaic=args.close_mosaic,
         project=str(Path(__file__).resolve().parent / "runs"),
@@ -361,7 +344,7 @@ def cmd_train(args: argparse.Namespace) -> None:
     shutil.copy2(origem_best, destino)
     print(f"Pesos treinados copiados para {destino}")
     print("Ative com: set GX_YOLO_INCIDENT_MODEL=ml/models/gx-incident.pt (ou configure no backend/.env)")
-    print("Valide antes de ativar: python ml/train_incident_model.py não faz isso — rode `yolo val` ou o detector")
+    print("Valide antes de ativar: python ml/train_incident_model.py não faz isso. Rode `yolo val` ou o detector")
     print("num punhado de frames CET reais e confira se caixa fantasma sumiu. Se ainda houver, suba yolo_threshold.")
 
 

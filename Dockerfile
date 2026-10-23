@@ -1,8 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# Imagem única do MotSP: API FastAPI + painel estático + inferência YOLO em CPU.
-# Feita para o Cloud Run, que escala a zero — o container só existe enquanto
-# alguém está usando o sistema.
+# Imagem do MotSP para o Cloud Run: API, painel e YOLO rodando em CPU.
 
 # ---------- Etapa 1: compila o TypeScript do painel ----------
 FROM node:20-slim AS frontend
@@ -12,58 +10,50 @@ RUN npm install --no-audit --no-fund
 COPY frontend ./frontend
 RUN npx tsc -p frontend/tsconfig.json
 
-# ---------- Etapa 2: runtime ----------
+# ---------- Etapa 2: execução ----------
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    # Sem locale a imagem slim loga em ASCII e "Câmera" vira "C?mera" no
-    # Cloud Logging.
+    # Sem isso os acentos saem errados nos logs.
     LANG=C.UTF-8 \
     PYTHONIOENCODING=utf-8 \
-    # Ultralytics e matplotlib querem escrever config em $HOME; no Cloud Run o
-    # sistema de arquivos é read-only fora de /tmp.
+    # No Cloud Run só dá para gravar arquivos em /tmp.
     YOLO_CONFIG_DIR=/tmp/ultralytics \
     MPLCONFIGDIR=/tmp/matplotlib \
-    # O container roda com 2 vCPU. Sem isso o torch abre uma thread por core do
-    # host e as inferências das câmeras brigam entre si.
+    # Limita as threads do torch aos 2 processadores do container.
     OMP_NUM_THREADS=2 \
-    # Test-time augmentation dobra o custo de cada inferência — em CPU isso
-    # aperta o ciclo das câmeras. Fica ligado só onde há GPU (padrão local).
+    # O TTA deixa a detecção duas vezes mais lenta, então fica desligado em CPU.
     GX_YOLO_TTA=false
 
-# libGL/libglib: dependências nativas do opencv, que vem junto com o ultralytics.
+# Bibliotecas do sistema que o opencv precisa.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# torch de CPU explicitamente: o wheel padrão do PyPI arrasta ~2,5 GB de CUDA
-# que não serve para nada no Cloud Run, que não tem GPU.
+# Versão do torch só para CPU, bem menor que a padrão, que vem com CUDA.
 RUN pip install --no-cache-dir torch==2.5.1 torchvision==0.20.1 \
         --index-url https://download.pytorch.org/whl/cpu
 
-# requirements-yolo.txt não é usado aqui: ele inclui o roboflow, que só a
-# máquina que TREINA o modelo precisa.
+# O requirements-yolo.txt não entra aqui porque só serve para treinar.
 COPY backend/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt \
  && pip install --no-cache-dir "ultralytics>=8.3.0"
 
-# O layout do projeto é preservado: app/routers/deteccao.py e
-# app/services/data_fusion_service.py colocam a raiz no sys.path para importar
-# `ml` e `data_fusion`, e ml/detector.py procura os pesos em ml/models/.
+# Mantém a estrutura de pastas do projeto, porque o código importa ml e
+# data_fusion a partir da raiz.
 COPY backend ./backend
 COPY ml ./ml
 COPY data_fusion ./data_fusion
 COPY database ./database
-# O próprio FastAPI serve o painel (GX_SERVE_FRONTEND, ligado por padrão), e
-# js/config.js resolve a URL da API pelo window.location.
+# O próprio FastAPI serve o painel.
 COPY --from=frontend /build/frontend ./frontend
 
-# O Cloud Run injeta $PORT (8080). O uvicorn sobe a partir de backend/, igual
-# ao start.ps1 local, para o sqlite e os caminhos relativos baterem.
+# O Cloud Run informa a porta em $PORT. O uvicorn sobe a partir de backend/,
+# igual ao start.ps1.
 ENV PORT=8080
 EXPOSE 8080
 WORKDIR /app/backend

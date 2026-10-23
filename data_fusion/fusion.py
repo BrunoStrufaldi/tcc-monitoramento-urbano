@@ -1,4 +1,4 @@
-"""Motor de fusão: combina IA e contexto em um score único."""
+"""Data Fusion: junta a nota da IA e a do contexto numa confiabilidade só."""
 
 from data_fusion.models import (
     ComponenteConfiabilidade,
@@ -7,11 +7,8 @@ from data_fusion.models import (
 )
 from data_fusion.scores import fator_peso_contexto, pontuar_contexto, pontuar_ia
 
-# Duas dimensões, na proporção 4:3 (IA 57%, contexto 43%). Já foram três
-# (IA 40%, clima 30%, fonte oficial 30%), mas todo evento nasce do YOLO e
-# nenhuma fonte oficial independente chega a confirmar um evento: a terceira
-# ficava sempre vazia e o rateio dava exatamente estes 4:3. O aviso do INMET,
-# que é fonte oficial, entra como um dos sinais do contexto.
+# Pesos das duas dimensões: IA com 4/7 (57%) e contexto com 3/7 (43%).
+# O aviso do INMET entra como parte do contexto.
 PESOS = {
     "ia": 4 / 7,
     "contexto": 3 / 7,
@@ -28,8 +25,7 @@ def _nivel_confiabilidade(valor: float) -> str:
 
 def calcular_confiabilidade(entrada: EventoFusionInput) -> ResultadoFusao:
     contexto, detalhe_contexto = pontuar_contexto(entrada.tipo, entrada.dados_contexto)
-    # O peso do contexto não é fixo: flexiona com a concordância entre as
-    # fontes independentes (ver scores.fator_peso_contexto).
+    # O peso do contexto muda conforme as fontes concordam ou não.
     fator_contexto, nota_peso = fator_peso_contexto(entrada.tipo, entrada.dados_contexto)
     if contexto > 0 and nota_peso:
         detalhe_contexto += f" · {nota_peso}"

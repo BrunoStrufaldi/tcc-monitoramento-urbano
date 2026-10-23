@@ -1,7 +1,6 @@
-"""Retenção: o que sai do banco tem de sair também do painel.
+"""Testes da limpeza de eventos antigos.
 
-A remoção só chega ao frontend como ``evento_removido`` — apagar em silêncio
-deixava cópia fantasma na tela (contador acima do que existe no banco).
+Todo evento apagado do banco também precisa sair do painel.
 """
 
 from datetime import UTC, datetime, timedelta

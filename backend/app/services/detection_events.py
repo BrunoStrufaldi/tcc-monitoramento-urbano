@@ -1,8 +1,4 @@
-"""Persiste um evento a partir de uma detecção YOLO feita no servidor.
-
-Usado pela detecção contínua nas câmeras (trânsito e alagamento): grava a
-evidência auditável e dispara o broadcast em tempo real.
-"""
+"""Grava os eventos que vêm da detecção nas câmeras e avisa o painel."""
 
 from __future__ import annotations
 
@@ -48,9 +44,9 @@ def refrescar_evento_no_ponto(
     dentro_de_segundos: float,
     tolerancia_graus: float = 1e-4,
 ) -> Evento | None:
-    """Detecção contínua: se já existe um evento vivo do mesmo tipo no mesmo
-    ponto dentro da janela, apenas renova o ``detectado_em`` (mantém uma única
-    marcação "ao vivo" no mapa) em vez de empilhar um novo evento.
+    """Se já existe um evento do mesmo tipo nesse ponto, só atualiza o horário dele.
+
+    Assim o mapa mostra uma marcação só, em vez de várias repetidas.
     """
     limite = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=dentro_de_segundos)
     evento = (
@@ -87,7 +83,7 @@ def registrar_deteccao(
     origem: str = "camera_continua",
     deteccoes_para_anotar: list[Deteccao] | None = None,
 ) -> Evento:
-    """Cria localização, evento e evidência, e propaga via WebSocket/SSE."""
+    """Cria a localização, o evento e a evidência, e avisa o painel."""
     _EVIDENCIAS_DIR.mkdir(parents=True, exist_ok=True)
     identificador = uuid.uuid4().hex
     nome_original = identificador + "-original.jpg"
@@ -98,8 +94,7 @@ def registrar_deteccao(
         anotada, largura, altura = annotate_evidence(conteudo_imagem, deteccoes_para_anotar or [deteccao])
         (_EVIDENCIAS_DIR / nome_arquivo).write_bytes(anotada)
     except Exception:
-        # A inferência já foi concluída; se a anotação visual falhar, o original
-        # continua sendo uma evidência válida e auditável.
+        # Se der erro ao desenhar as caixas, a foto original continua valendo.
         nome_arquivo = nome_original
 
     rotulo = _DISPLAY_NAMES.get(deteccao.nome, deteccao.nome.replace("_", " ").title())
@@ -156,7 +151,7 @@ def registrar_deteccao(
 
 
 def publicar_evento(db: Session, evento_id: int, *, tipo_mensagem: str = "evento_atualizado") -> None:
-    """Propaga um evento já persistido para WS/SSE (ex.: após recalcular a fusão)."""
+    """Avisa o painel sobre um evento que já está gravado."""
     evento = db.query(Evento).options(
         joinedload(Evento.localizacao), joinedload(Evento.regiao), joinedload(Evento.fonte)
     ).filter(Evento.id == evento_id).first()

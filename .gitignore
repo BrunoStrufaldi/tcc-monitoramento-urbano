@@ -9,16 +9,15 @@ __pycache__/
 # Node
 node_modules/
 
-# Pesos grandes de modelos locais (baixados na máquina de inferência).
-# Exceção: os dois que o runtime carrega vão para o Git, porque o deploy
-# automático (cloudbuild.yaml) builda a imagem a partir do GitHub.
+# Modelos grandes ficam fora do Git, menos os que o sistema usa, porque o
+# deploy automático monta a imagem a partir do GitHub.
 ml/models/*.pt
 !ml/models/yolo11m.pt
 !ml/models/gx-veiculos.pt
 !ml/models/gx-incident.pt
 weights/
 
-# Datasets baixados e runs de treino do modelo de incidentes (grandes, não são código)
+# Datasets e resultados de treino (grandes e não são código)
 ml/datasets/
 ml/runs/
 runs/
@@ -28,11 +27,11 @@ runs/
 *.db-shm
 *.db-wal
 
-# Dados de runtime (evidências capturadas, logs, backups locais)
+# Dados locais (evidências, logs e backups)
 backend/app/data/
 backend/data/
 
-# IDE / OS
+# Editor e sistema operacional
 .idea/
 .vscode/
 *.swp

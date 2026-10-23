@@ -1,8 +1,5 @@
--- O Data Fusion passou a ter duas dimensões (IA e contexto). A categoria dos
--- dados contextuais que a alimentam deixa de se chamar "clima" — ela também
--- guarda índice de trânsito (contagem de veículos, TomTom) e histórico de
--- alagamento, não só clima.
+-- A categoria "clima" dos dados contextuais passa a se chamar "contexto",
+-- porque ela também guarda dados de trânsito e o histórico de alagamento.
 --
--- No SQLite o mesmo UPDATE roda sozinho no startup
--- (data_fusion_service.migrar_categoria_legada).
+-- No SQLite essa troca é feita sozinha quando o sistema inicia.
 UPDATE dados_contextuais SET categoria = 'contexto' WHERE categoria = 'clima';

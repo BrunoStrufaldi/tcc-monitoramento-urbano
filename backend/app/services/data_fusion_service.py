@@ -23,16 +23,14 @@ from data_fusion.models import (  # noqa: E402
 
 _CENTESIMO = Decimal("0.01")
 
-# Categoria dos DadoContextual que alimentam a dimensão "contexto" da fusão.
+# Categoria dos dados que entram na dimensão de contexto do Data Fusion.
 CATEGORIA_CONTEXTO = "contexto"
 
 
 def migrar_categoria_legada(db: Session) -> int:
-    """Renomeia a categoria antiga ("clima") dos dados contextuais já gravados.
+    """Troca o nome antigo da categoria ("clima") nos dados já gravados.
 
-    Idempotente; roda no startup. Só pega dados de eventos ainda vivos na
-    janela de retenção — sem ela, o recálculo periódico deixaria esses
-    eventos sem contexto até expirarem.
+    Roda quando o sistema inicia e pode rodar várias vezes sem problema.
     """
     alterados = (
         db.query(DadoContextual)
@@ -44,16 +42,10 @@ def migrar_categoria_legada(db: Session) -> int:
 
 
 def atinge_limiar_ativo(confiabilidade: float) -> bool:
-    """Decide pela confiabilidade **exibida**, não pelo float cru.
+    """Compara a confiabilidade arredondada, do mesmo jeito que aparece na tela.
 
-    A interface mostra a confiabilidade como percentual inteiro, então um
-    evento de 0.7977 aparece como "80%" — e a regra "80% na tela vira ativo"
-    mentia, porque 0.7977 < 0.80. Arredondar antes de comparar alinha a
-    decisão ao número que o operador vê. ROUND_HALF_UP sobre a representação
-    decimal do float reproduz o critério do Intl.NumberFormat usado no front
-    (ver ``atingeLimiarAtivo`` em frontend/src/fusion-format.ts); o limiar
-    entra cru, para que um valor configurado entre centésimos continue valendo
-    exatamente o que foi configurado.
+    Assim um evento que aparece como 80% no painel é tratado como 80% também
+    aqui, mesmo que o valor exato seja 79,77%.
     """
     exibida = Decimal(str(confiabilidade)).quantize(_CENTESIMO, rounding=ROUND_HALF_UP)
     return exibida >= Decimal(str(settings.gx_fusion_auto_ativo_min))
@@ -130,23 +122,20 @@ def aplicar_fusao_evento(
             and automatico
             and not atinge
         ):
-            # Evento YOLO nasce "em_analise" e só chega a "ativo" por promoção
-            # automática. Se a confiabilidade não bate mais o limiar, volta
-            # para análise em vez de ficar preso.
+            # Se a confiabilidade caiu abaixo do limite, o evento volta para análise.
             evento.status = "em_analise"
             rebaixado = True
         mudou_status = promovido or rebaixado
         if mudou_status:
-            # O recálculo roda a cada ciclo para todo evento aberto; logar só a
-            # mudança de status evita uma linha por evento a cada 2 minutos.
+            # Só registra no log quando o status muda.
             db.add(
                 LogSistema(
                     nivel="INFO",
                     modulo="data_fusion",
                     mensagem=(
                         f"Confiabilidade {resultado.confiabilidade:.2%} ({resultado.nivel})"
-                        + (" — evento promovido para ativo" if promovido else "")
-                        + (" — evento rebaixado para em análise" if rebaixado else "")
+                        + (", evento promovido para ativo" if promovido else "")
+                        + (", evento rebaixado para em análise" if rebaixado else "")
                     ),
                     evento_id=evento.id,
                     contexto={
@@ -174,7 +163,7 @@ def aplicar_fusao_evento(
 
 
 def _publicar_evento_atualizado(db: Session, evento_id: int) -> None:
-    """Import tardio para evitar ciclo com detection_events."""
+    """Importa aqui dentro para evitar import circular com detection_events."""
     try:
         from app.services.detection_events import publicar_evento
 
@@ -184,10 +173,11 @@ def _publicar_evento_atualizado(db: Session, evento_id: int) -> None:
 
 
 def promover_eventos_por_confiabilidade(db: Session) -> int:
-    """Recalcula os eventos automáticos abertos (em análise ou ativos) e ajusta
-    o status ao limiar de confiabilidade: promove os que já batem e rebaixa os
-    que deixaram de bater (ex.: limiar elevado, dado de contexto que chegou depois).
-    Rede de segurança para o que só mudaria num recálculo posterior."""
+    """Recalcula os eventos abertos e ajusta o status de cada um.
+
+    Promove os que passaram do limite de confiabilidade e devolve para análise
+    os que caíram abaixo dele.
+    """
     ids = [
         row[0]
         for row in db.query(Evento.id).filter(Evento.status.in_(("em_analise", "ativo"))).all()

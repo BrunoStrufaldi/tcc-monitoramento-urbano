@@ -1,4 +1,4 @@
-"""Gerenciador de conexões WebSocket — thread-safe, testável, sem Redis."""
+"""Controla as conexões WebSocket abertas com o painel."""
 
 import asyncio
 import json
@@ -27,14 +27,7 @@ class WSMessage:
 
 
 class ConnectionManager:
-    """Gerencia conexões WebSocket ativas.
-
-    Uso:
-        manager = ConnectionManager()
-        await manager.connect(websocket)
-        await manager.broadcast(WSMessage("evento_criado", {...}))
-        manager.disconnect(websocket)
-    """
+    """Guarda as conexões WebSocket abertas e envia mensagens para todas."""
 
     def __init__(self) -> None:
         self._connections: list[WebSocket] = []
@@ -50,23 +43,19 @@ class ConnectionManager:
         await self.register(websocket)
 
     async def register(self, websocket: WebSocket) -> None:
-        """Registra uma conexão já aceita após autenticação."""
+        """Registra uma conexão que já foi aceita."""
         async with self._lock:
             self._connections.append(websocket)
-        logger.info("WS conectado — total: %d", self.count)
+        logger.info("WS conectado, total: %d", self.count)
 
     def disconnect(self, websocket: WebSocket) -> None:
         """Remove uma conexão WebSocket."""
         if websocket in self._connections:
             self._connections.remove(websocket)
-            logger.info("WS desconectado — total: %d", self.count)
+            logger.info("WS desconectado, total: %d", self.count)
 
     async def broadcast(self, message: WSMessage) -> int:
-        """Envia mensagem para todos os clientes conectados.
-
-        Returns:
-            Número de clientes que receberam a mensagem.
-        """
+        """Envia a mensagem para todos os clientes e devolve quantos receberam."""
         payload = message.to_json()
         sent = 0
         dead: list[WebSocket] = []
@@ -84,7 +73,7 @@ class ConnectionManager:
         return sent
 
     async def broadcast_evento(self, event_type: str, data: dict[str, Any]) -> int:
-        """Atalho para broadcast de eventos — mantém compatibilidade com SSE."""
+        """Atalho para enviar um evento, no mesmo formato usado no SSE."""
         return await self.broadcast(WSMessage(event_type, data))
 
 

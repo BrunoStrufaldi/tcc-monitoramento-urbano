@@ -1,25 +1,15 @@
-"""Coleta frames das câmeras públicas CET-SP para servir de **negativos** no
-treino do detector de alagamento (`ml/train_incident_model.py merge --negatives`).
+"""Baixa imagens das câmeras da CET-SP sem alagamento, para usar no treino.
 
-Por que: o dataset anterior tinha ~6 imagens sem alagamento em 2470. O modelo
-nunca viu uma via seca e passou a cravar caixa de "alagamento" em cena
-normal / rua molhada à noite / no nada. Estas imagens entram no treino com
-label vazio (fundo) e ensinam o modelo o que **não** é alagamento.
+Essas imagens ensinam o modelo de alagamento a reconhecer uma rua normal. Antes
+delas o modelo via alagamento em quase toda imagem.
 
     python ml/collect_negatives.py --hours 12
     python ml/collect_negatives.py --out ml/datasets/negativos_cet --interval 30 --hours 8
     python ml/collect_negatives.py --cameras 22,23,180 --max-per-camera 150
 
-Sem --hours, roda até Ctrl+C. Rode em horários variados (dia, noite, e durante
-chuva SEM alagamento) ao longo de alguns dias para variar iluminação e clima.
-
-IMPORTANTE: são candidatos a negativo. Antes de usar no merge, passe o olho na
-pasta e apague qualquer frame que tenha água acumulada de verdade — senão você
-ensina o modelo que alagamento é fundo.
-
-Usa só o catálogo de `backend/app/services/cet_camera_catalog.py` (carregado
-isolado, sem subir o backend) e a mesma checagem de frame desatualizado via
-cabeçalho Last-Modified.
+Sem --hours, roda até apertar Ctrl+C. Vale rodar em horários diferentes (dia,
+noite e chuva sem alagamento). Antes de usar as imagens, confira a pasta e
+apague as que tiverem água acumulada de verdade.
 """
 
 from __future__ import annotations
@@ -43,12 +33,10 @@ _CATALOGO_PATH = Path(__file__).resolve().parents[1] / "backend" / "app" / "serv
 
 
 def _carregar_catalogo():
-    """Carrega o módulo do catálogo isolado — ele só usa stdlib, então não
-    arrasta nenhuma dependência do backend (config, banco, etc.)."""
+    """Carrega só o catálogo de câmeras, sem precisar subir o backend."""
     spec = importlib.util.spec_from_file_location("cet_camera_catalog", _CATALOGO_PATH)
     modulo = importlib.util.module_from_spec(spec)
-    # dataclasses._is_type consulta sys.modules[cls.__module__]; sem registrar,
-    # @dataclass(frozen=True) quebra ao carregar o módulo isolado.
+    # Sem registrar o módulo, a dataclass dá erro ao carregar o arquivo sozinho.
     sys.modules[spec.name] = modulo
     spec.loader.exec_module(modulo)
     return modulo
@@ -66,7 +54,7 @@ def _sig_handler(_signum, _frame) -> None:
 
 
 def _hashes_existentes(pasta: Path) -> set[str]:
-    """SHA-256 dos frames já salvos, pra não duplicar entre execuções."""
+    """Hash das imagens já salvas, para não salvar a mesma imagem duas vezes."""
     vistos: set[str] = set()
     for arquivo in pasta.glob("*.jpg"):
         try:
@@ -102,7 +90,7 @@ def coletar(args: argparse.Namespace) -> None:
     salvos = 0
     rodadas = 0
     print(
-        f"Coletando de {len(cameras)} câmera(s) para {saida} — intervalo {args.interval}s, "
+        f"Coletando de {len(cameras)} câmera(s) para {saida}, intervalo {args.interval}s, "
         + (f"{args.hours}h" if args.hours else "até Ctrl+C")
         + f" | {len(vistos)} frame(s) já na pasta"
     )
@@ -143,7 +131,7 @@ def coletar(args: argparse.Namespace) -> None:
             if _parar:
                 break
 
-            # espera fracionada pra Ctrl+C responder rápido
+            # Espera em pedaços curtos para o Ctrl+C responder rápido
             fim_espera = time.monotonic() + args.interval
             while time.monotonic() < fim_espera and not _parar:
                 time.sleep(min(1.0, fim_espera - time.monotonic()))

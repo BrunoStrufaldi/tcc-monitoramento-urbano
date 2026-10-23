@@ -1,4 +1,4 @@
-"""Agenda coroutines no event loop principal a partir de endpoints sync (thread pool)."""
+"""Agenda tarefas assíncronas no loop principal a partir de outras threads."""
 
 import asyncio
 import logging
@@ -16,10 +16,9 @@ def set_main_loop(loop: asyncio.AbstractEventLoop) -> None:
 
 
 def schedule_coroutine(coro: Coroutine[Any, Any, Any]) -> None:
-    """Envia coroutine para o loop principal — seguro a partir de threads sync."""
+    """Manda a tarefa para o loop principal. Pode ser chamada de qualquer thread."""
     if _main_loop is None or not _main_loop.is_running():
-        # Sem loop (testes, scripts): fecha a coroutine para não gerar
-        # "coroutine was never awaited".
+        # Sem loop rodando (testes e scripts), fecha a tarefa para não gerar aviso.
         coro.close()
         return
     try:
