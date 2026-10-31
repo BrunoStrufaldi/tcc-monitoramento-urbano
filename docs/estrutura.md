@@ -69,7 +69,8 @@ TCC-Atualizado/
     ├── js/config.js              API_BASE_URL (= window.location.origin), centro e zoom do mapa
     ├── src/                      código TypeScript
     │   ├── app.ts                o painel inteiro (mapa, tempo real, YOLO, Data Fusion)
+    │   ├── busca-local.ts        busca por rua: distância e eventos a até 1,5 km
     │   └── fusion-format.ts      formatação e limite de promoção (igual ao backend)
     ├── dist/                     saída do `tsc` (vai para o Git)
-    └── tests/                    testes node:test do módulo de formatação
+    └── tests/                    testes node:test da formatação e da busca por rua
 ```

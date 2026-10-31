@@ -1,0 +1,199 @@
+{
+  "ambiente": {
+    "medido_em": "2026-10-31T14:49:20+00:00",
+    "so": "Windows-11-10.0.26300-SP0",
+    "cpu": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "nucleos_fisicos": 14,
+    "memoria_gb": 31.8,
+    "gpu": "NVIDIA GeForce RTX 3060",
+    "cuda_disponivel": true,
+    "python": "3.14.7",
+    "torch": "2.13.0+cu126",
+    "modelo_transito": "C:\\Users\\bruno\\OneDrive\\Área de Trabalho\\TCC\\TCC-Atualizado\\ml\\models\\gx-veiculos.pt",
+    "modelo_alagamento": "C:\\Users\\bruno\\OneDrive\\Área de Trabalho\\TCC\\TCC-Atualizado\\ml\\models\\gx-incident.pt",
+    "imgsz": 1280,
+    "conf_transito": 0.45,
+    "conf_alagamento": 0.6
+  },
+  "medicoes": {
+    "partida": [
+      {
+        "etapa": "Carga do peso de transito (yolo11m, 1x)",
+        "n": 1,
+        "media": 545.9857000000738,
+        "desvio": 0.0,
+        "p50": 545.9857000000738,
+        "p95": 545.9857000000738,
+        "min": 545.9857000000738,
+        "max": 545.9857000000738,
+        "nota": "partida a frio"
+      },
+      {
+        "etapa": "Carga do peso de alagamento (1x)",
+        "n": 1,
+        "media": 86.18049999995492,
+        "desvio": 0.0,
+        "p50": 86.18049999995492,
+        "p95": 86.18049999995492,
+        "min": 86.18049999995492,
+        "max": 86.18049999995492,
+        "nota": "partida a frio"
+      }
+    ],
+    "inferencia": [
+      {
+        "etapa": "Primeira inferencia apos a carga (warm-up CUDA, 1x)",
+        "n": 1,
+        "media": 3204.3595000000096,
+        "desvio": 0.0,
+        "p50": 3204.3595000000096,
+        "p95": 3204.3595000000096,
+        "min": 3204.3595000000096,
+        "max": 3204.3595000000096,
+        "nota": "nao se repete"
+      },
+      {
+        "etapa": "Inferencia YOLO11m @1280 (contagem de veiculos)",
+        "n": 60,
+        "media": 88.89229166665397,
+        "desvio": 6.990204016548718,
+        "p50": 85.62819999997373,
+        "p95": 104.6317000000272,
+        "min": 81.46110000006956,
+        "max": 107.19390000031126,
+        "nota": "GPU"
+      },
+      {
+        "etapa": "Inferencia do modelo de alagamento",
+        "n": 60,
+        "media": 17.19724666666025,
+        "desvio": 0.9869767468559435,
+        "p50": 17.09389999996347,
+        "p95": 18.63359999970271,
+        "min": 15.818399999716348,
+        "max": 21.899500000017724,
+        "nota": "GPU"
+      }
+    ],
+    "pipeline": [
+      {
+        "etapa": "Preparo do frame + inferencia (como no monitoramento)",
+        "n": 60,
+        "media": 92.26874500001638,
+        "desvio": 7.415738905423254,
+        "p50": 91.49539999998524,
+        "p95": 99.8104999998759,
+        "min": 80.42880000039077,
+        "max": 135.77410000016243,
+        "nota": "temp + YOLO"
+      }
+    ],
+    "persistencia": [
+      {
+        "etapa": "Persistencia do evento + evidencia anotada (2 JPEG + commit)",
+        "n": 10,
+        "media": 20.43552000004638,
+        "desvio": 20.635236078258192,
+        "p50": 13.298500000018976,
+        "p95": 82.3168000001715,
+        "min": 13.018999999985681,
+        "max": 82.3168000001715,
+        "nota": "SQLite/WAL"
+      },
+      {
+        "etapa": "Fusao de dados (IA + clima + fonte oficial) e gravacao",
+        "n": 10,
+        "media": 11.838570000008986,
+        "desvio": 5.529479073613249,
+        "p50": 8.90560000016194,
+        "p95": 25.892499999827123,
+        "min": 8.498600000166334,
+        "max": 25.892499999827123,
+        "nota": "SQLite/WAL"
+      }
+    ],
+    "hardware": [
+      {
+        "etapa": "predict() em GPU (mesma chamada)",
+        "n": 8,
+        "media": 38.97772499999519,
+        "desvio": 1.0312286807276585,
+        "p50": 39.23510000004171,
+        "p95": 39.804000000003725,
+        "min": 36.352699999952165,
+        "max": 39.804000000003725,
+        "nota": "com CUDA"
+      },
+      {
+        "etapa": "predict() em CPU (mesma chamada)",
+        "n": 8,
+        "media": 899.5604374999289,
+        "desvio": 38.776937080301096,
+        "p50": 889.3118000000868,
+        "p95": 964.7823999998764,
+        "min": 832.621300000028,
+        "max": 964.7823999998764,
+        "nota": "sem CUDA"
+      }
+    ],
+    "http": [
+      {
+        "etapa": "GET /health (piso da rede local + ASGI)",
+        "n": 30,
+        "media": 1.4666199999737728,
+        "desvio": 0.2869664828635885,
+        "p50": 1.3852000001861597,
+        "p95": 1.9210000000384753,
+        "min": 1.1457999999038293,
+        "max": 2.7236000000812055,
+        "nota": "127.0.0.1"
+      },
+      {
+        "etapa": "GET /eventos (carga do painel)",
+        "n": 30,
+        "media": 3.9454066666470076,
+        "desvio": 4.699096573713233,
+        "p50": 3.032699999948818,
+        "p95": 6.0658999996121565,
+        "min": 2.378600000156439,
+        "max": 29.006499999923108,
+        "nota": "127.0.0.1"
+      },
+      {
+        "etapa": "POST /deteccao/imagem (upload do testador YOLO)",
+        "n": 60,
+        "media": 106.23289166669565,
+        "desvio": 6.063488145681135,
+        "p50": 108.57639999994717,
+        "p95": 112.15840000022581,
+        "min": 88.82169999969847,
+        "max": 116.59449999979188,
+        "nota": "127.0.0.1"
+      }
+    ],
+    "ponta_a_ponta": [
+      {
+        "etapa": "Broadcast do evento ate o painel (WebSocket)",
+        "n": 10,
+        "media": 0.4575,
+        "desvio": 0.18174171232823796,
+        "p50": 0.38699999999999996,
+        "p95": 0.888,
+        "min": 0.216,
+        "max": 0.888,
+        "nota": "so a propagacao"
+      },
+      {
+        "etapa": "Frame -> inferencia -> evento no painel",
+        "n": 10,
+        "media": 140.35118000010698,
+        "desvio": 55.27418533820599,
+        "p50": 123.16240000018297,
+        "p95": 301.09370000036506,
+        "min": 94.09340000001976,
+        "max": 301.09370000036506,
+        "nota": "caminho completo"
+      }
+    ]
+  }
+}

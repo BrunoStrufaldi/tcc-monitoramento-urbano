@@ -71,6 +71,17 @@ simulação (`/deteccao/simular` e `/deteccao/video`). Com isso nenhuma rota HTT
 evento, e o único caminho é a detecção nas câmeras. A busca de eventos e o filtro por
 severidade, que também estavam escondidos, saíram pelo mesmo motivo.
 
+### Busca por rua, sem trajeto (31/10/2026)
+
+A orientadora sugeriu buscar uma rua ou um trajeto de um ponto a outro e ver os eventos em
+análise ou ativos. O mapa (Leaflet com o WMS do GeoSampa) só desenha, não acha endereços
+nem traça rotas. A busca por rua usa o Nominatim (OpenStreetMap), gratuito e sem chave, e
+mostra os eventos a até 1,5 km do local. O trajeto ficou de fora: precisaria de um serviço
+de rotas (OSRM ou OpenRouteService), e o servidor público do OSRM é só para demonstração.
+
+Tudo roda no navegador e nenhuma rota nova foi criada, então o painel continua somente
+leitura. O texto digitado na busca vai para o servidor do OpenStreetMap.
+
 ### Histórico de etapas concluídas
 
 | Etapa | Entrega |

@@ -118,7 +118,7 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
         # Se já tem um evento ativo nesse ponto, só atualiza ele em vez de criar outro.
         if refrescar_evento_no_ponto(
             db, tipo="transito", latitude=latitude, longitude=longitude,
-            dentro_de_segundos=settings.gx_alerta_cooldown_seconds,
+            dentro_de_segundos=settings.gx_alerta_cooldown_seconds, endereco=nome_camera,
         ):
             cooldown["transito"] = agora
             logger.info("Trânsito em %s renovado (evento ainda vivo no ponto)", nome_camera)
@@ -144,6 +144,7 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
                 modelo_ia="YOLO11 (contagem de veículos)",
                 origem="camera_continua_contagem",
                 deteccoes_para_anotar=veiculos,
+                endereco=nome_camera,
             )
             db.add(DadoContextual(
                 evento_id=evento.id,

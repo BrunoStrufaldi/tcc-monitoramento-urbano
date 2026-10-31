@@ -9,7 +9,7 @@
 cd backend
 venv\Scripts\python -m pytest tests -q
 
-# Frontend (testes do módulo de formatação)
+# Frontend (formatação e busca por rua)
 npm run test:frontend
 
 # Data Fusion sozinho

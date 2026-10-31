@@ -26,6 +26,7 @@ from app.routers import (
 )
 from app.services import flood_detection, live_detection
 from app.services.data_fusion_service import migrar_categoria_legada, promover_eventos_por_confiabilidade
+from app.services.detection_events import preencher_enderecos_das_cameras
 from app.services.event_retention import colapsar_eventos_duplicados, purgar_eventos_expirados
 
 
@@ -56,6 +57,7 @@ async def lifespan(_app: FastAPI):
         migrar_categoria_legada(db)
         colapsar_eventos_duplicados(db)
         promover_eventos_por_confiabilidade(db)
+        preencher_enderecos_das_cameras(db)
     set_main_loop(asyncio.get_running_loop())
     manutencao_task = asyncio.create_task(_manutencao_periodica())
     # Vem desligado por padrão, inclusive nos testes. Para ligar, use

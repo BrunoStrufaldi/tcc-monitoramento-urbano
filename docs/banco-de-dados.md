@@ -34,7 +34,7 @@ erDiagram
 | Tabela | Model | Função |
 |---|---|---|
 | `regioes` | `Regiao` | Divisão geográfica da cidade (nome, código e um polígono GeoJSON opcional). |
-| `localizacoes` | `Localizacao` | Coordenadas e endereço. A detecção cria uma localização para cada evento, e a limpeza apaga as que ficam sem uso. |
+| `localizacoes` | `Localizacao` | Coordenadas e endereço. A detecção cria uma localização para cada evento, com o nome da câmera no `endereco`, e a limpeza apaga as que ficam sem uso. |
 | `fontes_dados` | `FonteDados` | Origem do evento. Na prática, uma fonte `yolo` por câmera. É o tipo `yolo` que permite devolver um evento `ativo` para análise automaticamente. |
 | `eventos` | `Evento` | O evento urbano. Campos principais: `tipo`, `severidade`, `status`, `confianca` (nota do Data Fusion) e `detectado_em`. |
 | `evidencias_visuais` | `EvidenciaVisual` | Imagem, com `modelo_ia`, `classe_detectada`, `confianca`, `bbox` e o SHA-256 da original em `metadados`. |

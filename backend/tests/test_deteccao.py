@@ -15,6 +15,10 @@ def test_status_e_classes_do_detector(client: TestClient):
     assert status["modo"] in ("yolo", "indisponivel")
     assert isinstance(status["disponivel"], bool)
 
+    cameras = client.get("/deteccao/cameras").json()
+    assert len(cameras) == 10
+    assert set(cameras[0]) == {"id", "nome", "latitude", "longitude"}
+
 
 def test_upload_que_nao_e_imagem_retorna_400(client: TestClient):
     for rota in ("/deteccao/imagem", "/deteccao/incidente"):

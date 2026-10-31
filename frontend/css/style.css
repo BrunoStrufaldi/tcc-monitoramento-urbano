@@ -2362,3 +2362,100 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .rp-evidence-row--modelo,
   .rp-evidence-disclaimer { display: none !important; }
 }
+
+/* ============================================================
+   BUSCA POR RUA (sobre o mapa)
+   ============================================================ */
+.map-search {
+  top: 12px;
+  right: 12px;
+  width: min(340px, calc(100% - 24px));
+  border: 1px solid rgba(149, 169, 185, .24);
+  border-radius: 7px;
+  background: rgba(9, 15, 21, .92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 5px 20px rgba(0,0,0,.28);
+  overflow: hidden;
+}
+.map-search-form { display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 4px 0 10px; }
+.map-search-form > svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--text-secondary); }
+.map-search-form input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: 500 13px/1 var(--font-sans);
+  outline: none;
+}
+.map-search-form input::placeholder { color: var(--text-muted); }
+.map-search-form input::-webkit-search-cancel-button { display: none; }
+.map-search:focus-within { border-color: var(--border-focus); }
+.map-search-clear {
+  width: 28px; height: 28px;
+  border: 0; border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 18px; line-height: 1;
+  cursor: pointer;
+}
+.map-search-clear:hover { color: var(--text-primary); background: var(--bg-hover); }
+.map-search-submit {
+  height: 30px;
+  padding: 0 12px;
+  border: 0; border-radius: 5px;
+  background: var(--gx);
+  color: #fff;
+  font: 700 12px/1 var(--font-sans);
+  cursor: pointer;
+}
+.map-search-submit:hover { background: var(--gx-light); }
+.map-search-submit:disabled { opacity: .6; cursor: wait; }
+.map-search-clear:focus-visible, .map-search-submit:focus-visible, .map-search-list button:focus-visible { outline: 2px solid var(--gx-light); outline-offset: 1px; }
+.map-search-result { max-height: min(46vh, 320px); overflow-y: auto; padding: 8px 10px 6px; border-top: 1px solid rgba(149, 169, 185, .18); }
+.map-search-message { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+.map-search-message strong { color: var(--text-primary); }
+.map-search-message.is-error { color: #ff8c97; }
+.map-search-list { list-style: none; display: grid; gap: 4px; margin-top: 8px; }
+.map-search-list button {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.map-search-list button:hover { border-color: var(--border-strong); background: var(--bg-hover); }
+.map-search-dot { width: 8px; height: 8px; border-radius: 50%; grid-row: 1; }
+.map-search-camera { grid-column: 2; display: flex; align-items: center; gap: 5px; min-width: 0; color: var(--text-secondary); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.map-search-camera svg { width: 12px; height: 12px; flex-shrink: 0; color: var(--gx-light); }
+.map-search-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; font-weight: 600; }
+.map-search-meta { grid-column: 2; color: var(--text-muted); font-size: 11px; }
+.map-search-credit { margin-top: 6px; color: var(--text-muted); font-size: 10px; }
+.map-search-message.is-warning strong:first-child { color: var(--warn); }
+.map-search-coverage { display: flex; align-items: center; gap: 5px; margin-top: 3px; color: var(--text-muted); font-size: 11px; }
+.map-search-coverage svg, .map-search-cameras svg { width: 12px; height: 12px; flex-shrink: 0; color: var(--gx-light); }
+.map-search-cameras { list-style: none; display: grid; gap: 4px; margin-top: 8px; }
+.map-search-cameras li { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 6px 8px; border: 1px dashed var(--border-strong); border-radius: 6px; font-size: 12px; }
+.map-search-camera-name { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-secondary); }
+.map-search-cameras .map-search-meta { flex-shrink: 0; }
+
+/* No celular e no tablet o filtro do mapa some, então a busca ocupa o topo inteiro. */
+@media (max-width: 980px) {
+  .map-search { top: 10px; left: 10px; right: 10px; width: auto; }
+  .map-search-result { max-height: 38vh; }
+}
+/* No computador a busca divide o topo com o filtro e o botão de centralizar. */
+@media (min-width: 981px) {
+  .map-search { width: max(240px, min(340px, calc(100% - 250px))); }
+}
+@media (min-width: 1201px) {
+  .map-search { top: 4px; right: 14px; }
+}

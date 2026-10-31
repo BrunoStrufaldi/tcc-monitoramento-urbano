@@ -12,6 +12,7 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.services.cet_camera_catalog import CAMERAS
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
@@ -62,6 +63,12 @@ def listar_classes() -> dict:
             for key, value in CLASSES_URBANAS.items()
         ]
     }
+
+
+@router.get("/cameras")
+def listar_cameras() -> list[dict]:
+    """Câmeras da CET que o MotSP monitora. O painel usa para dizer se um local tem cobertura."""
+    return [{"id": cam.id, "nome": cam.nome, "latitude": cam.latitude, "longitude": cam.longitude} for cam in CAMERAS]
 
 
 @router.get("/status")

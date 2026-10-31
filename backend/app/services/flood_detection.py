@@ -59,7 +59,7 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
     with SessionLocal() as db:
         if refrescar_evento_no_ponto(
             db, tipo="alagamento", latitude=latitude, longitude=longitude,
-            dentro_de_segundos=settings.gx_alerta_cooldown_seconds,
+            dentro_de_segundos=settings.gx_alerta_cooldown_seconds, endereco=nome_camera,
         ):
             logger.info("Alagamento em %s renovado (evento ainda vivo no ponto)", nome_camera)
             return
@@ -74,6 +74,7 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
                 fonte_descricao=f"Modelo dedicado de incidentes rodando direto na câmera pública CET-SP '{nome_camera}', sem confirmação humana.",
                 modelo_ia="YOLO11 (modelo de incidentes GX)",
                 origem="camera_continua_alagamento",
+                endereco=nome_camera,
             )
             condicoes = obter_condicoes_atuais(latitude, longitude)
             if condicoes.get("disponivel") and condicoes.get("chuva_mm") is not None:

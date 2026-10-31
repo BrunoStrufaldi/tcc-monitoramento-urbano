@@ -43,6 +43,40 @@ O filtro de status (Todos, Ativos ou Em análise) sempre começa em Todos. O nav
 lembrar a escolha anterior do `<select>`, então o código volta para o padrão ao abrir. No
 celular o mesmo filtro aparece como botões no painel lateral, sempre iguais ao `<select>`.
 
+### Busca por rua
+
+A caixa no canto do mapa recebe o nome de uma rua ou de um local de São Paulo. O texto vai
+para o Nominatim (OpenStreetMap), limitado ao retângulo da cidade. Esse retângulo pega
+pedaços de Guarulhos e Osasco, então o painel pede cinco resultados e usa o primeiro que fica
+no município de São Paulo. Ele vira o centro de um círculo de 1,5 km. Com a busca ligada:
+
+- o mapa e o total "Eventos no mapa" mostram só os eventos dentro do círculo, respeitando
+  também o filtro de status;
+- uma lista mostra esses eventos do mais perto para o mais longe, com o nome da câmera que
+  detectou cada um, e um clique seleciona o evento;
+- a lista é refeita quando chega evento novo pelo tempo real;
+- o × ou a tecla Esc desligam a busca.
+
+A lista também diz se o local tem cobertura, usando as câmeras de `/deteccao/cameras`:
+
+| Situação | Mensagem |
+|---|---|
+| Tem evento no círculo | Os eventos e quantas câmeras monitoradas ficam na área |
+| Tem câmera, mas nenhum evento | "Nenhum evento nas câmeras monitoradas", com o nome e a distância de cada câmera |
+| Nenhuma câmera no círculo | "Local sem cobertura": o sistema não tem como detectar eventos ali |
+
+A mensagem fala em câmeras monitoradas pelo MotSP, e não em câmeras da CET, porque a CET
+tem muito mais câmeras do que as 10 do catálogo. As coordenadas das câmeras são aproximadas
+(nível de quarteirão, ver [Detecção](deteccao.md)), o que não muda nada num raio de 1,5 km.
+
+O Nominatim aceita no máximo uma consulta por segundo e não permite autocompletar, por isso
+a busca só roda ao apertar Enter ou Buscar, espera 1,1 s entre consultas e guarda as
+respostas já vistas. A conta de distância fica em `busca-local.ts`, que tem teste próprio.
+
+Limites: o Nominatim devolve um ponto só. Numa avenida longa esse ponto é o meio de um
+trecho, então a busca com número ("Av. Paulista, 1000") é mais precisa. A busca olha os
+eventos que o painel já carregou (até 200).
+
 ### Design tokens (CSS)
 
 Marca:

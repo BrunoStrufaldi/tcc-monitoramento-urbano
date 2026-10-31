@@ -1,4 +1,5 @@
 import { atingeLimiarAtivo, formatFusionPercent, fusionComponentLabel } from "./fusion-format.js";
+import { RAIO_BUSCA_M, pontosNoRaio, formatarDistancia, nomeCurtoDoLocal, resultadoNaCapital, urlBuscaEndereco } from "./busca-local.js";
 const SEVERITIES = {
     baixa: { label: "Baixa", color: "#22c55e", scale: 10, zIndex: 2 },
     media: { label: "Média", color: "#FFB300", scale: 12, zIndex: 3 },
@@ -17,6 +18,11 @@ const transientMarkerLayers = new Set();
 let rightPanelOpen = false;
 let leftPanelOpen = false;
 const MARKER_CLUSTER_THRESHOLD = 120;
+let buscaAtual = null;
+let buscaCamada = null;
+let ultimaBuscaEm = 0;
+const buscaCache = new Map();
+let camerasMonitoradas = null;
 let connectionMode = "disconnected";
 let wsConnection = null;
 let sseConnection = null;
@@ -649,7 +655,10 @@ function initStatusFilter() {
     syncStatusFilterButtons();
 }
 function isEventVisible(event) {
-    return matchesStatusFilter(event);
+    return matchesStatusFilter(event) && dentroDaBusca(event);
+}
+function dentroDaBusca(event) {
+    return !buscaAtual || pontosNoRaio([event], buscaAtual).length > 0;
 }
 function clearMarkers() {
     deselectCurrentMarker();
@@ -896,10 +905,11 @@ function renderSelectedEvent(event) {
     highlightMarker(event.id);
 }
 function updateMetrics(events) {
-    const noMapa = events.filter(matchesStatusFilter);
+    const noMapa = events.filter(isEventVisible);
     animateKpi(byId("kpi-ativos"), String(noMapa.length));
     animateKpi(byId("kpi-status-ativos"), String(events.filter((e) => e.status === "ativo").length));
     animateKpi(byId("kpi-status-analise"), String(events.filter((e) => e.status === "em_analise").length));
+    renderBuscaResultado();
 }
 function animateKpi(element, newValue) {
     if (element.textContent === newValue)
@@ -1188,9 +1198,10 @@ async function loadEvents() {
         setApiStatus(true, "Sincronizando");
         loadedEvents = await fetchEvents();
         updateMetrics(loadedEvents);
-        applyMarkers(!selectedEventId);
+        // Com uma busca ligada o mapa fica parado no círculo da busca.
+        applyMarkers(!selectedEventId && !buscaAtual);
         const ongoingId = selectedEventId && !loadedEvents.some((e) => e.id === selectedEventId) ? null : selectedEventId;
-        const target = loadedEvents.find((e) => e.id === ongoingId) || (ongoingId ? null : (loadedEvents.find(isEventVisible) || loadedEvents[0] || null));
+        const target = loadedEvents.find((e) => e.id === ongoingId) || (ongoingId ? null : (loadedEvents.find(isEventVisible) || (buscaAtual ? null : loadedEvents[0]) || null));
         selectedEventId = target?.id || null;
         renderSelectedEvent(target || null);
         updateLastUpdate();
@@ -1210,6 +1221,163 @@ async function loadEvents() {
         applyMarkers(false);
         renderSelectedEvent(null);
     }
+}
+/* ============================================================
+   BUSCA POR RUA: eventos a até 1,5 km do local digitado
+   ============================================================ */
+function initBusca() {
+    const form = byId("busca-form");
+    const input = byId("busca-texto");
+    const limpar = byId("busca-limpar");
+    form.addEventListener("submit", (submitEvent) => {
+        submitEvent.preventDefault();
+        void buscarEndereco(input.value);
+    });
+    input.addEventListener("input", () => { limpar.hidden = !input.value && !buscaAtual; });
+    input.addEventListener("keydown", (keyEvent) => { if (keyEvent.key === "Escape")
+        limparBusca(); });
+    limpar.addEventListener("click", () => { limparBusca(); input.focus(); });
+    byId("busca-resultado").addEventListener("click", (clickEvent) => {
+        const botao = clickEvent.target.closest("button[data-evento-id]");
+        if (botao)
+            selectEvent(Number(botao.dataset.eventoId), true);
+    });
+    fetchOperationalData("/deteccao/cameras")
+        .then((lista) => { camerasMonitoradas = lista; renderBuscaResultado(); })
+        .catch((error) => console.error(error));
+}
+async function buscarEndereco(texto) {
+    const chave = texto.trim().toLocaleLowerCase("pt-BR");
+    if (chave.length < 3) {
+        setBuscaMensagem("Digite pelo menos 3 letras do nome da rua.", true);
+        return;
+    }
+    const botao = byId("busca-enviar");
+    botao.disabled = true;
+    setBuscaMensagem("Buscando…");
+    try {
+        let local = buscaCache.get(chave);
+        if (local === undefined) {
+            // O Nominatim aceita no máximo uma consulta por segundo.
+            const espera = ultimaBuscaEm + 1100 - Date.now();
+            if (espera > 0)
+                await new Promise((resolve) => window.setTimeout(resolve, espera));
+            ultimaBuscaEm = Date.now();
+            const resposta = await fetch(urlBuscaEndereco(texto));
+            if (!resposta.ok)
+                throw new Error("Nominatim retornou " + resposta.status);
+            const achado = resultadoNaCapital(await resposta.json());
+            local = achado
+                ? { latitude: Number(achado.lat), longitude: Number(achado.lon), nome: nomeCurtoDoLocal(achado.display_name) }
+                : null;
+            buscaCache.set(chave, local);
+        }
+        if (!local) {
+            desfazerBusca();
+            setBuscaMensagem("Não encontramos esse endereço em São Paulo. Tente incluir o número ou o bairro.", true);
+            return;
+        }
+        aplicarBusca(local);
+    }
+    catch (error) {
+        console.error(error);
+        desfazerBusca();
+        setBuscaMensagem("A busca de endereços está fora do ar agora. Tente de novo em alguns instantes.", true);
+    }
+    finally {
+        botao.disabled = false;
+    }
+}
+function aplicarBusca(local) {
+    buscaAtual = local;
+    byId("busca-limpar").hidden = false;
+    desenharAreaBusca();
+    // Se o evento selecionado ficou fora do círculo, ele deixa de ser mostrado.
+    if (selectedEventId != null && !loadedEvents.some((e) => e.id === selectedEventId && isEventVisible(e))) {
+        selectedEventId = null;
+        clearEventEvidence();
+        renderSelectedEvent(null);
+    }
+    applyMarkers(false);
+    updateMetrics(loadedEvents);
+}
+/** Tira o círculo e volta a mostrar todos os eventos, sem mexer no texto digitado. */
+function desfazerBusca() {
+    if (!buscaAtual)
+        return;
+    buscaAtual = null;
+    desenharAreaBusca();
+    applyMarkers(false);
+    updateMetrics(loadedEvents);
+}
+function limparBusca() {
+    desfazerBusca();
+    byId("busca-texto").value = "";
+    byId("busca-limpar").hidden = true;
+    byId("busca-resultado").hidden = true;
+}
+function desenharAreaBusca() {
+    buscaCamada?.remove();
+    buscaCamada = null;
+    if (!buscaAtual || !map || !window.L)
+        return;
+    const centro = [buscaAtual.latitude, buscaAtual.longitude];
+    buscaCamada = window.L.layerGroup([
+        window.L.circle(centro, { radius: RAIO_BUSCA_M, color: "#FF8A00", weight: 2, fillColor: "#FF8A00", fillOpacity: 0.08, interactive: false }),
+        window.L.circleMarker(centro, { radius: 5, color: "#ffffff", weight: 2, fillColor: "#FF5500", fillOpacity: 1, interactive: false }),
+    ]).addTo(map);
+    map.fitBounds(window.L.latLng(centro).toBounds(RAIO_BUSCA_M * 2), { padding: [40, 40] });
+}
+function setBuscaMensagem(texto, erro = false) {
+    const painel = byId("busca-resultado");
+    painel.hidden = false;
+    painel.innerHTML = '<p class="map-search-message' + (erro ? " is-error" : "") + '">' + escapeHtml(texto) + "</p>";
+}
+const ICONE_CAMERA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
+function listaCameras(cameras) {
+    return '<ul class="map-search-cameras">' + cameras.map(({ ponto, distancia }) => "<li>" + ICONE_CAMERA + '<span class="map-search-camera-name">' + escapeHtml(ponto.nome) + "</span>" +
+        '<span class="map-search-meta">' + formatarDistancia(distancia) + "</span></li>").join("") + "</ul>";
+}
+/** Lista os eventos dentro do círculo. Roda de novo sempre que a lista de eventos muda. */
+function renderBuscaResultado() {
+    if (!buscaAtual)
+        return;
+    const raio = formatarDistancia(RAIO_BUSCA_M);
+    const local = escapeHtml(buscaAtual.nome);
+    const proximos = pontosNoRaio(loadedEvents.filter(matchesStatusFilter), buscaAtual);
+    const camerasPerto = camerasMonitoradas ? pontosNoRaio(camerasMonitoradas, buscaAtual) : null;
+    let html;
+    if (camerasPerto && !camerasPerto.length && !proximos.length) {
+        html = '<p class="map-search-message is-warning"><strong>Local sem cobertura.</strong> Nenhuma câmera monitorada pelo MotSP fica a até ' +
+            raio + " de <strong>" + local + "</strong>, então o sistema não tem como detectar eventos aqui.</p>";
+    }
+    else if (!proximos.length) {
+        const filtro = currentStatusFilter();
+        const quais = filtro ? formatStatus(filtro).toLocaleLowerCase("pt-BR") : "ativo ou em análise";
+        html = '<p class="map-search-message">Nenhum evento ' + quais + (camerasPerto ? " nas câmeras monitoradas" : "") +
+            " a até " + raio + " de <strong>" + local + "</strong>" + (camerasPerto ? ":" : ".") + "</p>" +
+            (camerasPerto ? listaCameras(camerasPerto) : "");
+    }
+    else {
+        const total = proximos.length === 1 ? "1 evento" : proximos.length + " eventos";
+        const cobertura = camerasPerto?.length
+            ? '<p class="map-search-coverage">' + ICONE_CAMERA + (camerasPerto.length === 1 ? "1 câmera monitorada" : camerasPerto.length + " câmeras monitoradas") + " nessa área</p>"
+            : "";
+        html = '<p class="map-search-message"><strong>' + total + "</strong> a até " + raio + " de <strong>" + local + "</strong></p>" + cobertura +
+            '<ul class="map-search-list">' + proximos.map(({ ponto: evento, distancia }) => {
+            // A detecção grava o nome da câmera como endereço do evento.
+            const camera = evento.localizacao?.endereco;
+            return '<li><button type="button" data-evento-id="' + evento.id + '" title="' + escapeHtml(evento.titulo + (camera ? " · " + camera : "")) + '">' +
+                '<span class="map-search-dot" style="background:' + statusColor(evento.status) + '"></span>' +
+                '<span class="map-search-title">' + escapeHtml(evento.titulo) + "</span>" +
+                (camera ? '<span class="map-search-camera">' + ICONE_CAMERA + escapeHtml(camera) + "</span>" : "") +
+                '<span class="map-search-meta">' + escapeHtml(formatStatus(evento.status)) + " · " + formatarDistancia(distancia) + "</span>" +
+                "</button></li>";
+        }).join("") + "</ul>";
+    }
+    const painel = byId("busca-resultado");
+    painel.hidden = false;
+    painel.innerHTML = html + '<p class="map-search-credit">Endereços: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></p>';
 }
 function mostrarMapaIndisponivel() {
     byId("mapa").innerHTML = '<div class="map-fallback">' +
@@ -1286,6 +1454,7 @@ function initMapa() {
     initEvidenceViewer();
     byId("btn-atualizar").addEventListener("click", loadEvents);
     initStatusFilter();
+    initBusca();
     const closeRightBtn = byId("btn-close-right");
     if (closeRightBtn) {
         closeRightBtn.addEventListener("click", toggleRightPanel);

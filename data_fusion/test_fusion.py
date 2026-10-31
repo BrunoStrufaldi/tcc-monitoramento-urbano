@@ -40,7 +40,7 @@ def test_pesos_e_dimensoes_ausentes():
     entrada = EventoFusionInput(
         evento_id=6,
         tipo="observacao_visual",
-        evidencias_ia=[EvidenciaIA(confianca=0.735, modelo_ia="YOLO11n", classe_detectada="veiculo")],
+        evidencias_ia=[EvidenciaIA(confianca=0.735, modelo_ia="YOLO11m", classe_detectada="veiculo")],
         dados_contexto=[],
     )
     resultado = calcular_confiabilidade(entrada)

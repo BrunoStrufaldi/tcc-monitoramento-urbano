@@ -17,6 +17,7 @@ from app.models.fonte_dados import FonteDados
 from app.models.localizacao import Localizacao
 from app.routers.tempo_real import _broadcast
 from app.schemas.evento import EventoResponse
+from app.services.cet_camera_catalog import CAMERAS
 from app.services.evidence_annotation import annotate_evidence
 from app.ws_manager import manager as ws_manager
 from ml.detector import Deteccao
@@ -35,6 +36,26 @@ def _fonte(db: Session, nome: str, descricao: str) -> FonteDados:
     return source
 
 
+def preencher_enderecos_das_cameras(db: Session, tolerancia_graus: float = 1e-4) -> int:
+    """Dá o nome da câmera às localizações sem endereço que ficam no ponto de uma câmera do catálogo.
+
+    Serve para os eventos gravados antes de a detecção salvar o nome da câmera.
+    """
+    preenchidas = 0
+    for localizacao in db.query(Localizacao).filter(Localizacao.endereco.is_(None)).all():
+        camera = next((
+            cam for cam in CAMERAS
+            if abs(cam.latitude - localizacao.latitude) < tolerancia_graus
+            and abs(cam.longitude - localizacao.longitude) < tolerancia_graus
+        ), None)
+        if camera:
+            localizacao.endereco = camera.nome
+            preenchidas += 1
+    if preenchidas:
+        db.commit()
+    return preenchidas
+
+
 def refrescar_evento_no_ponto(
     db: Session,
     *,
@@ -43,6 +64,7 @@ def refrescar_evento_no_ponto(
     longitude: float,
     dentro_de_segundos: float,
     tolerancia_graus: float = 1e-4,
+    endereco: str | None = None,
 ) -> Evento | None:
     """Se já existe um evento do mesmo tipo nesse ponto, só atualiza o horário dele.
 
@@ -65,6 +87,9 @@ def refrescar_evento_no_ponto(
     if evento is None:
         return None
     evento.detectado_em = datetime.now(UTC).replace(tzinfo=None)
+    # Eventos criados antes de a detecção gravar o nome da câmera ganham o nome aqui.
+    if endereco and evento.localizacao and not evento.localizacao.endereco:
+        evento.localizacao.endereco = endereco
     db.commit()
     publicar_evento(db, evento.id)
     return evento
@@ -82,6 +107,7 @@ def registrar_deteccao(
     modelo_ia: str = "YOLO11 (inferência repetida no servidor)",
     origem: str = "camera_continua",
     deteccoes_para_anotar: list[Deteccao] | None = None,
+    endereco: str | None = None,
 ) -> Evento:
     """Cria a localização, o evento e a evidência, e avisa o painel."""
     _EVIDENCIAS_DIR.mkdir(parents=True, exist_ok=True)
@@ -104,7 +130,8 @@ def registrar_deteccao(
         "em análise até a fusão de dados atingir o limiar de confiabilidade."
     )
 
-    localizacao = Localizacao(latitude=latitude, longitude=longitude)
+    # O endereço é o nome da câmera, que é o que o painel mostra na busca por rua.
+    localizacao = Localizacao(latitude=latitude, longitude=longitude, endereco=endereco)
     db.add(localizacao)
     db.flush()
     source = _fonte(db, fonte_nome, fonte_descricao)

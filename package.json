@@ -2,7 +2,7 @@
   "type": "module",
   "scripts": {
     "build:frontend": "tsc -p frontend/tsconfig.json",
-    "test:frontend": "node --test frontend/tests/fusion-format.test.mjs"
+    "test:frontend": "node --test frontend/tests/fusion-format.test.mjs frontend/tests/busca-local.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.5.0"
