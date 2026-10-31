@@ -37,3 +37,8 @@ backend/data/
 *.swp
 Thumbs.db
 .DS_Store
+
+# Arquivos de apoio da monografia
+dados_secao6.md
+latencia.json
+results_veiculos.csv
