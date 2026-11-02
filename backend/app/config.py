@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     # Por quanto tempo um evento fica no painel depois da última detecção.
     gx_evento_janela_minutos: int = 45
     # Confiabilidade a partir da qual um evento em análise passa para ativo.
-    gx_fusion_auto_ativo_min: float = 0.77
+    gx_fusion_auto_ativo_min: float = 0.80
     # Chave da TomTom. Ela precisa ser lida aqui para que o valor do .env chegue
     # até o serviço.
     tomtom_api_key: str | None = None
