@@ -11,7 +11,7 @@ pela primeira vez. Assim a API sobe normalmente numa máquina sem GPU e sem os m
 
 | Modelo | Variável | Uso | Confiança |
 |---|---|---|---|
-| Veículos (YOLO ajustado nas câmeras CET) | `GX_YOLO_MODEL` → `gx-veiculos.pt` | Contagem de veículos para trânsito, upload de imagem | `YOLO_THRESHOLD` = 0,45 |
+| Veículos (YOLO ajustado nas câmeras CET) | `GX_YOLO_MODEL` → `gx-veiculos.pt` | Contagem de veículos para trânsito | `YOLO_THRESHOLD` = 0,45 |
 | Incidentes (próprio) | `GX_YOLO_INCIDENT_MODEL` → `gx-incident.pt` | Classe única `alagamento` | `GX_YOLO_INCIDENT_CONF` = 0,6 |
 
 Os dois ficam separados de propósito: se o modelo de veículos fosse trocado por um

@@ -16,26 +16,12 @@ painel mostra a tela de "Mapa indisponível" e todo o resto continua funcionando
 Os marcadores têm a cor do status (verde para ativo, amarelo para em análise), se agrupam
 conforme o zoom, e o evento selecionado continua selecionado entre as atualizações.
 
-### Views
+### Painéis
 
-| View | O que mostra |
-|---|---|
-| `dashboard` (Início) | Totais por status, o evento selecionado com o anel de confiança, a explicação de como a nota foi calculada e, no celular em pé, a evidência visual |
-| `yolo-teste` | Testa uma imagem nos dois modelos ao mesmo tempo |
-
-A barra de ícones (`rail`) leva a essas duas telas. O painel direito mostra a evidência
-visual (a imagem com as caixas do YOLO) do evento selecionado, com opção de ampliar.
-
-### Testador de YOLO
-
-Envia a mesma imagem para `/deteccao/incidente` e `/deteccao/imagem` ao mesmo tempo e
-mostra um resultado fácil de ler:
-
-- alagamento detectado → `danger`
-- veículos ≥ `min_veiculos_transito` (lido de `/deteccao/status`) → `warn`
-- nada relevante → `ok`
-
-Ele desenha as caixas sobre a imagem e lista cada detecção dizendo de qual modelo ela veio.
+O painel esquerdo mostra os totais por status, o evento selecionado com o anel de
+confiança, a explicação de como a nota foi calculada e, no celular em pé, a evidência
+visual. O painel direito mostra a evidência visual (a imagem com as caixas do YOLO) do
+evento selecionado, com opção de ampliar.
 
 ### Filtros e KPIs
 

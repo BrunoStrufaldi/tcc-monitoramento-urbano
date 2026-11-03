@@ -27,7 +27,7 @@ python -m data_fusion.test_historico_alagamento
 | `test_consultas.py` | Consulta e filtros de todas as rotas, 404 e escrita bloqueada (405) |
 | `test_evidencias.py` | Evidência gravada pela detecção (imagem original e hash) e download do arquivo |
 | `test_tempo_real.py` | WebSocket, SSE, conexões que caíram, ping/pong e envio entre threads |
-| `test_deteccao.py` | Status e testador do YOLO, upload inválido e modelo indisponível |
+| `test_deteccao.py` | Status do YOLO, classes, câmeras e remoção das rotas de upload |
 | `test_detector_concorrencia.py` | Trava de carregamento, limite de detecções e trava por modelo; configuração do YOLO pelo `Settings` |
 | `test_event_retention.py` | Limpeza, junção de repetidos e aviso de remoção |
 | `test_e2e.py` | Fluxos de ponta a ponta, status da API e cache do painel |
@@ -86,8 +86,7 @@ histórico: `database/migrations/001_security.sql` (tabelas `usuarios` e
   compatíveis de CUDA e Ultralytics. Para medir, use o `backend/benchmark_latencia.py`
   (com imagens reais da CET).
 - Privacidade: só são gravadas imagens de câmeras públicas da CET, e só quando viram
-  evidência de um evento. O testador do YOLO no painel apaga a imagem enviada logo depois
-  da detecção.
+  evidência de um evento. O painel não recebe imagens enviadas por usuários.
 - As fontes públicas não substituem a validação feita por uma pessoa.
 
 ### Pendências

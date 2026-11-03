@@ -296,8 +296,8 @@ def bloco_persistencia(frames: list[tuple[str, bytes]], repeticoes: int) -> list
     ]
 
 
-def bloco_http(frames: list[tuple[str, bytes]], repeticoes: int) -> list[dict]:
-    """Ida e volta de uma requisição HTTP no servidor local, com envio de imagem."""
+def bloco_http() -> list[dict]:
+    """Ida e volta de uma requisição HTTP no servidor local."""
     linhas: list[dict] = []
     with httpx.Client(base_url="http://127.0.0.1:%d" % PORTA, timeout=120.0) as cliente:
         cliente.get("/health")
@@ -315,18 +315,6 @@ def bloco_http(frames: list[tuple[str, bytes]], repeticoes: int) -> list[dict]:
             cliente.get("/eventos")
             amostras.append((time.perf_counter() - inicio) * 1000)
         linhas.append(_resumir("GET /eventos (carga do painel)", amostras, "127.0.0.1"))
-
-        def _enviar(par):
-            _, conteudo = par
-            resposta = cliente.post(
-                "/deteccao/imagem",
-                files={"file": ("frame.jpg", conteudo, "image/jpeg")},
-            )
-            resposta.raise_for_status()
-
-        _enviar(frames[0])
-        amostras = _cronometrar(_enviar, frames, repeticoes)
-        linhas.append(_resumir("POST /deteccao/imagem (upload do testador YOLO)", amostras, "127.0.0.1"))
     return linhas
 
 
@@ -440,7 +428,7 @@ def main() -> None:
 
     servidor = _subir_servidor()
     try:
-        resultado["http"] = bloco_http(frames, argumentos.repeticoes)
+        resultado["http"] = bloco_http()
         totais, propagacoes = asyncio.run(_medir_ponta_a_ponta(frames, argumentos.e2e))
         resultado["ponta_a_ponta"] = []
         if propagacoes:

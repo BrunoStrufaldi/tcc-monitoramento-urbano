@@ -152,7 +152,7 @@ evento.
                       │  Data Fusion (na criação e a cada 120 s)
                       ▼
         ┌─────────────────────────────┐
-        │ confiabilidade ≥ 0,77 ?     │
+        │ confiabilidade ≥ 0,80 ?     │
         └───────┬─────────────┬───────┘
              sim│             │não
                 ▼             ▼

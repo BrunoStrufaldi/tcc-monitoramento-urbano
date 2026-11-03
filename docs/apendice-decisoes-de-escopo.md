@@ -82,6 +82,16 @@ de rotas (OSRM ou OpenRouteService), e o servidor público do OSRM é só para d
 Tudo roda no navegador e nenhuma rota nova foi criada, então o painel continua somente
 leitura. O texto digitado na busca vai para o servidor do OpenStreetMap.
 
+### Testador de YOLO (02/11/2026)
+
+A aba "Testar YOLO" deixava enviar uma foto e ver o que os dois modelos achavam nela. Era
+útil para conferir os modelos, mas não faz parte da operação: os eventos vêm só das
+câmeras. A aba saiu do painel junto com as rotas que só ela usava (`POST /deteccao/imagem`
+e `POST /deteccao/incidente`). Com isso a API não recebe mais imagens de fora. O
+`GET /deteccao/status` continua, porque o deploy usa para conferir os modelos. A barra de
+ícones da esquerda ficou só com o botão "Início" e saiu também; o painel esquerdo ocupa o
+espaço dela.
+
 ### Histórico de etapas concluídas
 
 | Etapa | Entrega |

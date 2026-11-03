@@ -54,7 +54,7 @@ Testes: `cd backend; venv\Scripts\python -m pytest -q` (backend), `npm run test:
   chuva medida (Open-Meteo), o aviso oficial do INMET e o histórico de alagamento da via
   (CGE-SP e GeoSampa).
 - Calcula a confiabilidade. O Data Fusion junta duas notas, IA (57%) e contexto (43%), num
-  valor de 0 a 1. O evento só aparece como `ativo` quando passa do limite (77% por
+  valor de 0 a 1. O evento só aparece como `ativo` quando passa do limite (80% por
   padrão). Abaixo disso fica `em_analise`.
 - Atualiza em tempo real. Todo evento criado, atualizado ou removido chega ao painel por
   WebSocket. Se ele não funcionar, o painel usa SSE e, por último, consulta periódica.
@@ -111,7 +111,7 @@ Testes: `cd backend; venv\Scripts\python -m pytest -q` (backend), `npm run test:
    ┌────────────────────────────────────────────────┐
    │ data_fusion/  ──►  confiabilidade 0..1         │
    │  IA 57% · contexto 43%                         │
-   │  ≥ 0,77 → status vira "ativo"                  │
+   │  ≥ 0,80 → status vira "ativo"                  │
    └───────────┬────────────────────────────────────┘
                │
                ▼

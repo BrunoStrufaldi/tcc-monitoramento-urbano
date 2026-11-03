@@ -64,7 +64,7 @@ TCC-Atualizado/
 │   └── migrations/               001 a 007 (ver §6)
 │
 └── frontend/
-    ├── index.html                página única com ARIA: painel de eventos, testador YOLO, mapa
+    ├── index.html                página única com ARIA: painel de eventos, mapa
     ├── css/style.css             design tokens e tema escuro
     ├── js/config.js              API_BASE_URL (= window.location.origin), centro e zoom do mapa
     ├── src/                      código TypeScript

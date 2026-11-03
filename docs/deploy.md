@@ -84,7 +84,7 @@ gratuito.
 4. Ligar o monitoramento contínuo (opcional)
 
    No primeiro deploy as threads de detecção sobem desligadas (o padrão do `config.py`).
-   O painel funciona, o testador de imagens funciona e nada gasta CPU sozinho. O script
+   O painel funciona e nada gasta CPU sozinho. O script
    só muda isso quando é pedido. Um novo deploy sem a opção mantém o que já está na
    nuvem, porque ele usa `--update-env-vars` (que junta as variáveis) e não
    `--set-env-vars` (que trocaria todas).

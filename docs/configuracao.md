@@ -65,4 +65,4 @@ relativos dos modelos partem da raiz do projeto, e não de `backend/`.
 | `GX_ALERTA_COOLDOWN_SECONDS` | `1800` (30 min) | Tempo que a câmera espera depois de criar um evento. |
 | `GX_TRANSITO_VETO_COOLDOWN_SECONDS` | `600` (10 min) | Tempo de espera depois de uma recusa da TomTom. É curto de propósito: uma recusa às 19h00 não pode deixar a câmera parada até 19h30 se a via travar no meio do caminho. Também limita o uso da API: 1 consulta por câmera a cada 10 min dá umas 1.400 chamadas por dia nas 10 câmeras, dentro do plano gratuito. |
 | `GX_EVENTO_JANELA_MINUTOS` | `45` | Janela de tempo real. Um evento detectado antes disso é apagado do banco. Fica acima do tempo de espera do alerta, para não abrir um buraco entre uma detecção e a próxima. |
-| `GX_FUSION_AUTO_ATIVO_MIN` | `0.77` | Confiabilidade a partir da qual um evento `em_analise` passa para `ativo`. |
+| `GX_FUSION_AUTO_ATIVO_MIN` | `0.80` | Confiabilidade a partir da qual um evento `em_analise` passa para `ativo`. |

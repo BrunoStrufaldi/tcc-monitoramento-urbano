@@ -42,8 +42,6 @@ para explicar a confiança do evento.
 | GET | `/deteccao/classes` | Classes do sistema e um aviso sobre os limites do modelo padrão do YOLO. |
 | GET | `/deteccao/cameras` | As câmeras da CET monitoradas (id, nome e coordenadas). O painel usa na busca por rua para dizer se o local tem cobertura. |
 | GET | `/deteccao/status` | Se os dois modelos estão disponíveis, o caminho deles, o erro de carregamento e o `min_veiculos_transito`. |
-| POST | `/deteccao/imagem` | Envia uma imagem e roda o modelo de veículos. PNG, JPG ou WEBP de até 10 MB; o arquivo temporário é apagado no fim. |
-| POST | `/deteccao/incidente` | Envia uma imagem e roda o modelo de alagamento. É só um teste: não cria evento nem evidência. |
 
 ### Consulta de apoio
 
