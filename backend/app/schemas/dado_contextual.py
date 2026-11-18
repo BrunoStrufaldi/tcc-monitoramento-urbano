@@ -8,7 +8,6 @@ class DadoContextualResponse(BaseModel):
 
     id: int
     evento_id: int | None
-    regiao_id: int | None
     fonte_id: int | None
     categoria: str
     chave: str

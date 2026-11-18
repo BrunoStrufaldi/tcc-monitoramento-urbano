@@ -20,7 +20,6 @@ from app.routers import (
     fusion,
     localizacoes,
     logs,
-    regioes,
     tempo_real,
     websocket,
 )
@@ -89,7 +88,6 @@ app.add_middleware(
 app.include_router(eventos.router)
 app.include_router(fusion.router)
 app.include_router(logs.router)
-app.include_router(regioes.router)
 app.include_router(fontes.router)
 app.include_router(localizacoes.router)
 app.include_router(evidencias.router)

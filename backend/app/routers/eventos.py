@@ -17,7 +17,6 @@ router = APIRouter(prefix="/eventos", tags=["eventos"])
 
 _EVENTO_LOAD_OPTIONS = (
     joinedload(Evento.localizacao),
-    joinedload(Evento.regiao),
     joinedload(Evento.fonte),
 )
 

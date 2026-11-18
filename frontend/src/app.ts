@@ -18,7 +18,6 @@ type AppConfig = {
 };
 
 type EventLocation = { endereco?: string | null; bairro?: string | null; cidade?: string | null };
-type EventRegion = { nome: string };
 type EventFonte = { nome: string; tipo: string };
 
 type UrbanEvent = {
@@ -33,7 +32,6 @@ type UrbanEvent = {
   confianca?: number | string | null;
   detectado_em?: string | null;
   localizacao?: EventLocation | null;
-  regiao?: EventRegion | null;
   fonte?: EventFonte | null;
 };
 

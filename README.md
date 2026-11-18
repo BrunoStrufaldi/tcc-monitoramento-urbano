@@ -6,7 +6,7 @@ que vê com outras fontes de dados (trânsito, clima, avisos oficiais e históri
 alagamento da via) e só mostra no painel o que essas fontes confirmam.
 
 > Este README é a visão geral: o que o sistema faz, como as partes se ligam e como rodar.
-> Os detalhes de cada parte estão em `docs/`. As seções seguem a mesma numeração (§1 a §21)
+> Os detalhes de cada parte estão em `docs/`. As seções seguem a mesma numeração (§1 a §22)
 > em todos os arquivos.
 
 ---
@@ -36,6 +36,7 @@ alagamento da via) e só mostra no painel o que essas fontes confirmam.
 | §19 | [Decisões de escopo (o que foi removido e por quê)](docs/apendice-decisoes-de-escopo.md#19-decisões-de-escopo-o-que-foi-removido-e-por-quê) | `docs/apendice-decisoes-de-escopo.md` |
 | §20 | [Referências técnicas](docs/apendice-referencias.md#20-referências-técnicas) | `docs/apendice-referencias.md` |
 | §21 | [Deploy no Google Cloud Run](docs/deploy.md#21-deploy-no-google-cloud-run) | `docs/deploy.md` |
+| §22 | [Manifesto da versão avaliada](docs/manifesto-versao-avaliada.md#22-manifesto-da-versão-avaliada) | `docs/manifesto-versao-avaliada.md` |
 
 Testes: `cd backend; venv\Scripts\python -m pytest -q` (backend), `npm run test:frontend`
 (painel) e `python -m pytest -q data_fusion` na raiz. Detalhes em [§17](docs/testes-e-seguranca.md#17-testes).

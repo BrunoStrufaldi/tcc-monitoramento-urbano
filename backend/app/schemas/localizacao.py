@@ -7,7 +7,6 @@ class LocalizacaoResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    regiao_id: int | None
     latitude: float
     longitude: float
     endereco: str | None

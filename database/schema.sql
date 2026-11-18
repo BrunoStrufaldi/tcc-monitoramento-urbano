@@ -22,18 +22,6 @@ DROP TABLE IF EXISTS regioes;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
-CREATE TABLE regioes (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  nome VARCHAR(120) NOT NULL,
-  codigo VARCHAR(32) UNIQUE,
-  descricao TEXT,
-  poligono_geojson JSON NULL,
-  ativo TINYINT(1) NOT NULL DEFAULT 1,
-  criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_regioes_ativo (ativo)
-) ENGINE=InnoDB;
-
 CREATE TABLE fontes_dados (
   id INT AUTO_INCREMENT PRIMARY KEY,
   nome VARCHAR(120) NOT NULL,
@@ -50,7 +38,6 @@ CREATE TABLE fontes_dados (
 
 CREATE TABLE localizacoes (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  regiao_id INT NULL,
   latitude DOUBLE NOT NULL,
   longitude DOUBLE NOT NULL,
   endereco VARCHAR(255) NULL,
@@ -61,9 +48,7 @@ CREATE TABLE localizacoes (
   referencia VARCHAR(200) NULL,
   criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_localizacoes_regiao FOREIGN KEY (regiao_id) REFERENCES regioes(id) ON DELETE SET NULL,
-  INDEX idx_localizacoes_coords (latitude, longitude),
-  INDEX idx_localizacoes_regiao (regiao_id)
+  INDEX idx_localizacoes_coords (latitude, longitude)
 ) ENGINE=InnoDB;
 
 CREATE TABLE eventos (
@@ -74,14 +59,12 @@ CREATE TABLE eventos (
   severidade ENUM('baixa', 'media', 'alta', 'critica') NOT NULL DEFAULT 'media',
   status VARCHAR(30) NOT NULL DEFAULT 'ativo',
   localizacao_id INT NOT NULL,
-  regiao_id INT NULL,
   fonte_id INT NULL,
   confianca DECIMAL(5,4) NULL,
   detectado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_eventos_localizacao FOREIGN KEY (localizacao_id) REFERENCES localizacoes(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_eventos_regiao FOREIGN KEY (regiao_id) REFERENCES regioes(id) ON DELETE SET NULL,
   CONSTRAINT fk_eventos_fonte FOREIGN KEY (fonte_id) REFERENCES fontes_dados(id) ON DELETE SET NULL,
   INDEX idx_eventos_status (status),
   INDEX idx_eventos_tipo (tipo),
@@ -114,7 +97,6 @@ CREATE TABLE evidencias_visuais (
 CREATE TABLE dados_contextuais (
   id INT AUTO_INCREMENT PRIMARY KEY,
   evento_id INT NULL,
-  regiao_id INT NULL,
   fonte_id INT NULL,
   categoria VARCHAR(60) NOT NULL,
   chave VARCHAR(80) NOT NULL,
@@ -124,10 +106,8 @@ CREATE TABLE dados_contextuais (
   coletado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_contexto_evento FOREIGN KEY (evento_id) REFERENCES eventos(id) ON DELETE CASCADE,
-  CONSTRAINT fk_contexto_regiao FOREIGN KEY (regiao_id) REFERENCES regioes(id) ON DELETE SET NULL,
   CONSTRAINT fk_contexto_fonte FOREIGN KEY (fonte_id) REFERENCES fontes_dados(id) ON DELETE SET NULL,
   INDEX idx_contexto_evento (evento_id),
-  INDEX idx_contexto_regiao (regiao_id),
   INDEX idx_contexto_categoria (categoria),
   INDEX idx_contexto_coletado (coletado_em)
 ) ENGINE=InnoDB;
@@ -146,11 +126,6 @@ CREATE TABLE logs_sistema (
   INDEX idx_logs_criado (criado_em),
   INDEX idx_logs_evento (evento_id)
 ) ENGINE=InnoDB;
-
-INSERT INTO regioes (nome, codigo, descricao) VALUES
-  ('Centro', 'CENTRO', 'Região central da cidade'),
-  ('Zona Norte', 'ZN', 'Bairros da zona norte'),
-  ('Zona Sul', 'ZS', 'Bairros da zona sul');
 
 INSERT INTO fontes_dados (nome, tipo, descricao, ativo) VALUES
   ('MotSP YOLO', 'yolo', 'Observações visuais revalidadas no servidor', 1);

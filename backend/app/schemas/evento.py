@@ -6,7 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.fonte_dados import FonteDadosResponse
 from app.schemas.localizacao import LocalizacaoResponse
-from app.schemas.regiao import RegiaoResponse
 
 SEVERIDADES = Literal["baixa", "media", "alta", "critica"]
 STATUS_EVENTO = Literal["ativo", "em_analise"]
@@ -18,7 +17,6 @@ class EventoBase(BaseModel):
     tipo: str = Field(..., max_length=50, examples=["transito", "alagamento"])
     severidade: SEVERIDADES = "media"
     status: STATUS_EVENTO = "ativo"
-    regiao_id: int | None = None
     fonte_id: int | None = None
     confianca: Decimal | None = Field(None, ge=0, le=1)
 
@@ -34,5 +32,4 @@ class EventoResponse(EventoBase):
     criado_em: datetime
     atualizado_em: datetime
     localizacao: LocalizacaoResponse | None = None
-    regiao: RegiaoResponse | None = None
     fonte: FonteDadosResponse | None = None

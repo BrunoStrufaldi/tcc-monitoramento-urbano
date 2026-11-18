@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 from app.models.dado_contextual import DadoContextual
 from app.models.fonte_dados import FonteDados
 from app.models.localizacao import Localizacao
-from app.models.regiao import Regiao
 
 
 def _gravar(db_session, *objetos):
@@ -66,20 +65,16 @@ def test_filtros_das_tabelas_ligadas_ao_evento(client: TestClient, db_session, c
 
 
 def test_filtros_dos_cadastros(client: TestClient, db_session):
-    zona_leste, _ = _gravar(db_session, Regiao(nome="Zona Leste", codigo="ZL"), Regiao(nome="Inativa", ativo=False))
     _gravar(
         db_session,
-        Localizacao(latitude=-23.5505, longitude=-46.6333, endereco="Av. Paulista, 1000", regiao_id=zona_leste.id),
+        Localizacao(latitude=-23.5505, longitude=-46.6333, endereco="Av. Paulista, 1000"),
         Localizacao(latitude=-23.56, longitude=-46.64),
         FonteDados(nome="Câmera", tipo="yolo"),
         FonteDados(nome="INMET", tipo="clima"),
     )
 
-    assert [r["nome"] for r in client.get("/regioes?ativo=true").json()] == ["Zona Leste"]
-    assert client.get(f"/regioes/{zona_leste.id}").json()["codigo"] == "ZL"
-
-    localizacoes = client.get(f"/localizacoes?regiao_id={zona_leste.id}").json()
-    assert [loc["endereco"] for loc in localizacoes] == ["Av. Paulista, 1000"]
+    localizacoes = client.get("/localizacoes").json()
+    assert {loc["endereco"] for loc in localizacoes} == {"Av. Paulista, 1000", None}
     assert localizacoes[0]["cidade"] == "São Paulo"
 
     assert [f["nome"] for f in client.get("/fontes?tipo=clima").json()] == ["INMET"]
@@ -87,13 +82,13 @@ def test_filtros_dos_cadastros(client: TestClient, db_session):
 
 
 def test_id_inexistente_retorna_404(client: TestClient):
-    for rota in ("eventos", "evidencias", "dados-contextuais", "regioes", "localizacoes", "fontes"):
+    for rota in ("eventos", "evidencias", "dados-contextuais", "localizacoes", "fontes"):
         assert client.get(f"/{rota}/9999").status_code == 404, rota
 
 
 def test_rotas_de_escrita_nao_existem(client: TestClient):
     """Sem login, uma rota pública de escrita deixaria qualquer um alterar os dados."""
-    for rota in ("eventos", "evidencias", "dados-contextuais", "regioes", "localizacoes", "fontes"):
+    for rota in ("eventos", "evidencias", "dados-contextuais", "localizacoes", "fontes"):
         assert client.post(f"/{rota}", json={}).status_code == 405, rota
         assert client.patch(f"/{rota}/1", json={}).status_code == 405, rota
         assert client.delete(f"/{rota}/1").status_code == 405, rota

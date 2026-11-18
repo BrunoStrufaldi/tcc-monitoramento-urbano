@@ -33,6 +33,15 @@ python -m data_fusion.test_historico_alagamento
 | `test_e2e.py` | Fluxos de ponta a ponta, status da API e cache do painel |
 | `test_cet_camera_catalog.py` | Câmera mais próxima e imagem travada |
 | `test_inmet_alert_source.py` · `test_tomtom_traffic_source.py` | Leitura das APIs externas e falha de rede |
+| `test_replay_sintetico.py` | Roda o replay sintético e compara com `backend/replay_saida_esperada.txt` |
+
+### Replay sintético
+
+`venv\Scripts\python replay_sintetico.py` (em `backend/`) passa por trânsito, alagamento,
+câmera travada, imagem repetida e expiração com entradas fixas, sem imagens reais nem
+internet, e confere o resultado com a saída esperada. Serve para demonstrar o sistema
+sem depender das câmeras. Os cenários estão no
+[§22](manifesto-versao-avaliada.md#2210-replay-sintético).
 
 ### Convenções da suíte
 

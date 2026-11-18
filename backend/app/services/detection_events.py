@@ -168,7 +168,7 @@ def registrar_deteccao(
     ))
     db.commit()
     resultado = db.query(Evento).options(
-        joinedload(Evento.localizacao), joinedload(Evento.regiao), joinedload(Evento.fonte)
+        joinedload(Evento.localizacao), joinedload(Evento.fonte)
     ).filter(Evento.id == evento.id).first()
 
     payload = EventoResponse.model_validate(resultado, from_attributes=True).model_dump(mode="json")
@@ -180,7 +180,7 @@ def registrar_deteccao(
 def publicar_evento(db: Session, evento_id: int, *, tipo_mensagem: str = "evento_atualizado") -> None:
     """Avisa o painel sobre um evento que já está gravado."""
     evento = db.query(Evento).options(
-        joinedload(Evento.localizacao), joinedload(Evento.regiao), joinedload(Evento.fonte)
+        joinedload(Evento.localizacao), joinedload(Evento.fonte)
     ).filter(Evento.id == evento_id).first()
     if not evento:
         return

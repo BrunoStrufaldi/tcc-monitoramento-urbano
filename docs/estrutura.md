@@ -7,7 +7,7 @@
 ```text
 TCC-Atualizado/
 ├── README.md                     visão geral e mapa da documentação
-├── docs/                         documentação detalhada, um arquivo por assunto (§3 a §21)
+├── docs/                         documentação detalhada, um arquivo por assunto (§3 a §22)
 ├── package.json                  build e testes do frontend (tsc + node:test)
 ├── start.ps1                     sobe a API, que também serve o painel, em http://localhost:8000
 ├── Dockerfile                    imagem com API, painel e YOLO (CPU) para o Cloud Run (§21)
@@ -60,8 +60,8 @@ TCC-Atualizado/
 │   ├── datasets/ · runs/         datasets e resultados de treino (fora do Git)
 │
 ├── database/
-│   ├── schema.sql                DDL MySQL das 7 tabelas e dados iniciais mínimos
-│   └── migrations/               001 a 007 (ver §6)
+│   ├── schema.sql                DDL MySQL das 6 tabelas e dados iniciais mínimos
+│   └── migrations/               001 a 008 (ver §6)
 │
 └── frontend/
     ├── index.html                página única com ARIA: painel de eventos, mapa

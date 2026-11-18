@@ -51,13 +51,12 @@ para explicar a confiança do evento.
 | GET | `/evidencias/{id}` | nenhum |
 | GET | `/evidencias/arquivo/{nome}` | Entrega a imagem local. Usa `Path(nome).name` para não deixar acessar outras pastas. |
 | GET | `/logs` | Filtros: `nivel`, `modulo`, `evento_id`, `limite`. |
-| GET | `/dados-contextuais` | Filtros: `evento_id`, `regiao_id`, `categoria`, `limite`. Só a coleta automática grava esses dados. |
+| GET | `/dados-contextuais` | Filtros: `evento_id`, `categoria`, `limite`. Só a coleta automática grava esses dados. |
 
 ### Cadastro (somente leitura)
 
 | Rota | Métodos |
 |---|---|
-| `/regioes` | GET · GET/{id} |
 | `/fontes` | GET · GET/{id} |
 | `/localizacoes` | GET · GET/{id} |
 

@@ -8,14 +8,6 @@ from fastapi.testclient import TestClient
 
 from app.models.dado_contextual import DadoContextual
 from app.models.fonte_dados import FonteDados
-from app.models.regiao import Regiao
-
-
-def _criar_regiao(db_session) -> int:
-    regiao = Regiao(nome="Centro", descricao="Região central")
-    db_session.add(regiao)
-    db_session.commit()
-    return regiao.id
 
 
 def _criar_fonte(db_session) -> int:
@@ -27,7 +19,6 @@ def _criar_fonte(db_session) -> int:
 
 def test_fluxo_evento_detectado_ate_consulta(client: TestClient, db_session, criar_evento, criar_evidencia):
     """Evento detectado, evidência, dado de contexto e consultas do painel."""
-    regiao_id = _criar_regiao(db_session)
     fonte_id = _criar_fonte(db_session)
 
     evento = criar_evento(
@@ -36,7 +27,6 @@ def test_fluxo_evento_detectado_ate_consulta(client: TestClient, db_session, cri
         tipo="alagamento",
         severidade="critica",
         status="ativo",
-        regiao_id=regiao_id,
         fonte_id=fonte_id,
         confianca=0.85,
     )

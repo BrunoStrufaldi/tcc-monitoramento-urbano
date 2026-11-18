@@ -1,8 +1,11 @@
 """Lista das câmeras públicas da CET-SP usadas pelo sistema.
 
 A CET não tem uma API com a lista de câmeras, então elas foram tiradas do site
-cameras.cetsp.com.br. São 10 câmeras. As coordenadas foram calculadas a partir
-do nome do cruzamento, então são aproximadas.
+cameras.cetsp.com.br. São as 10 câmeras que o site mostrava em 18/11/2026. As
+coordenadas foram calculadas a partir do nome do cruzamento, então são aproximadas.
+
+O site marca algumas câmeras como inativas. Elas ficam na lista mesmo assim,
+porque a foto antiga é descartada pela checagem de frescor.
 """
 
 from __future__ import annotations
@@ -30,14 +33,14 @@ class CameraCET:
 CAMERAS: tuple[CameraCET, ...] = (
     CameraCET(225, "Ascendino Reis - R Pedro de Toledo", -23.5975, -46.6508),
     CameraCET(184, "Brasil - Av Brig Luis Antônio", -23.5608, -46.6437),
-    CameraCET(195, "Brasil - Av Henrique Schaumann", -23.5643, -46.6780),
-    CameraCET(210, "Brig Luis Antônio - Al Santos", -23.5659, -46.6532),
     CameraCET(220, "Cidade Jardim - Av Nove de Julho", -23.5867, -46.6900),
     CameraCET(180, "Consolação - R Caio Prado", -23.5492, -46.6485),
     CameraCET(222, "Hélio Pellegrino - R Diogo Jácome", -23.5983, -46.6684),
     CameraCET(224, "Ibirapuera - R Ipê", -23.5877, -46.6585),
     CameraCET(200, "Iguatemi - Av Brig Faria Lima", -23.5772, -46.6880),
+    CameraCET(31, "Juscelino Kubitschek - Av Brig. Faria Lima", -23.5905, -46.6814),
     CameraCET(23, "Paulista - Av Brigadeiro Luiz Antônio", -23.5576, -46.6606),
+    CameraCET(15, "Paulista - Metrô Paulista", -23.5556, -46.6628),
 )
 
 

@@ -17,9 +17,6 @@ SQLite dá o erro `database is locked`.
 
 ```mermaid
 erDiagram
-    regioes ||--o{ localizacoes : contem
-    regioes ||--o{ eventos : referencia
-    regioes ||--o{ dados_contextuais : contextualiza
     fontes_dados ||--o{ eventos : origina
     fontes_dados ||--o{ evidencias_visuais : captura
     fontes_dados ||--o{ dados_contextuais : fornece
@@ -33,7 +30,6 @@ erDiagram
 
 | Tabela | Model | Função |
 |---|---|---|
-| `regioes` | `Regiao` | Divisão geográfica da cidade (nome, código e um polígono GeoJSON opcional). |
 | `localizacoes` | `Localizacao` | Coordenadas e endereço. A detecção cria uma localização para cada evento, com o nome da câmera no `endereco`, e a limpeza apaga as que ficam sem uso. |
 | `fontes_dados` | `FonteDados` | Origem do evento. Na prática, uma fonte `yolo` por câmera. É o tipo `yolo` que permite devolver um evento `ativo` para análise automaticamente. |
 | `eventos` | `Evento` | O evento urbano. Campos principais: `tipo`, `severidade`, `status`, `confianca` (nota do Data Fusion) e `detectado_em`. |
@@ -63,6 +59,7 @@ de chegar ao banco.
 | `005_remove_notificacoes.sql` | destrutiva | Apaga `notificacoes`, que nunca recebeu nenhum registro. |
 | `006_remove_legado_geosampa_e_resolvido.sql` | destrutiva | Apaga `ocorrencias_externas` (sem uso desde que o GeoSampa saiu) e `eventos.resolvido_em` (o evento é apagado quando passa o tempo, nunca "resolvido"). |
 | `007_categoria_contexto.sql` | dados | Troca a categoria "clima" dos dados contextuais por "contexto". |
+| `008_remove_regioes.sql` | destrutiva | Apaga `regioes` e as colunas `regiao_id` de `eventos`, `localizacoes` e `dados_contextuais`. Nenhum serviço preenchia essas colunas. |
 
-O `schema.sql` não cria eventos, evidências nem dados de contexto, só as regiões, três
-fontes de dados e uma linha de log. Os eventos só entram pela detecção real.
+O `schema.sql` não cria eventos, evidências nem dados de contexto, só uma fonte de dados
+e uma linha de log. Os eventos só entram pela detecção real.

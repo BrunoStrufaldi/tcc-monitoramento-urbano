@@ -4,7 +4,6 @@ from app.schemas.evento import EventoResponse
 from app.schemas.fonte_dados import FonteDadosResponse
 from app.schemas.localizacao import LocalizacaoResponse
 from app.schemas.log_sistema import LogSistemaResponse
-from app.schemas.regiao import RegiaoResponse
 
 __all__ = [
     "DadoContextualResponse",
@@ -13,5 +12,4 @@ __all__ = [
     "FonteDadosResponse",
     "LocalizacaoResponse",
     "LogSistemaResponse",
-    "RegiaoResponse",
 ]

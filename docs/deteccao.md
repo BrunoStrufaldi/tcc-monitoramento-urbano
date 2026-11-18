@@ -212,14 +212,19 @@ existe uma API com a lista). É uma parte pequena da rede de câmeras da CET.
 |---|---|---|---|
 | 225 | Ascendino Reis - R Pedro de Toledo | -23,5975 | -46,6508 |
 | 184 | Brasil - Av Brig Luis Antônio | -23,5608 | -46,6437 |
-| 195 | Brasil - Av Henrique Schaumann | -23,5643 | -46,6780 |
-| 210 | Brig Luis Antônio - Al Santos | -23,5659 | -46,6532 |
 | 220 | Cidade Jardim - Av Nove de Julho | -23,5867 | -46,6900 |
 | 180 | Consolação - R Caio Prado | -23,5492 | -46,6485 |
 | 222 | Hélio Pellegrino - R Diogo Jácome | -23,5983 | -46,6684 |
 | 224 | Ibirapuera - R Ipê | -23,5877 | -46,6585 |
 | 200 | Iguatemi - Av Brig Faria Lima | -23,5772 | -46,6880 |
+| 31 | Juscelino Kubitschek - Av Brig. Faria Lima | -23,5905 | -46,6814 |
 | 23 | Paulista - Av Brigadeiro Luiz Antônio | -23,5576 | -46,6606 |
+| 15 | Paulista - Metrô Paulista | -23,5556 | -46,6628 |
+
+Em 18/11/2026 a CET trocou duas câmeras do site: saíram a 195 (Brasil - Av Henrique
+Schaumann) e a 210 (Brig Luis Antônio - Al Santos), que estavam travadas desde outubro, e
+entraram a 31 e a 15. O site marca a 180 e a 15 como inativas. Elas continuam no catálogo,
+mas a foto antiga é descartada pela checagem de frescor (`Last-Modified` com mais de 300 s).
 
 As coordenadas foram calculadas a partir do nome do cruzamento (Nominatim/OpenStreetMap).
 São aproximadas, no nível da rua ou do quarteirão, e não a posição exata do poste. Isso

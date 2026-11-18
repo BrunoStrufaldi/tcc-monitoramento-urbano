@@ -11,13 +11,9 @@ router = APIRouter(prefix="/localizacoes", tags=["localizacoes"])
 @router.get("", response_model=list[LocalizacaoResponse])
 def listar_localizacoes(
     db: Session = Depends(get_db),
-    regiao_id: int | None = None,
     limite: int = Query(100, ge=1, le=500),
 ) -> list[Localizacao]:
-    query = db.query(Localizacao)
-    if regiao_id is not None:
-        query = query.filter(Localizacao.regiao_id == regiao_id)
-    return query.order_by(Localizacao.criado_em.desc()).limit(limite).all()
+    return db.query(Localizacao).order_by(Localizacao.criado_em.desc()).limit(limite).all()
 
 
 @router.get("/{localizacao_id}", response_model=LocalizacaoResponse)

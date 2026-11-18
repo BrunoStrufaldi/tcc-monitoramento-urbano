@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from app.models.fonte_dados import FonteDados
     from app.models.localizacao import Localizacao
     from app.models.log_sistema import LogSistema
-    from app.models.regiao import Regiao
 
 
 class Evento(Base):
@@ -26,7 +25,6 @@ class Evento(Base):
     severidade: Mapped[str] = mapped_column(String(20), default="media")
     status: Mapped[str] = mapped_column(String(30), default="ativo")
     localizacao_id: Mapped[int] = mapped_column(ForeignKey("localizacoes.id"))
-    regiao_id: Mapped[int | None] = mapped_column(ForeignKey("regioes.id"))
     fonte_id: Mapped[int | None] = mapped_column(ForeignKey("fontes_dados.id"))
     confianca: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
     detectado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -36,7 +34,6 @@ class Evento(Base):
     )
 
     localizacao: Mapped["Localizacao"] = relationship(back_populates="eventos")
-    regiao: Mapped["Regiao | None"] = relationship(back_populates="eventos")
     fonte: Mapped["FonteDados | None"] = relationship(back_populates="eventos")
     evidencias: Mapped[list["EvidenciaVisual"]] = relationship(back_populates="evento")
     dados_contextuais: Mapped[list["DadoContextual"]] = relationship(back_populates="evento")
