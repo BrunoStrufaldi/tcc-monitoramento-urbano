@@ -158,8 +158,8 @@ a união das caixas dos veículos.
 | `indice_congestionamento` | `min(10, n_veiculos / 2)`, índice calculado pela contagem |
 | `indice_congestionamento_tomtom` | `10 × (1 − velocidade_atual / velocidade_livre)` |
 
-Quando os dois existem, o Data Fusion usa a média, porque duas fontes concordando valem
-mais que uma.
+Quando os dois existem, a nota do contexto usa a média dos dois índices. O peso do
+contexto continua fixo em 43%.
 
 ---
 

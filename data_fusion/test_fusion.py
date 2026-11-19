@@ -1,6 +1,6 @@
 """Testes do Data Fusion (python -m data_fusion.test_fusion na raiz do projeto)."""
 
-from data_fusion.fusion import PESOS, calcular_confiabilidade
+from data_fusion.fusion import PESOS, _nivel_confiabilidade, calcular_confiabilidade
 from data_fusion.models import DadoContexto, EvidenciaIA, EventoFusionInput
 
 
@@ -96,31 +96,29 @@ def test_transito_combina_veiculos_e_tomtom():
     divergem = _contexto(calcular_confiabilidade(_entrada_transito(3.0, 8.0)))
     assert "média de 2 fontes" in divergem.detalhe
     assert divergem.pontuacao == 0.72
-    # 3 e 8 são fontes que se contradizem, então o contexto pesa menos.
-    assert divergem.peso_base == round(PESOS["contexto"] * 0.8, 4)
-    assert "fontes divergem" in divergem.detalhe
-
-    concordam = calcular_confiabilidade(_entrada_transito(6.5, 6.5))
-    uma_fonte = calcular_confiabilidade(_entrada_transito(6.5))
-    contexto_concordam, contexto_uma = _contexto(concordam), _contexto(uma_fonte)
-    assert contexto_uma.peso_base == round(PESOS["contexto"], 4)
-    assert contexto_concordam.peso_base == round(PESOS["contexto"] * 1.4, 4)
-    assert "fontes concordam" in contexto_concordam.detalhe
-    # Mesma nota, mas com mais peso: as fontes concordando sobem a confiabilidade.
-    assert contexto_concordam.pontuacao == contexto_uma.pontuacao
-    assert concordam.confiabilidade > uma_fonte.confiabilidade
 
 
-def test_transito_nota_e_peso_variam_continuamente():
+def test_pesos_fixos_com_uma_ou_duas_fontes():
+    # Com as duas dimensões presentes, o peso é sempre 57% e 43%, como na fórmula.
+    for entrada in (_entrada_transito(6.5), _entrada_transito(6.5, 6.5), _entrada_transito(3.0, 8.0)):
+        resultado = calcular_confiabilidade(entrada)
+        pesos = {c.nome: c.peso for c in resultado.componentes}
+        assert pesos == {"ia": round(PESOS["ia"], 4), "contexto": round(PESOS["contexto"], 4)}
+
+
+def test_transito_nota_varia_continuamente():
     # Índices diferentes precisam dar notas e contribuições diferentes.
     contextos = [_contexto(calcular_confiabilidade(_entrada_transito(i))) for i in (4.5, 5.5, 6.5)]
     assert contextos[0].pontuacao < contextos[1].pontuacao < contextos[2].pontuacao
     assert len({c.contribuicao for c in contextos}) == 3
 
-    # Quanto mais as fontes discordam, menor o peso, sem degraus.
-    pesos = [_contexto(calcular_confiabilidade(_entrada_transito(6.0, t))).peso_base for t in (6.0, 5.0, 4.0, 3.0)]
-    assert pesos == sorted(pesos, reverse=True)
-    assert len(set(pesos)) == 4
+
+def test_nivel_usa_o_valor_arredondado():
+    # 79,77% aparece como 80% na tela, então o nível precisa ser alta.
+    assert _nivel_confiabilidade(0.7977) == "alta"
+    assert _nivel_confiabilidade(0.7949) == "media"
+    assert _nivel_confiabilidade(0.5450) == "media"
+    assert _nivel_confiabilidade(0.5449) == "baixa"
 
 
 if __name__ == "__main__":

@@ -32,7 +32,8 @@ class ComponenteConfiabilidade:
     peso: float
     contribuicao: float
     detalhe: str
-    # Peso padrão da dimensão. O campo peso é o valor que realmente entrou na conta.
+    # Peso fixo da dimensão. O campo peso é o valor que entrou na conta, que só
+    # muda quando a outra dimensão não tem nota.
     peso_base: float = 0.0
 
 

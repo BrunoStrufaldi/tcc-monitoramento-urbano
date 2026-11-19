@@ -35,7 +35,7 @@ limiares: yolo_threshold=0.45, gx_yolo_incident_conf=0.6, gx_transito_min_veicul
     evento #4 tipo=alagamento status=em_analise confiabilidade=0.57 contexto: historico_alagamento_indice=0
 [A2] YOLO vê alagamento (0,81) com chuva de 30 mm/h, aviso INMET 9,5 e via que alaga sempre
     log INFO: Alagamento sinalizado em câmera sintética -23.61 (confiança 81%), histórico da via: índice 9
-    evento #5 tipo=alagamento status=ativo confiabilidade=0.91 contexto: alerta_inmet_severidade=9.5, historico_alagamento_indice=9, precipitacao_mm_h=30
+    evento #5 tipo=alagamento status=ativo confiabilidade=0.89 contexto: alerta_inmet_severidade=9.5, historico_alagamento_indice=9, precipitacao_mm_h=30
 
 == Câmera ==
 [C1] câmera travada: frame com 10 min de idade

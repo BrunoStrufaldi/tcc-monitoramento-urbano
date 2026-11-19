@@ -34,14 +34,14 @@ confiabilidade  = Σ pontuacao(d) × peso_efetivo(d)
 
 Sem nenhum dado de contexto, a confiabilidade é a própria nota da IA.
 
-### Peso do contexto conforme a concordância
+Fora esse caso, os pesos são fixos: com as duas dimensões presentes a conta é sempre
+`C = 0,57 · S_IA + 0,43 · S_ctx`, tenha o contexto uma fonte ou duas. Quando há duas
+fontes de contexto (chuva e INMET, ou contagem de veículos e TomTom), elas entram na nota
+do contexto pela média, e não mudam o peso.
 
-Quando há duas fontes de contexto ao vivo (chuva e INMET, ou contagem de veículos e
-TomTom), o peso do contexto é multiplicado por um fator entre 0,8x (as fontes se
-contradizem) e 1,4x (dizem a mesma coisa), conforme as notas delas concordam. Uma
-diferença de 0,4 ou mais entre as notas conta como contradição total. Com uma fonte só, o
-fator é 1,0x. O histórico de alagamento fica fora dessa conta, porque ele fala da via e
-não do que está acontecendo agora.
+Até 19/11/2026 o peso do contexto variava de 0,8x a 1,4x conforme as duas fontes
+concordavam. Isso foi tirado para o sistema fazer exatamente o que a fórmula diz. No
+replay sintético só o A2 mudou, de 0,91 para 0,89, e nenhum status mudou.
 
 ### Níveis
 
@@ -50,6 +50,10 @@ não do que está acontecendo agora.
 | ≥ 0,80 | `alta` |
 | 0,55 a 0,79 | `media` |
 | < 0,55 | `baixa` |
+
+O nível também usa a confiabilidade arredondada para duas casas, como a promoção para
+ativo (ver abaixo). O círculo do evento selecionado usa as mesmas faixas: verde a partir
+de 80%, amarelo de 55% a 79% e vermelho abaixo de 55%.
 
 ### Pontuação do contexto, por tipo de evento
 

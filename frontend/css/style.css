@@ -937,7 +937,6 @@ input, select, textarea { font-family: inherit; }
   letter-spacing: 0.05em;
   color: var(--text-muted);
 }
-.fx-weights { margin: 0 0 4px; font-size: 10px; color: var(--text-muted); line-height: 1.5; }
 .fx-calcs { display: flex; flex-direction: column; gap: 5px; }
 .fx-calc {
   display: grid;
@@ -2161,14 +2160,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .rp-evidence-disclaimer { min-height: 22px; margin-top: 3px; padding-block: 3px; }
 }
 
-/* Painel que explica a nota. No computador ele ocupa o espaço que sobra
-   abaixo do evento e rola por dentro se precisar. Em telas menores a coluna
-   inteira rola. */
+/* Painel que explica a nota. No computador ele fica do tamanho do texto e
+   rola por dentro se faltar espaço. Em telas menores a coluna inteira rola. */
 @media (min-width: 1201px) {
-  /* A coluna ocupa toda a altura e o painel estica para preencher o resto. */
   #view-dashboard { height: auto; min-height: 0; flex: 1 1 auto; }
   .fusion-explain {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-height: 150px;
     max-height: 460px;
     overflow-y: auto;
@@ -2187,8 +2184,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .fusion-explain-title { font-size: 10px; }
   .fusion-explain-body { gap: 5px; }
   .fx-label { font-size: 9px; }
-  /* Em tela baixa o texto explicativo some e ficam só os números. */
-  .fx-weights, .fx-just { display: none; }
+  /* Em tela baixa a justificativa some e fica só a frase principal. */
+  .fx-just { display: none; }
 }
 
 /* ============================================================

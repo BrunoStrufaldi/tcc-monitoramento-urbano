@@ -154,55 +154,6 @@ def _indices_transito(valores: dict[str, float]) -> list[float]:
     ]
 
 
-def _notas_por_fonte_ao_vivo(tipo: str, dados: list[DadoContexto]) -> list[float]:
-    """Nota separada de cada fonte ao vivo do evento.
-
-    O histórico de alagamento fica de fora, porque ele fala da via e não do que
-    está acontecendo agora.
-    """
-    tipo_norm = tipo.lower().strip()
-    valores = {d.chave.lower(): d.valor_numerico for d in dados if d.valor_numerico is not None}
-    if tipo_norm == "transito":
-        return [_interpolar(i, _ANCORAS_TRANSITO) for i in _indices_transito(valores)]
-    if tipo_norm == "alagamento":
-        notas = []
-        chuva = valores.get("precipitacao_mm_h") or None
-        if chuva is not None:
-            notas.append(_pontuar_chuva(chuva)[0])
-        if valores.get("alerta_inmet_severidade") is not None:
-            notas.append(_pontuar_aviso_inmet(valores["alerta_inmet_severidade"])[0])
-        return notas
-    return []
-
-
-# O peso do contexto muda conforme as fontes concordam: cai até 0.8x quando
-# elas se contradizem e sobe até 1.4x quando dizem a mesma coisa.
-FATOR_PESO_CONTEXTO_MIN = 0.8
-FATOR_PESO_CONTEXTO_MAX = 1.4
-_DIVERGENCIA_TOTAL = 0.4
-
-
-def fator_peso_contexto(tipo: str, dados: list[DadoContexto]) -> tuple[float, str | None]:
-    """Quanto o peso do contexto deve subir ou descer.
-
-    Com uma fonte só, o peso fica igual. Com duas, ele sobe se elas concordam e
-    desce se uma desmente a outra.
-    """
-    notas = _notas_por_fonte_ao_vivo(tipo, dados)
-    if len(notas) < 2:
-        return 1.0, None
-    divergencia = max(notas) - min(notas)
-    concordancia = _clamp(1 - divergencia / _DIVERGENCIA_TOTAL)
-    fator = FATOR_PESO_CONTEXTO_MIN + (FATOR_PESO_CONTEXTO_MAX - FATOR_PESO_CONTEXTO_MIN) * concordancia
-    if concordancia >= 0.75:
-        resumo = "fontes concordam"
-    elif concordancia >= 0.35:
-        resumo = "fontes concordam em parte"
-    else:
-        resumo = "fontes divergem"
-    return round(fator, 4), f"peso ajustado {fator:.2f}x ({resumo}, concordância {concordancia:.0%})"
-
-
 def pontuar_contexto(tipo: str, dados: list[DadoContexto]) -> tuple[float, str]:
     if not dados:
         return 0.0, "Sem dados de contexto vinculados, dimensão não utilizada"

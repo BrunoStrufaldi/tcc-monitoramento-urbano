@@ -777,8 +777,10 @@ function renderSelectedEvent(event: UrbanEvent | null): void {
     const offset = circumference - (pct / 100) * circumference;
     confidenceRing.style.strokeDashoffset = String(offset);
     confidenceRing.classList.remove("good", "moderate", "poor");
-    if (pct >= 75) confidenceRing.classList.add("good");
-    else if (pct >= 40) confidenceRing.classList.add("moderate");
+    // Mesmas faixas do selo do Data Fusion: verde só a partir de 80%, quando o
+    // evento vira ativo.
+    if (pct >= 80) confidenceRing.classList.add("good");
+    else if (pct >= 55) confidenceRing.classList.add("moderate");
     else confidenceRing.classList.add("poor");
   } else {
     confidenceWrap.hidden = true;
@@ -827,10 +829,6 @@ function scheduleMarkerRefresh(): void {
   markerRefreshTimer = setTimeout(() => applyMarkers(false), 80);
 }
 
-// Pesos padrão do Data Fusion, iguais aos de data_fusion/fusion.py. Só são
-// usados se a API não mandar os pesos dela.
-const PESO_BASE_FUSAO: Record<string, number> = { ia: 4 / 7, contexto: 3 / 7 };
-
 /** Painel no mapa com a conta do Data Fusion, o resultado e o que mais pesou. */
 function renderFusionExplain(result: FusionResult, eventoTipo?: string): void {
   const panel = document.getElementById("fusion-explain");
@@ -839,45 +837,18 @@ function renderFusionExplain(result: FusionResult, eventoTipo?: string): void {
   if (!panel || !levelBadge || !body) return;
 
   const usados = result.componentes.filter((component) => component.peso > 0);
-  const foraDeUso = result.componentes.filter((component) => component.peso <= 0);
   if (!usados.length) { panel.hidden = true; return; }
   panel.hidden = false;
 
   const p0 = (valor: number): string => formatFusionPercent(valor, 0);
   const rotulo = (c: FusionDisplayComponent): string =>
     c.nome === "ia" ? "IA" : fusionComponentLabel(c.nome, eventoTipo);
-  const pesoBase = (c: FusionDisplayComponent): number => c.peso_base || PESO_BASE_FUSAO[c.nome] || c.peso;
   const finalPct = p0(result.confiabilidade);
 
   levelBadge.textContent = formatFusionLevel(result.nivel) + " · " + finalPct;
   levelBadge.className = "fusion-explain-level nivel-" + result.nivel;
 
   // --- A conta ---
-  // Quando o peso do contexto muda, isso aparece numa frase separada, para a
-  // lista de pesos padrão continuar somando 100%.
-  const ajustados = usados.filter((c) => PESO_BASE_FUSAO[c.nome] != null
-    && Math.abs(pesoBase(c) - PESO_BASE_FUSAO[c.nome]) > 0.005);
-  const ajuste = ajustados.map((c) => escapeHtml(rotulo(c)) + " " + p0(PESO_BASE_FUSAO[c.nome]) + "&rarr;" + p0(pesoBase(c)) +
-    (pesoBase(c) > PESO_BASE_FUSAO[c.nome] ? " (fontes concordam)" : " (fontes divergem)")).join(", ");
-  const redistribuido = foraDeUso.length > 0
-    && usados.some((c) => Math.abs(c.peso - pesoBase(c)) > 0.005);
-  let pesos: string;
-  if (redistribuido) {
-    const somaFora = foraDeUso.reduce((soma, c) => soma + pesoBase(c), 0);
-    const nomesFora = foraDeUso.map(rotulo).join(" e ");
-    pesos = '<p class="fx-weights">Base: ' +
-      result.componentes.map((c) => escapeHtml(rotulo(c)) + " " + p0(PESO_BASE_FUSAO[c.nome] ?? pesoBase(c))).join(", ") + '. ' +
-      (ajuste ? 'Ajuste por concordância: ' + ajuste + '. ' : '') +
-      escapeHtml(nomesFora) + (foraDeUso.length > 1 ? " não pontuaram" : " não pontuou") +
-      ', então ' + p0(somaFora) + ' de peso ' + (foraDeUso.length > 1 ? "delas foram rateados" : "dela foi rateado") +
-      ' entre as demais &rarr; ' +
-      usados.map((c) => escapeHtml(rotulo(c)) + " " + p0(pesoBase(c)) + "&rarr;" + p0(c.peso)).join(", ") + '.</p>';
-  } else {
-    pesos = '<p class="fx-weights">Pesos: ' +
-      usados.map((c) => escapeHtml(rotulo(c)) + " " + p0(c.peso)).join(", ") + '.' +
-      (ajuste ? ' Ajuste por concordância: ' + ajuste + '.' : '') + '</p>';
-  }
-
   const linhas = usados.map((c) =>
     '<div class="fx-calc">' +
       '<span class="fx-calc-nome">' + escapeHtml(rotulo(c)) + '</span>' +
@@ -890,7 +861,7 @@ function renderFusionExplain(result: FusionResult, eventoTipo?: string): void {
     '<span class="fx-calc-op">' + usados.map((c) => p0(c.contribuicao)).join(" + ") + '</span>' +
   '</div>';
   const conta = '<div class="fx-block">' +
-    '<span class="fx-label">A conta</span>' + pesos +
+    '<span class="fx-label">A conta</span>' +
     '<div class="fx-calcs">' + linhas + total + '</div>' +
     '</div>';
 

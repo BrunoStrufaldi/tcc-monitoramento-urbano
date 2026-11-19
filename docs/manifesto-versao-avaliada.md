@@ -114,8 +114,7 @@ Run não sobrescreve nenhum deles.
 | Idade máxima do frame (câmera travada) | 300 s | `GX_CAMERA_FRESCOR_MAXIMO_SEGUNDOS` |
 | Tempo até o evento expirar sem nova detecção | 45 min | `GX_EVENTO_JANELA_MINUTOS` |
 | Confiabilidade para passar de "em análise" a "ativo" | 0,80 | `GX_FUSION_AUTO_ATIVO_MIN` |
-| Pesos da fusão | IA 4/7 (57%), contexto 3/7 (43%) | `data_fusion/fusion.py` |
-| Ajuste do peso do contexto | de 0,8x a 1,4x | `data_fusion/scores.py` |
+| Pesos da fusão (fixos) | IA 4/7 (57%), contexto 3/7 (43%) | `data_fusion/fusion.py` |
 | Faixas de nível | alta a partir de 0,80, média a partir de 0,55 | `data_fusion/fusion.py` |
 | Rotina de manutenção (expira, junta repetidos, recalcula notas) | a cada 120 s | `backend/app/main.py` |
 
@@ -183,7 +182,7 @@ e `frontend/tests/`. "Replay" indica o cenário do replay sintético (seção 22
 | | Sem modelo ou em espera, nada é criado | `test_live_detection::test_processar_frame_nao_cria_em_espera_ou_sem_modelo` | passou |
 | RF03 Consultar a TomTom | Cálculo do índice e falha de rede | `test_tomtom_traffic_source` (2 testes) | passou |
 | | TomTom confirma ou recusa o evento | `test_live_detection::test_processar_frame_cria_transito_com_as_duas_fontes`, `test_live_detection::test_processar_frame_veto_da_tomtom_nao_cria_e_espera_pouco`, replay T2, T3, T4 | passou |
-| RF04 Calcular a confiabilidade (Data Fusion) | Pesos, chuva, aviso do INMET, histórico, trânsito | `data_fusion/test_fusion.py` (6 testes), `data_fusion/test_historico_alagamento.py` (2), `test_e2e::test_fluxo_fusao_dados`, replay T1, T3, A1, A2 | passou |
+| RF04 Calcular a confiabilidade (Data Fusion) | Pesos, chuva, aviso do INMET, histórico, trânsito | `data_fusion/test_fusion.py` (8 testes), `data_fusion/test_historico_alagamento.py` (2), `test_e2e::test_fluxo_fusao_dados`, replay T1, T3, A1, A2 | passou |
 | RF05 "Em análise" abaixo de 80% e "ativo" a partir de 80%, em tempo real | Promoção e rebaixamento pelo limiar arredondado | `test_data_fusion_service` (3 testes de limiar), `frontend/tests/fusion-format.test.mjs` (2), replay T1 (0,86 ativo), T3 (0,77 em análise) | passou |
 | | Painel recebe o evento em tempo real | `test_tempo_real` (7 testes) | passou |
 | RF06 Guardar foto original, foto marcada e hash | Arquivos gravados e SHA-256 da original | `test_evidencias::test_registrar_deteccao_grava_evento_e_evidencia_auditavel`, `test_evidencias::test_obter_arquivo_de_evidencia` | passou |
@@ -256,7 +255,7 @@ fica em `backend/replay_saida_esperada.txt`. Os cenários:
 | T5 | 3 veículos | nada criado, TomTom nem consultada | abaixo do piso de 4 |
 | T6 e T7 | 18 veículos duas vezes na mesma câmera | um evento só | intervalo de 30 min entre alertas |
 | A1 | alagamento 0,81 sem chuva, aviso ou histórico | evento criado, 0,57, em análise | contexto fraco derruba a nota |
-| A2 | alagamento 0,81, chuva 30 mm/h, INMET 9,5, via que alaga sempre | evento criado, 0,91, ativo | contexto forte confirma |
+| A2 | alagamento 0,81, chuva 30 mm/h, INMET 9,5, via que alaga sempre | evento criado, 0,89, ativo | contexto forte confirma |
 | C1 | frame com 10 min de idade | não vai para o YOLO | frame acima de 300 s |
 | C2 | o mesmo frame 3 vezes e depois um novo | só 2 vão para o YOLO | SHA-256 igual ao anterior |
 | E1 | eventos de 50 e de 10 min atrás | o de 50 min é removido | janela de 45 min |
