@@ -26,8 +26,14 @@ class Settings(BaseSettings):
     gx_camera_snapshot_url: str | None = None
     gx_camera_latitude: float | None = None
     gx_camera_longitude: float | None = None
-    gx_live_detection_interval_seconds: float = 5.0
     gx_monitoramento_ativo: bool = False
+    # Ciclo geral: de quanto em quanto tempo as câmeras com evento são vistas de
+    # novo. Conta a partir do fim da passada completa feita ao ligar.
+    gx_ciclo_minutos: float = 10.0
+    # De quanto em quanto tempo as câmeras sem evento são vistas.
+    gx_ciclo_sem_evento_segundos: float = 60.0
+    # Quantos ciclos seguidos sem detecção apagam um evento.
+    gx_ciclos_sem_confirmacao_para_remover: int = 2
     # Quantidade de veículos que já indica trânsito. Mesmo assim, a TomTom
     # ainda pode recusar se a via estiver fluindo.
     gx_transito_min_veiculos: int = 12
@@ -39,15 +45,13 @@ class Settings(BaseSettings):
     gx_transito_min_veiculos_confirmado: int = 16
     # Índice mínimo de lentidão da TomTom para confirmar o trânsito.
     gx_transito_tomtom_indice_minimo: float = 3.0
-    gx_alerta_cooldown_seconds: float = 1800.0
-    # Tempo de espera depois que a TomTom recusa um evento. É curto para não
-    # deixar a câmera parada muito tempo, e também limita as consultas à API.
-    gx_transito_veto_cooldown_seconds: float = 600.0
     gx_transito_monitorar_catalogo: bool = False
     gx_alagamento_monitorar_catalogo: bool = False
     gx_camera_frescor_maximo_segundos: float = 300.0
-    # Por quanto tempo um evento fica no painel depois da última detecção.
-    gx_evento_janela_minutos: int = 45
+    # Por quanto tempo uma leitura da TomTom é reaproveitada no mesmo ponto. As
+    # câmeras sem evento são vistas a cada 60 s, e sem isso a cota gratuita
+    # diária da TomTom acabaria em poucas horas.
+    gx_tomtom_cache_segundos: float = 300.0
     # Confiabilidade a partir da qual um evento em análise passa para ativo.
     gx_fusion_auto_ativo_min: float = 0.80
     # Chave da TomTom. Ela precisa ser lida aqui para que o valor do .env chegue

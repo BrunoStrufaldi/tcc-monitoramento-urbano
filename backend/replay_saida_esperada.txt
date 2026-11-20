@@ -1,51 +1,99 @@
 MotSP replay sintético
-limiares: yolo_threshold=0.45, gx_yolo_incident_conf=0.6, gx_transito_min_veiculos_corroborado=4, gx_transito_min_veiculos=12, gx_transito_min_veiculos_confirmado=16, gx_transito_tomtom_indice_minimo=3.0, gx_alerta_cooldown_seconds=1800.0, gx_transito_veto_cooldown_seconds=600.0, gx_camera_frescor_maximo_segundos=300.0, gx_evento_janela_minutos=45, gx_fusion_auto_ativo_min=0.8
+limiares: yolo_threshold=0.45, gx_yolo_incident_conf=0.6, gx_transito_min_veiculos_corroborado=4, gx_transito_min_veiculos=12, gx_transito_min_veiculos_confirmado=16, gx_transito_tomtom_indice_minimo=3.0, gx_ciclo_minutos=10.0, gx_ciclo_sem_evento_segundos=60.0, gx_ciclos_sem_confirmacao_para_remover=2, gx_camera_frescor_maximo_segundos=300.0, gx_fusion_auto_ativo_min=0.8
 
-== Trânsito ==
+== Trânsito (um ciclo numa câmera sem evento) ==
 [T1] 18 veículos, TomTom fora do ar
-    TomTom consultada: sim
-    log INFO: Trânsito sinalizado em câmera sintética -23.5: 18 veículos no quadro (índice 9.0), contagem alta (18 veículos)
+    log INFO: Trânsito visto em câmera sintética -23.5: 18 veículos no quadro (índice 9.0), contagem alta (18 veículos)
+    log INFO: Evento #1 (transito) criado em câmera sintética -23.5: ativo
+    YOLO chamado: 1x, TomTom consultada: sim
+    passada completo: cameras=1, sem_imagem=0, criados=1, atualizados=0, sem_confirmacao=0, removidos=0, falhas=0
     evento #1 tipo=transito status=ativo confiabilidade=0.86 contexto: indice_congestionamento=9
 [T2] 13 veículos, TomTom diz trecho fluindo (índice 1,0)
-    TomTom consultada: sim
     log INFO: Trânsito descartado em câmera sintética -23.51: TomTom indica trecho fluindo (índice 1.0/10) (13 veículos no quadro)
-    resultado: nenhum evento criado
+    YOLO chamado: 1x, TomTom consultada: sim
+    passada completo: cameras=1, sem_imagem=0, criados=0, atualizados=0, sem_confirmacao=0, removidos=0, falhas=0
+    no mapa: nenhum evento nesta câmera
 [T3] 6 veículos, TomTom confirma lentidão (índice 8,0)
-    TomTom consultada: sim
-    log INFO: Trânsito sinalizado em câmera sintética -23.52: 6 veículos no quadro (índice 3.0), TomTom sustenta a contagem baixa (índice 8.0/10)
+    log INFO: Trânsito visto em câmera sintética -23.52: 6 veículos no quadro (índice 3.0), TomTom sustenta a contagem baixa (índice 8.0/10)
+    log INFO: Evento #2 (transito) criado em câmera sintética -23.52: em_analise
+    YOLO chamado: 1x, TomTom consultada: sim
+    passada completo: cameras=1, sem_imagem=0, criados=1, atualizados=0, sem_confirmacao=0, removidos=0, falhas=0
     evento #2 tipo=transito status=em_analise confiabilidade=0.77 contexto: indice_congestionamento=3, indice_congestionamento_tomtom=8
 [T4] 6 veículos, TomTom fora do ar
-    TomTom consultada: sim
     log INFO: Trânsito descartado em câmera sintética -23.53: sem TomTom e contagem baixa (6 veículos), nada a corroborar (6 veículos no quadro)
-    resultado: nenhum evento criado
+    YOLO chamado: 1x, TomTom consultada: sim
+    passada completo: cameras=1, sem_imagem=0, criados=0, atualizados=0, sem_confirmacao=0, removidos=0, falhas=0
+    no mapa: nenhum evento nesta câmera
 [T5] 3 veículos, abaixo do piso
-    TomTom consultada: não
-    resultado: nenhum evento criado
-[T6] 18 veículos numa câmera nova
-    TomTom consultada: sim
-    log INFO: Trânsito sinalizado em câmera sintética -23.55: 18 veículos no quadro (índice 9.0), contagem alta (18 veículos)
-    evento #3 tipo=transito status=ativo confiabilidade=0.86 contexto: indice_congestionamento=9
-[T7] mesma câmera de T6 logo em seguida (dentro dos 30 min)
-    TomTom consultada: não
-    resultado: nenhum evento criado
+    YOLO chamado: 1x, TomTom consultada: não
+    passada completo: cameras=1, sem_imagem=0, criados=0, atualizados=0, sem_confirmacao=0, removidos=0, falhas=0
+    no mapa: nenhum evento nesta câmera
 
-== Alagamento ==
+== Alagamento (um ciclo numa câmera sem evento) ==
 [A1] YOLO vê alagamento (0,81) sem chuva, aviso nem histórico
-    log INFO: Alagamento sinalizado em câmera sintética -23.6 (confiança 81%), histórico da via: índice 0
-    evento #4 tipo=alagamento status=em_analise confiabilidade=0.57 contexto: historico_alagamento_indice=0
+    log INFO: Alagamento visto em câmera sintética -23.6 (confiança 81%), histórico da via: índice 0
+    log INFO: Evento #3 (alagamento) criado em câmera sintética -23.6: em_analise
+    YOLO chamado: 1x, TomTom consultada: não
+    passada completo: cameras=1, sem_imagem=0, criados=1, atualizados=0, sem_confirmacao=0, removidos=0, falhas=0
+    evento #3 tipo=alagamento status=em_analise confiabilidade=0.57 contexto: historico_alagamento_indice=0
 [A2] YOLO vê alagamento (0,81) com chuva de 30 mm/h, aviso INMET 9,5 e via que alaga sempre
-    log INFO: Alagamento sinalizado em câmera sintética -23.61 (confiança 81%), histórico da via: índice 9
-    evento #5 tipo=alagamento status=ativo confiabilidade=0.89 contexto: alerta_inmet_severidade=9.5, historico_alagamento_indice=9, precipitacao_mm_h=30
+    log INFO: Alagamento visto em câmera sintética -23.61 (confiança 81%), histórico da via: índice 9
+    log INFO: Evento #4 (alagamento) criado em câmera sintética -23.61: ativo
+    YOLO chamado: 1x, TomTom consultada: não
+    passada completo: cameras=1, sem_imagem=0, criados=1, atualizados=0, sem_confirmacao=0, removidos=0, falhas=0
+    evento #4 tipo=alagamento status=ativo confiabilidade=0.89 contexto: alerta_inmet_severidade=9.5, historico_alagamento_indice=9, precipitacao_mm_h=30
 
-== Câmera ==
-[C1] câmera travada: frame com 10 min de idade
-    log WARNING: Câmera câmera sintética travada num frame antigo (Last-Modified: <data do frame>), frame ignorado
-    frames recebidos: 1, enviados ao YOLO: 0
-[C2] frame novo (1 min) chega três vezes igual e depois muda
-    frames recebidos: 4, enviados ao YOLO: 2
+== Os dois ritmos na mesma câmera ==
+[K1] verificação de 60 s: 6 veículos e TomTom confirma (índice 8,0)
+    log INFO: Trânsito visto em câmera sintética -23.7: 6 veículos no quadro (índice 3.0), TomTom sustenta a contagem baixa (índice 8.0/10)
+    log INFO: Evento #5 (transito) criado em câmera sintética -23.7: em_analise
+    YOLO chamado: 1x, TomTom consultada: sim
+    passada sem_evento: cameras=1, sem_imagem=0, criados=1, atualizados=0, sem_confirmacao=0, removidos=0, falhas=0
+    evento #5 tipo=transito status=em_analise confiabilidade=0.77 contexto: indice_congestionamento=3, indice_congestionamento_tomtom=8
+[K2] verificação de 60 s seguinte: a câmera já tem evento e fica de fora
+    YOLO chamado: 0x, TomTom consultada: não
+    passada sem_evento: cameras=0, sem_imagem=0, criados=0, atualizados=0, sem_confirmacao=0, removidos=0, falhas=0
+    evento #5 tipo=transito status=em_analise confiabilidade=0.77 contexto: indice_congestionamento=3, indice_congestionamento_tomtom=8
+[K3] ciclo geral: 18 veículos, o mesmo evento é atualizado
+    log INFO: Trânsito visto em câmera sintética -23.7: 18 veículos no quadro (índice 9.0), contagem alta (18 veículos)
+    log INFO: Evento #5 (transito) em câmera sintética -23.7 confirmado de novo: em_analise -> ativo
+    YOLO chamado: 1x, TomTom consultada: sim
+    passada com_evento: cameras=1, sem_imagem=0, criados=0, atualizados=1, sem_confirmacao=0, removidos=0, falhas=0
+    evento #5 tipo=transito status=ativo confiabilidade=0.86 contexto: indice_congestionamento=9
+[K4] ciclo geral: 2 veículos, primeiro ciclo sem confirmação
+    log INFO: Evento #5 (transito) em câmera sintética -23.7 não foi visto neste ciclo (1 de 2)
+    YOLO chamado: 1x, TomTom consultada: não
+    passada com_evento: cameras=1, sem_imagem=0, criados=0, atualizados=0, sem_confirmacao=1, removidos=0, falhas=0
+    evento #5 tipo=transito status=ativo confiabilidade=0.86 contexto: indice_congestionamento=9
+[K5] ciclo geral: 2 veículos, segundo ciclo sem confirmação
+    log INFO: Evento #5 (transito) em câmera sintética -23.7 removido: 2 ciclos sem confirmação
+    YOLO chamado: 1x, TomTom consultada: não
+    passada com_evento: cameras=1, sem_imagem=0, criados=0, atualizados=0, sem_confirmacao=0, removidos=1, falhas=0
+    no mapa: nenhum evento nesta câmera
+[K6] verificação de 60 s: sem evento, a câmera volta a ser olhada
+    YOLO chamado: 1x, TomTom consultada: não
+    passada sem_evento: cameras=1, sem_imagem=0, criados=0, atualizados=0, sem_confirmacao=0, removidos=0, falhas=0
+    no mapa: nenhum evento nesta câmera
 
-== Expiração ==
-[E1] eventos detectados há 50 e há 10 min (janela de 45 min)
-    evento detectado há 50 min: removido
-    evento detectado há 10 min: mantido
-    total removido: 1
+== Câmera sem imagem nova ==
+[C1] verificação de 60 s: 18 veículos
+    log INFO: Trânsito visto em câmera sintética -23.8: 18 veículos no quadro (índice 9.0), contagem alta (18 veículos)
+    log INFO: Evento #5 (transito) criado em câmera sintética -23.8: ativo
+    YOLO chamado: 1x, TomTom consultada: sim
+    passada sem_evento: cameras=1, sem_imagem=0, criados=1, atualizados=0, sem_confirmacao=0, removidos=0, falhas=0
+    evento #5 tipo=transito status=ativo confiabilidade=0.86 contexto: indice_congestionamento=9
+[C2] ciclo geral: câmera travada, frame com 10 min de idade
+    log WARNING: Câmera câmera sintética -23.8 travada num frame antigo (Last-Modified: <data do frame>), frame ignorado
+    YOLO chamado: 0x, TomTom consultada: não
+    passada com_evento: cameras=1, sem_imagem=1, criados=0, atualizados=0, sem_confirmacao=0, removidos=0, falhas=0
+    evento #5 tipo=transito status=ativo confiabilidade=0.86 contexto: indice_congestionamento=9
+[C3] ciclo geral: frame novo, mas sem trânsito
+    log INFO: Evento #5 (transito) em câmera sintética -23.8 não foi visto neste ciclo (1 de 2)
+    YOLO chamado: 1x, TomTom consultada: não
+    passada com_evento: cameras=1, sem_imagem=0, criados=0, atualizados=0, sem_confirmacao=1, removidos=0, falhas=0
+    evento #5 tipo=transito status=ativo confiabilidade=0.86 contexto: indice_congestionamento=9
+[C4] ciclo geral: a câmera manda o mesmo frame do anterior
+    log INFO: Câmera câmera sintética -23.8 mandou a mesma imagem da última vez, frame ignorado
+    YOLO chamado: 0x, TomTom consultada: não
+    passada com_evento: cameras=1, sem_imagem=1, criados=0, atualizados=0, sem_confirmacao=0, removidos=0, falhas=0
+    evento #5 tipo=transito status=ativo confiabilidade=0.86 contexto: indice_congestionamento=9

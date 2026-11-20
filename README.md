@@ -47,9 +47,9 @@ Testes: `cd backend; venv\Scripts\python -m pytest -q` (backend), `npm run test:
 
 ### Faz
 
-- Detecta sozinho. De tempos em tempos o sistema baixa a imagem de 10 câmeras públicas da
-  CET-SP e roda o YOLO nela. Dois tipos de evento estão no escopo: trânsito
-  (congestionamento) e alagamento.
+- Detecta sozinho. O sistema baixa a imagem de 10 câmeras públicas da CET-SP e roda o
+  YOLO nela. Dois tipos de evento estão no escopo: trânsito (congestionamento) e
+  alagamento. Por enquanto só o trânsito está ligado.
 - Confere com outras fontes. Nenhum evento é criado só pelo que a câmera viu. No trânsito,
   quem ajuda a decidir é a velocidade real do trecho (TomTom). No alagamento entram a
   chuva medida (Open-Meteo), o aviso oficial do INMET e o histórico de alagamento da via
@@ -59,8 +59,13 @@ Testes: `cd backend; venv\Scripts\python -m pytest -q` (backend), `npm run test:
   padrão). Abaixo disso fica `em_analise`.
 - Atualiza em tempo real. Todo evento criado, atualizado ou removido chega ao painel por
   WebSocket. Se ele não funcionar, o painel usa SSE e, por último, consulta periódica.
-- Apaga o que ficou velho. Um evento dura no máximo 45 minutos depois da última detecção.
-  Depois disso ele sai do banco e do painel.
+- Olha cada câmera no ritmo certo. Câmera sem evento é vista a cada 60 segundos. Câmera
+  com evento no mapa é vista de novo a cada 10 minutos, no ciclo geral.
+- Atualiza o mesmo evento. Quando a câmera confirma o evento no ciclo geral, ele ganha
+  foto e dados novos e a confiabilidade é recalculada, sem criar outro evento no mapa. Um
+  evento `em_analise` pode virar `ativo` assim.
+- Apaga o que acabou. Um evento que a câmera não confirma em 2 ciclos gerais seguidos sai
+  do banco e do painel.
 
 ### Não faz
 
@@ -89,6 +94,10 @@ Testes: `cd backend; venv\Scripts\python -m pytest -q` (backend), `npm run test:
         │                        │                  │                  │
         ▼                        │                  │                  │
   ┌───────────────────────────┐  │                  │                  │
+  │ ciclo_monitoramento.py    │  │                  │                  │
+  │  com evento: a cada 10 min│  │                  │                  │
+  │  sem evento: a cada 60 s  │  │                  │                  │
+  ├───────────────────────────┤  │                  │                  │
   │ live_detection.py         │  │                  │                  │
   │  gx-veiculos.pt →         │◄─┘                  │                  │
   │  contagem de veículos     │                     │                  │
@@ -100,12 +109,13 @@ Testes: `cd backend; venv\Scripts\python -m pytest -q` (backend), `npm run test:
               │
               ▼
    ┌────────────────────────────────────────────────┐
-   │ detection_events.registrar_deteccao()          │
+   │ detection_events                               │
+   │  · sem evento no ponto: cria (em_analise)      │
+   │  · com evento no ponto: atualiza o mesmo       │
    │  · grava JPEG original + cópia com caixas YOLO │
    │  · SHA-256 do original (auditoria)             │
-   │  · cria Localizacao + Evento (em_analise)      │
-   │  · cria EvidenciaVisual                        │
    │  · grava DadoContextual (contexto/índices)     │
+   │  · 2 ciclos sem confirmação: apaga o evento    │
    └───────────┬────────────────────────────────────┘
                │
                ▼
@@ -123,10 +133,9 @@ Testes: `cd backend; venv\Scripts\python -m pytest -q` (backend), `npm run test:
                │                        └──────────────────────────────┘
                ▼
    ┌────────────────────────────────────────────────┐
-   │ event_retention (loop a cada 120 s)            │
-   │  · apaga eventos fora da janela de 45 min      │
+   │ event_retention (fim de cada passada)          │
+   │  · apaga o evento e avisa o painel             │
    │  · junta duplicados no mesmo ponto             │
-   │  · promove/rebaixa por confiabilidade          │
    └────────────────────────────────────────────────┘
 ```
 
@@ -194,8 +203,10 @@ No `.env`:
 
 ```env
 GX_MONITORAMENTO_ATIVO=true
-GX_TRANSITO_MONITORAR_CATALOGO=true      # 10 threads de trânsito
-GX_ALAGAMENTO_MONITORAR_CATALOGO=true    # 10 threads de alagamento (exige gx-incident.pt)
+GX_TRANSITO_MONITORAR_CATALOGO=true      # trânsito nas 10 câmeras
+GX_ALAGAMENTO_MONITORAR_CATALOGO=false   # alagamento desligado por enquanto
+GX_CICLO_MINUTOS=10                      # câmeras com evento
+GX_CICLO_SEM_EVENTO_SEGUNDOS=60          # câmeras sem evento
 TOMTOM_API_KEY=...                       # sem ela, o trânsito é decidido só pela contagem
 ```
 

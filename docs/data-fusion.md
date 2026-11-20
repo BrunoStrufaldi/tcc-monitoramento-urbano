@@ -136,10 +136,11 @@ painel mostraria um resultado diferente do status do evento.
 
 ### Rede de segurança
 
-O `promover_eventos_por_confiabilidade` roda quando o sistema inicia e a cada 120 s em
-todos os eventos abertos, recalculando e ajustando o status. Isso cobre o que só mudaria
-num recálculo depois, como um limite alterado ou um dado de contexto que chegou depois do
-evento.
+A fusão é recalculada a cada ciclo de monitoramento (10 min) em todo evento que a câmera
+confirma, com a foto e os dados de contexto daquele ciclo. É isso que permite um evento
+`em_analise` virar `ativo` (ou o contrário) sem criar outro evento. Além disso, o
+`promover_eventos_por_confiabilidade` roda quando o sistema inicia, para aplicar um limite
+que tenha sido alterado na configuração.
 
 ---
 
@@ -153,7 +154,7 @@ evento.
               status = "em_analise"
               confianca = confiança da detecção
                       │
-                      │  Data Fusion (na criação e a cada 120 s)
+                      │  Data Fusion (na criação e a cada ciclo que confirma)
                       ▼
         ┌─────────────────────────────┐
         │ confiabilidade ≥ 0,80 ?     │
@@ -163,10 +164,12 @@ evento.
            "ativo"      continua "em_analise"
                 │             │      (some do painel com o filtro padrão)
                 └──────┬──────┘
-                       │  nova detecção no mesmo ponto → detectado_em atualizado
+                       │  ciclo geral (10 min) vê de novo → mesmo evento com
+                       │  foto e contexto novos, fusão recalculada, detectado_em
+                       │  atualizado (pode subir para "ativo" ou voltar)
                        │
                        ▼
-        detectado_em < agora − 45 min
+        2 ciclos gerais seguidos sem ver o evento
                        │
                        ▼
         APAGADO do banco (evento, evidências, dados
@@ -174,17 +177,17 @@ evento.
         "evento_removido"
 ```
 
-O `event_retention.py` faz três coisas a cada 120 s:
+Quem apaga o evento é o ciclo de monitoramento, no 2º ciclo geral seguido sem confirmação
+([deteccao.md](deteccao.md)). Não existe prazo de validade: se a câmera parar de mandar
+imagem, o evento fica no mapa até ela voltar. O `event_retention.py` faz a remoção em si:
 
-1. `purgar_eventos_expirados`: apaga tudo que passou da janela. Cada remoção é avisada por
+1. `remover_eventos`: apaga o evento e o que está ligado a ele. Cada remoção é avisada por
    WS/SSE, porque o painel só tira um evento da lista quando recebe `evento_removido`.
    Apagar sem avisar deixava cópias velhas na tela, com o contador acima do que existia no
    banco.
-2. `colapsar_eventos_duplicados`: para cada `(tipo, lat com 5 casas, lon com 5 casas)`,
-   deixa só o evento mais recente. Isso resolve repetições criadas antes da checagem de
-   duplicados, por exemplo depois de vários reinícios do servidor, que zeram o tempo de
-   espera na memória.
-3. `promover_eventos_por_confiabilidade`: ajusta o status conforme o limite.
+2. `colapsar_eventos_duplicados`: roda no fim de cada passada e, para cada
+   `(tipo, lat com 5 casas, lon com 5 casas)`, deixa só o evento mais recente. O ciclo já
+   atualiza o evento no lugar em vez de criar outro, então isto é só uma garantia.
 
 Não existe o status `resolvido`: não há operador para resolver um evento, e ele é apagado
-quando passa o tempo (a coluna `resolvido_em` foi removida na migração `006`).
+quando a câmera deixa de ver (a coluna `resolvido_em` foi removida na migração `006`).

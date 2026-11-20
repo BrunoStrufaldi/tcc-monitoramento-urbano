@@ -94,19 +94,69 @@ continua valendo para todas, já que qualquer outra pode travar do mesmo jeito.
 
 ---
 
-## 10. Detecção contínua de trânsito
+## 10. Ciclo de monitoramento e detecção de trânsito
 
-O `backend/app/services/live_detection.py` usa uma thread por câmera, cada uma com o seu
-próprio tempo de espera. Assim uma avenida congestionada não impede o alerta de outra.
+### O ciclo
 
-### O loop
+O `backend/app/services/ciclo_monitoramento.py` tem dois ritmos:
 
-1. Baixa a imagem a cada `GX_LIVE_DETECTION_INTERVAL_SECONDS` (5 s)
-2. Descarta se o `Last-Modified` estiver velho
-3. Descarta se o SHA-256 for igual ao da imagem anterior (nada mudou)
-4. Roda o modelo de veículos e conta as detecções de `{veiculo, motocicleta, onibus, caminhao}`
-5. Aplica o gatilho de três faixas
-6. Se for criar, junta as detecções numa única detecção de `transito`
+| Passada | Quando | Quais câmeras |
+|---|---|---|
+| Completa | Uma vez, quando o sistema liga | Todas |
+| Ciclo geral | A cada `GX_CICLO_MINUTOS` (10 min), contados a partir do fim da passada completa | Só as que têm evento no mapa |
+| Sem evento | A cada `GX_CICLO_SEM_EVENTO_SEGUNDOS` (60 s), contados a partir do fim da verificação anterior | Só as que não têm evento no mapa |
+
+Um evento criado pela verificação de 60 s entra no próximo horário do ciclo geral, que é
+igual para todos os eventos. Quando um evento é apagado, a câmera volta para a verificação
+de 60 s. O ritmo é separado por tipo de evento: numa câmera com evento de trânsito e sem
+evento de alagamento, o trânsito vai para o ciclo geral e o alagamento continua na
+verificação de 60 s. Por enquanto só o trânsito é monitorado
+(`GX_ALAGAMENTO_MONITORAR_CATALOGO=false`).
+
+Em cada passada, para cada câmera olhada:
+
+1. Baixa a imagem
+2. Descarta se o `Last-Modified` estiver velho (câmera travada)
+3. Descarta se o SHA-256 for igual ao da última imagem dela (câmera parada)
+4. Roda as regras de trânsito (`live_detection.analisar_frame`) e, se ligado, as de
+   alagamento (`flood_detection.analisar_frame`)
+5. Para cada tipo, compara o resultado com o evento que já existe no ponto da câmera
+
+| O ciclo viu o evento? | Já existe evento no ponto? | O que acontece |
+|---|---|---|
+| Sim | Não | Cria o evento. A fusão decide se ele entra `em_analise` ou `ativo`. |
+| Sim | Sim | Atualiza o mesmo evento: foto nova, dados de contexto novos, fusão recalculada e `detectado_em` renovado. Um evento `em_analise` pode virar `ativo` e um `ativo` pode voltar para `em_analise`. |
+| Não | Sim | Conta um ciclo sem confirmação. No 2º ciclo seguido (`GX_CICLOS_SEM_CONFIRMACAO_PARA_REMOVER`) o evento é apagado. |
+| Imagem descartada nos passos 2 ou 3 | Sim | Nada muda. Sem imagem nova não dá para saber se o evento continua. |
+| Modelo indisponível ou erro | Sim | Nada muda, pelo mesmo motivo. |
+
+Como o evento é atualizado no lugar, o mapa nunca mostra dois eventos do mesmo tipo na
+mesma câmera, e o número do evento não muda entre os ciclos. Trânsito e alagamento são
+eventos separados: um não impede o outro na mesma câmera.
+
+Não existe prazo de validade: um evento só sai do mapa quando a câmera passa 2 ciclos
+seguidos sem confirmar. Se a câmera parar de mandar imagem, o evento fica no mapa até ela
+voltar.
+
+Ao terminar, cada passada junta eventos repetidos que tenham sobrado e grava um resumo em
+`logs_sistema` (módulo `ciclo_monitoramento`). A verificação de 60 s só grava quando cria
+um evento ou tem falha, para não encher a tabela. O resumo da última passada de cada ritmo
+aparece em `GET /monitoramento/status`. Só roda uma passada por vez.
+
+O relógio fica dentro do próprio sistema, numa thread. Na nuvem a CPU só existe enquanto
+alguém está com o painel aberto, então o monitoramento anda só nesse tempo. Ver
+[deploy.md](deploy.md).
+
+A verificação de 60 s pode consultar a TomTom toda vez que vê de 4 a 15 veículos numa
+câmera sem evento. Para não gastar a cota gratuita diária, cada leitura boa da TomTom é
+reaproveitada no mesmo ponto por `GX_TOMTOM_CACHE_SEGUNDOS` (300 s). O ciclo geral, de
+10 min, sempre pega uma leitura nova.
+
+### O que a regra de trânsito faz com a imagem
+
+1. Roda o modelo de veículos e conta as detecções de `{veiculo, motocicleta, onibus, caminhao}`
+2. Aplica o gatilho de três faixas
+3. Se for evento, junta as detecções numa única detecção de `transito`
 
 ### Por que contagem sozinha não basta
 
@@ -142,15 +192,14 @@ média de todos derrubava a nota da IA mesmo com o congestionamento claro na fre
 câmera. O que importa é haver vários veículos bem detectados juntos. A caixa do evento é
 a união das caixas dos veículos.
 
-### Deduplicação em duas camadas
+### Sem eventos repetidos
 
-- Na memória: um tempo de espera por thread (30 min depois de criar um evento, 10 min
-  depois de uma recusa da TomTom). Ele se perde quando o servidor reinicia.
-- No banco: `refrescar_evento_no_ponto` procura um evento ativo do mesmo tipo no mesmo
-  ponto (tolerância de 1e-4°) dentro da janela. Se achar, só atualiza o `detectado_em` e
-  publica `evento_atualizado`, em vez de criar outro evento. A renovação passa pelo mesmo
-  gatilho da criação (contagem e TomTom). Antes bastava o piso de 4 veículos, e numa via
-  movimentada o evento nunca expirava enquanto o servidor estivesse ligado.
+`buscar_evento_no_ponto` procura o evento aberto do mesmo tipo no ponto da câmera
+(tolerância de 1e-4°). Se ele existe, o ciclo atualiza esse evento em vez de criar outro
+(`atualizar_evento`) e publica `evento_atualizado`. A confirmação passa pelo mesmo gatilho
+da criação (contagem e TomTom), então uma via movimentada mas fluindo não mantém o evento
+vivo. Por garantia, `colapsar_eventos_duplicados` ainda roda no fim de cada ciclo e deixa
+só o evento mais recente de cada tipo em cada ponto.
 
 ### Dados contextuais gravados
 
@@ -166,12 +215,11 @@ contexto continua fixo em 43%.
 
 ## 11. Detecção contínua de alagamento
 
-O `backend/app/services/flood_detection.py` funciona como o trânsito (uma thread por
-câmera, o mesmo catálogo e a mesma checagem de imagem travada), mas roda o modelo de
-alagamento direto na imagem.
+O `backend/app/services/flood_detection.py` roda no mesmo ciclo do trânsito, com a mesma
+imagem e as mesmas regras de criar, atualizar e apagar, mas usa o modelo de alagamento.
 
-Sem `GX_YOLO_INCIDENT_MODEL` configurado, o loop sobe mas descarta todas as imagens sem
-avisar, como o resto do sistema faz quando falta um modelo treinado.
+Sem `GX_YOLO_INCIDENT_MODEL` configurado, a análise de alagamento falha em todas as
+câmeras e o ciclo registra a falha sem mexer nos eventos que já existem.
 
 Quando um `alagamento` é detectado, o serviço busca três dados e grava todos em
 `dados_contextuais` com a categoria `contexto`:
@@ -186,8 +234,10 @@ Gravar o histórico mesmo quando ele é zero permite ao Data Fusion separar uma 
 histórico" (que é um sinal negativo) de "sem informação" (quando a chave não existe).
 
 Uma diferença importante: o alagamento não tem nada parecido com a recusa da TomTom. Os
-dados de clima entram depois que o evento é criado e ajustam a confiabilidade, e é ela
-que decide se o evento aparece como `ativo` ou fica `em_analise`.
+dados de clima não decidem se o evento existe. Eles ajustam a confiabilidade, e é ela que
+decide se o evento aparece como `ativo` ou fica `em_analise`. Como os dados são buscados
+de novo a cada ciclo, um alagamento que começou `em_analise` vira `ativo` quando a chuva
+ou o aviso do INMET aparecem.
 
 ---
 

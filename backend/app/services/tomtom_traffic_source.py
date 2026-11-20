@@ -5,6 +5,8 @@ mostra se a via está lenta naquele momento. Precisa da TOMTOM_API_KEY.
 """
 
 import json
+import threading
+import time
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
@@ -12,9 +14,31 @@ from app.config import settings
 
 _URL = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
 
+# Última leitura boa de cada ponto, com o momento em que foi feita.
+_cache: dict[tuple[float, float], tuple[float, dict]] = {}
+_cache_lock = threading.Lock()
+
 
 def obter_fluxo_transito(latitude: float, longitude: float) -> dict:
-    """Busca a velocidade atual e a normal do trecho mais perto do ponto."""
+    """Busca a velocidade atual e a normal do trecho mais perto do ponto.
+
+    Uma leitura boa é reaproveitada por GX_TOMTOM_CACHE_SEGUNDOS. Uma falha não
+    é guardada, para a próxima chamada tentar de novo.
+    """
+    chave = (round(latitude, 5), round(longitude, 5))
+    with _cache_lock:
+        guardado = _cache.get(chave)
+    if guardado is not None and time.monotonic() - guardado[0] < settings.gx_tomtom_cache_segundos:
+        return dict(guardado[1])
+
+    resultado = _consultar(latitude, longitude)
+    if resultado.get("disponivel"):
+        with _cache_lock:
+            _cache[chave] = (time.monotonic(), resultado)
+    return resultado
+
+
+def _consultar(latitude: float, longitude: float) -> dict:
     api_key = settings.tomtom_api_key
     if not api_key:
         return {"disponivel": False, "fonte": "TomTom Traffic", "erro": "TOMTOM_API_KEY não configurada"}

@@ -20,7 +20,7 @@ TCC-Atualizado/
 │   ├── requirements-yolo.txt     ultralytics (só na máquina que roda ou treina o modelo)
 │   ├── .env.example              todas as variáveis, com uma explicação curta de cada uma
 │   ├── app/
-│   │   ├── main.py               app FastAPI, início e fim, loop de manutenção (120 s)
+│   │   ├── main.py               app FastAPI, início e fim, liga o monitoramento
 │   │   ├── config.py             Settings (pydantic-settings), onde fica toda a configuração
 │   │   ├── database.py           engine, SessionLocal, Base e PRAGMA WAL para o SQLite
 │   │   ├── broadcast.py          agenda tarefas no loop principal a partir das threads
@@ -29,8 +29,9 @@ TCC-Atualizado/
 │   │   ├── schemas/              schemas Pydantic (Literal[] para os enums)
 │   │   ├── routers/              11 routers (ver §7)
 │   │   ├── services/
-│   │   │   ├── live_detection.py        detecção contínua de trânsito (uma thread por câmera)
-│   │   │   ├── flood_detection.py       detecção contínua de alagamento (uma thread por câmera)
+│   │   │   ├── ciclo_monitoramento.py   olha as câmeras (com evento a cada 10 min, sem evento a cada 60 s) e cria, atualiza ou apaga eventos
+│   │   │   ├── live_detection.py        regras de trânsito aplicadas a uma imagem
+│   │   │   ├── flood_detection.py       regras de alagamento aplicadas a uma imagem
 │   │   │   ├── detection_events.py      grava evento e evidência e avisa o painel
 │   │   │   ├── event_retention.py       apaga eventos velhos e junta os repetidos
 │   │   │   ├── data_fusion_service.py   liga o app ao data_fusion e muda o status

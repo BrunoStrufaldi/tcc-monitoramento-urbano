@@ -1,8 +1,9 @@
-"""Apaga os eventos que já passaram do tempo.
+"""Apaga eventos do banco e do painel.
 
-O painel mostra só o que está acontecendo agora, então os eventos antigos são
-apagados junto com as evidências e os dados ligados a eles. Cada remoção é
-avisada ao painel, para ele tirar o evento da tela.
+O painel mostra só o que está acontecendo agora. Quem decide apagar um evento é
+o ciclo de monitoramento, quando a câmera passa dois ciclos sem confirmar o
+evento. O evento sai junto com as evidências e os dados ligados a ele, e cada
+remoção é avisada ao painel, para ele tirar o evento da tela.
 """
 
 from __future__ import annotations
@@ -13,7 +14,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.broadcast import schedule_coroutine
-from app.config import settings
 from app.models.dado_contextual import DadoContextual
 from app.models.evento import Evento
 from app.models.evidencia_visual import EvidenciaVisual
@@ -23,9 +23,8 @@ from app.routers.tempo_real import _broadcast
 from app.ws_manager import manager as ws_manager
 
 
-def limite_da_janela(janela_minutos: int | None = None) -> datetime:
-    minutos = settings.gx_evento_janela_minutos if janela_minutos is None else janela_minutos
-    return datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=minutos)
+def limite_da_janela(janela_minutos: int) -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=janela_minutos)
 
 
 def _publicar_remocoes(ids: list[int]) -> None:
@@ -54,6 +53,11 @@ def _apagar_eventos(db: Session, ids: list[int]) -> None:
     _publicar_remocoes(ids)
 
 
+def remover_eventos(db: Session, ids: list[int]) -> None:
+    """Apaga eventos escolhidos e tira eles do painel."""
+    _apagar_eventos(db, ids)
+
+
 def colapsar_eventos_duplicados(db: Session) -> int:
     """Deixa só o evento mais recente de cada tipo em cada ponto."""
     vivos = (
@@ -75,15 +79,3 @@ def colapsar_eventos_duplicados(db: Session) -> int:
             perdedores.append(eid)
     _apagar_eventos(db, perdedores)
     return len(perdedores)
-
-
-def purgar_eventos_expirados(db: Session, janela_minutos: int | None = None) -> int:
-    """Remove eventos detectados antes da janela. Retorna quantos foram apagados."""
-    minutos = settings.gx_evento_janela_minutos if janela_minutos is None else janela_minutos
-    if minutos <= 0:
-        return 0
-
-    corte = limite_da_janela(minutos)
-    ids = list(db.scalars(select(Evento.id).where(Evento.detectado_em < corte)))
-    _apagar_eventos(db, ids)
-    return len(ids)

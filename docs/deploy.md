@@ -16,11 +16,14 @@ São três coisas que se somam:
 | Mecanismo | Efeito |
 |---|---|
 | `--min-instances 0` | Sem acesso, nenhuma instância fica ligada e não há cobrança. |
-| CPU só durante requisições | O Cloud Run congela a CPU do container entre uma requisição e outra. As threads de `live_detection` e `flood_detection` não rodam com o painel fechado, mesmo com `GX_MONITORAMENTO_ATIVO=true`. |
-| WebSocket do painel | Enquanto alguém está com o painel aberto, o `/ws` mantém uma requisição aberta. É nesse tempo que a CPU fica disponível e a detecção contínua acontece. |
+| CPU só durante requisições | O Cloud Run congela a CPU do container entre uma requisição e outra. A thread do ciclo de monitoramento não roda com o painel fechado, mesmo com `GX_MONITORAMENTO_ATIVO=true`. |
+| WebSocket do painel | Enquanto alguém está com o painel aberto, o `/ws` mantém uma requisição aberta. É nesse tempo que a CPU fica disponível e o monitoramento acontece. |
 
-Ou seja, o próprio acesso de uma pessoa é o que liga o sistema. Fechou o painel, o
-monitoramento para, e uns 15 minutos depois a instância é desligada.
+Ou seja, o próprio acesso de uma pessoa é o que liga o sistema. A instância liga a frio,
+faz a passada completa nas câmeras e segue com os dois ritmos (câmera com evento a cada
+10 min, sem evento a cada 60 s). Fechou o painel, o monitoramento para, e uns 15 minutos
+depois a instância é desligada. Como o banco fica dentro da instância, o próximo acesso
+começa com o mapa vazio.
 
 O `--max-instances 1` também é de propósito: o banco é um SQLite dentro do container, então
 duas instâncias ao mesmo tempo teriam dados diferentes. Ele também serve de limite de
@@ -83,7 +86,7 @@ gratuito.
 
 4. Ligar o monitoramento contínuo (opcional)
 
-   No primeiro deploy as threads de detecção sobem desligadas (o padrão do `config.py`).
+   No primeiro deploy o monitoramento sobe desligado (o padrão do `config.py`).
    O painel funciona e nada gasta CPU sozinho. O script
    só muda isso quando é pedido. Um novo deploy sem a opção mantém o que já está na
    nuvem, porque ele usa `--update-env-vars` (que junta as variáveis) e não
@@ -93,6 +96,9 @@ gratuito.
    .\deploy.ps1 -ProjectId SEU-PROJECT-ID -Monitoramento -PularApis          # liga
    .\deploy.ps1 -ProjectId SEU-PROJECT-ID -DesligarMonitoramento -PularApis  # desliga
    ```
+
+   O alagamento fica sempre desligado na nuvem (`GX_ALAGAMENTO_MONITORAR_CATALOGO=false`).
+   Para conferir as últimas passadas: `GET /monitoramento/status`.
 
    Ou, sem montar a imagem de novo:
 
@@ -107,10 +113,8 @@ gratuito.
 > mostra o `ValidationError` de verdade.
 
 > Em CPU, uma detecção do YOLO com `imgsz=1280` leva alguns segundos, muito mais que na
-> GPU. Por isso o deploy usa `GX_LIVE_DETECTION_INTERVAL_SECONDS=60`, em vez do intervalo
-> curto usado localmente. Ligar as 20 threads do catálogo (10 de trânsito e 10 de
-> alagamento) em 2 vCPU sobrecarrega a instância. Para uma demonstração, é melhor ligar só
-> o `GX_TRANSITO_MONITORAR_CATALOGO` ou apontar o `GX_CAMERA_SNAPSHOT_URL` para uma câmera só.
+> GPU. O ciclo passa pelas câmeras uma de cada vez, só com o modelo de veículos, então a
+> verificação de 60 s fica folgada mesmo com as 10 câmeras sem evento.
 
 ### 21.4 Custo e proteção do crédito
 
@@ -136,14 +140,15 @@ Proteções recomendadas:
   30 a 60 segundos para ligar. Antes de apresentar para a banca, abra o link alguns
   minutos antes.
 - O banco não fica salvo. O SQLite fica num disco temporário do container: cada vez que o
-  serviço liga, ele começa vazio e as tabelas são criadas de novo. Isso combina com a
-  janela de 45 minutos dos eventos ([§13](data-fusion.md#13-ciclo-de-vida-de-um-evento)),
+  serviço liga, ele começa vazio e as tabelas são criadas de novo. Isso combina com o
+  prazo curto dos eventos ([§13](data-fusion.md#13-ciclo-de-vida-de-um-evento)),
   mas nada sobrevive quando o serviço desliga. Para guardar os dados de verdade seria
   preciso usar o Cloud Storage ou o Cloud SQL, e nenhum dos dois é gratuito para sempre.
 - A memória é o gargalo, não a CPU. No primeiro deploy com o monitoramento ligado o
   container foi derrubado por falta de memória (`4249 MiB` de `4096`) 19 segundos depois
-  de carregar o YOLO. As 10 threads de cada tipo carregavam o modelo ao mesmo tempo, cada
-  uma com a sua cópia, e depois rodavam todas juntas. A trava de carregamento e o limite
+  de carregar o YOLO. Na versão antiga, com uma thread por câmera, as 10 threads de cada
+  tipo carregavam o modelo ao mesmo tempo, cada uma com a sua cópia, e depois rodavam
+  todas juntas. O ciclo atual passa pelas câmeras uma de cada vez. A trava de carregamento e o limite
   de detecções simultâneas (`GX_YOLO_MAX_CONCORRENCIA`, [§5](configuracao.md#modelos-yolo))
   existem por causa disso. Quando o container cai, o SQLite vai junto e o painel volta a
   zero sem aviso.

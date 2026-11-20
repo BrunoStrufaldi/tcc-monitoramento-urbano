@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.broadcast import schedule_coroutine
+from app.models.dado_contextual import DadoContextual
 from app.models.evento import Evento
 from app.models.evidencia_visual import EvidenciaVisual
 from app.models.fonte_dados import FonteDados
@@ -18,12 +20,31 @@ from app.models.localizacao import Localizacao
 from app.routers.tempo_real import _broadcast
 from app.schemas.evento import EventoResponse
 from app.services.cet_camera_catalog import CAMERAS
+from app.services.data_fusion_service import CATEGORIA_CONTEXTO, aplicar_fusao_evento
 from app.services.evidence_annotation import annotate_evidence
 from app.ws_manager import manager as ws_manager
 from ml.detector import Deteccao
 
 _EVIDENCIAS_DIR = Path(__file__).resolve().parents[1] / "data" / "evidencias"
 _DISPLAY_NAMES = {"transito": "Trânsito"}
+
+
+@dataclass
+class Analise:
+    """O que a análise de uma imagem encontrou e precisa ir para o evento."""
+
+    deteccao: Deteccao
+    fonte_nome: str
+    fonte_descricao: str
+    modelo_ia: str
+    origem: str
+    deteccoes_para_anotar: list[Deteccao] | None = None
+    # Dados de contexto do Data Fusion, no formato (chave, valor, unidade).
+    contexto: list[tuple[str, float, str]] = field(default_factory=list)
+
+
+def _agora() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _fonte(db: Session, nome: str, descricao: str) -> FonteDados:
@@ -56,41 +77,165 @@ def preencher_enderecos_das_cameras(db: Session, tolerancia_graus: float = 1e-4)
     return preenchidas
 
 
-def refrescar_evento_no_ponto(
+def buscar_evento_no_ponto(
     db: Session,
     *,
     tipo: str,
     latitude: float,
     longitude: float,
-    dentro_de_segundos: float,
     tolerancia_graus: float = 1e-4,
-    endereco: str | None = None,
 ) -> Evento | None:
-    """Se já existe um evento do mesmo tipo nesse ponto, só atualiza o horário dele.
-
-    Assim o mapa mostra uma marcação só, em vez de várias repetidas.
-    """
-    limite = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=dentro_de_segundos)
-    evento = (
+    """Devolve o evento aberto desse tipo no ponto da câmera, se existir."""
+    return (
         db.query(Evento)
         .join(Localizacao, Evento.localizacao_id == Localizacao.id)
         .filter(
             Evento.tipo == tipo,
             Evento.status.in_(("em_analise", "ativo")),
-            Evento.detectado_em >= limite,
             func.abs(Localizacao.latitude - latitude) < tolerancia_graus,
             func.abs(Localizacao.longitude - longitude) < tolerancia_graus,
         )
         .order_by(Evento.detectado_em.desc())
         .first()
     )
-    if evento is None:
-        return None
-    evento.detectado_em = datetime.now(UTC).replace(tzinfo=None)
-    # Eventos criados antes de a detecção gravar o nome da câmera ganham o nome aqui.
+
+
+def _salvar_imagens(conteudo_imagem: bytes, deteccoes: list[Deteccao]) -> tuple[str, str, int | None, int | None]:
+    """Grava a foto original e a foto com as caixas do YOLO."""
+    _EVIDENCIAS_DIR.mkdir(parents=True, exist_ok=True)
+    identificador = uuid.uuid4().hex
+    nome_original = identificador + "-original.jpg"
+    (_EVIDENCIAS_DIR / nome_original).write_bytes(conteudo_imagem)
+    nome_arquivo = identificador + "-yolo.jpg"
+    largura = altura = None
+    try:
+        anotada, largura, altura = annotate_evidence(conteudo_imagem, deteccoes)
+        (_EVIDENCIAS_DIR / nome_arquivo).write_bytes(anotada)
+    except Exception:
+        # Se der erro ao desenhar as caixas, a foto original continua valendo.
+        nome_arquivo = nome_original
+    return nome_arquivo, nome_original, largura, altura
+
+
+def _nova_evidencia(
+    evento_id: int,
+    fonte_id: int,
+    deteccao: Deteccao,
+    conteudo_imagem: bytes,
+    *,
+    modelo_ia: str,
+    origem: str,
+    deteccoes_para_anotar: list[Deteccao] | None,
+) -> EvidenciaVisual:
+    nome_arquivo, nome_original, largura, altura = _salvar_imagens(
+        conteudo_imagem, deteccoes_para_anotar or [deteccao]
+    )
+    return EvidenciaVisual(
+        evento_id=evento_id,
+        tipo="imagem",
+        caminho_arquivo=nome_arquivo,
+        fonte_id=fonte_id,
+        modelo_ia=modelo_ia,
+        classe_detectada=deteccao.nome,
+        confianca=deteccao.confianca,
+        largura_px=largura,
+        altura_px=altura,
+        metadados={
+            "origem": origem,
+            "validado_no_servidor": True,
+            "classe_modelo": deteccao.classe_modelo,
+            "bbox": deteccao.bbox,
+            "arquivo_original": nome_original,
+            "sha256_original": hashlib.sha256(conteudo_imagem).hexdigest(),
+        },
+    )
+
+
+def _apagar_arquivos(evidencia: EvidenciaVisual) -> None:
+    nomes = {evidencia.caminho_arquivo, (evidencia.metadados or {}).get("arquivo_original")}
+    for nome in nomes:
+        if nome:
+            (_EVIDENCIAS_DIR / nome).unlink(missing_ok=True)
+
+
+def _gravar_contexto(db: Session, evento_id: int, contexto: list[tuple[str, float, str]]) -> None:
+    for chave, valor, unidade in contexto:
+        db.add(DadoContextual(
+            evento_id=evento_id,
+            categoria=CATEGORIA_CONTEXTO,
+            chave=chave,
+            valor_numerico=valor,
+            unidade=unidade,
+        ))
+
+
+def criar_evento(
+    db: Session,
+    analise: Analise,
+    conteudo_imagem: bytes,
+    latitude: float,
+    longitude: float,
+    endereco: str | None = None,
+) -> Evento:
+    """Cria um evento novo, grava o contexto, calcula a fusão e avisa o painel."""
+    evento = registrar_deteccao(
+        db,
+        analise.deteccao,
+        conteudo_imagem,
+        latitude,
+        longitude,
+        fonte_nome=analise.fonte_nome,
+        fonte_descricao=analise.fonte_descricao,
+        modelo_ia=analise.modelo_ia,
+        origem=analise.origem,
+        deteccoes_para_anotar=analise.deteccoes_para_anotar,
+        endereco=endereco,
+        publicar=False,
+    )
+    _gravar_contexto(db, evento.id, analise.contexto)
+    db.commit()
+    aplicar_fusao_evento(db, evento.id, persistir=True)
+    publicar_evento(db, evento.id, tipo_mensagem="evento_criado")
+    return evento
+
+
+def atualizar_evento(
+    db: Session,
+    evento: Evento,
+    analise: Analise,
+    conteudo_imagem: bytes,
+    endereco: str | None = None,
+) -> Evento:
+    """Atualiza um evento que já existe com o resultado do ciclo atual.
+
+    O evento continua com o mesmo número, então não aparece repetido no mapa.
+    A foto e os dados de contexto antigos são trocados pelos novos e a fusão é
+    recalculada. Assim um evento em análise pode virar ativo e um ativo pode
+    voltar para análise.
+    """
+    for evidencia in list(evento.evidencias):
+        _apagar_arquivos(evidencia)
+        db.delete(evidencia)
+    db.query(DadoContextual).filter(
+        DadoContextual.evento_id == evento.id,
+        DadoContextual.categoria == CATEGORIA_CONTEXTO,
+    ).delete(synchronize_session=False)
+
+    source = _fonte(db, analise.fonte_nome, analise.fonte_descricao)
+    db.add(_nova_evidencia(
+        evento.id, source.id, analise.deteccao, conteudo_imagem,
+        modelo_ia=analise.modelo_ia, origem=analise.origem,
+        deteccoes_para_anotar=analise.deteccoes_para_anotar,
+    ))
+    _gravar_contexto(db, evento.id, analise.contexto)
+    evento.detectado_em = _agora()
+    evento.severidade = analise.deteccao.severidade
     if endereco and evento.localizacao and not evento.localizacao.endereco:
         evento.localizacao.endereco = endereco
     db.commit()
+    # Descarta as listas que estão na memória para a fusão ler o que foi gravado.
+    db.expire(evento)
+    aplicar_fusao_evento(db, evento.id, persistir=True)
     publicar_evento(db, evento.id)
     return evento
 
@@ -108,21 +253,9 @@ def registrar_deteccao(
     origem: str = "camera_continua",
     deteccoes_para_anotar: list[Deteccao] | None = None,
     endereco: str | None = None,
+    publicar: bool = True,
 ) -> Evento:
     """Cria a localização, o evento e a evidência, e avisa o painel."""
-    _EVIDENCIAS_DIR.mkdir(parents=True, exist_ok=True)
-    identificador = uuid.uuid4().hex
-    nome_original = identificador + "-original.jpg"
-    (_EVIDENCIAS_DIR / nome_original).write_bytes(conteudo_imagem)
-    nome_arquivo = identificador + "-yolo.jpg"
-    largura = altura = None
-    try:
-        anotada, largura, altura = annotate_evidence(conteudo_imagem, deteccoes_para_anotar or [deteccao])
-        (_EVIDENCIAS_DIR / nome_arquivo).write_bytes(anotada)
-    except Exception:
-        # Se der erro ao desenhar as caixas, a foto original continua valendo.
-        nome_arquivo = nome_original
-
     rotulo = _DISPLAY_NAMES.get(deteccao.nome, deteccao.nome.replace("_", " ").title())
     titulo = "Possível " + rotulo + " detectado pelo YOLO"
     descricao = (
@@ -147,33 +280,19 @@ def registrar_deteccao(
     )
     db.add(evento)
     db.flush()
-    db.add(EvidenciaVisual(
-        evento_id=evento.id,
-        tipo="imagem",
-        caminho_arquivo=nome_arquivo,
-        fonte_id=source.id,
-        modelo_ia=modelo_ia,
-        classe_detectada=deteccao.nome,
-        confianca=deteccao.confianca,
-        largura_px=largura,
-        altura_px=altura,
-        metadados={
-            "origem": origem,
-            "validado_no_servidor": True,
-            "classe_modelo": deteccao.classe_modelo,
-            "bbox": deteccao.bbox,
-            "arquivo_original": nome_original,
-            "sha256_original": hashlib.sha256(conteudo_imagem).hexdigest(),
-        },
+    db.add(_nova_evidencia(
+        evento.id, source.id, deteccao, conteudo_imagem,
+        modelo_ia=modelo_ia, origem=origem, deteccoes_para_anotar=deteccoes_para_anotar,
     ))
     db.commit()
     resultado = db.query(Evento).options(
         joinedload(Evento.localizacao), joinedload(Evento.fonte)
     ).filter(Evento.id == evento.id).first()
 
-    payload = EventoResponse.model_validate(resultado, from_attributes=True).model_dump(mode="json")
-    schedule_coroutine(_broadcast("evento_criado", payload))
-    schedule_coroutine(ws_manager.broadcast_evento("evento_criado", payload))
+    if publicar:
+        payload = EventoResponse.model_validate(resultado, from_attributes=True).model_dump(mode="json")
+        schedule_coroutine(_broadcast("evento_criado", payload))
+        schedule_coroutine(ws_manager.broadcast_evento("evento_criado", payload))
     return resultado
 
 

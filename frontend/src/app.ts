@@ -336,6 +336,8 @@ function handleRealtimeMessage(tipo: string, dados: Record<string, unknown>): vo
       updateMarker(atualizado);
       if (selectedEventId === atualizado.id) {
         renderSelectedEvent(atualizado);
+        // A cada ciclo o evento confirmado ganha uma foto nova.
+        loadEventEvidence(atualizado.id);
       }
       break;
     }

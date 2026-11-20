@@ -20,30 +20,14 @@ from app.routers import (
     fusion,
     localizacoes,
     logs,
+    monitoramento,
     tempo_real,
     websocket,
 )
-from app.services import flood_detection, live_detection
+from app.services import ciclo_monitoramento
 from app.services.data_fusion_service import migrar_categoria_legada, promover_eventos_por_confiabilidade
 from app.services.detection_events import preencher_enderecos_das_cameras
-from app.services.event_retention import colapsar_eventos_duplicados, purgar_eventos_expirados
-
-
-async def _manutencao_periodica() -> None:
-    """Mantém o painel em tempo real.
-
-    Apaga os eventos velhos, junta eventos repetidos no mesmo ponto e promove os
-    que já passaram do limite de confiabilidade.
-    """
-    while True:
-        try:
-            with SessionLocal() as db:
-                purgar_eventos_expirados(db)
-                colapsar_eventos_duplicados(db)
-                promover_eventos_por_confiabilidade(db)
-        except Exception:
-            pass
-        await asyncio.sleep(120)
+from app.services.event_retention import colapsar_eventos_duplicados
 
 
 @asynccontextmanager
@@ -52,22 +36,18 @@ async def lifespan(_app: FastAPI):
     if settings.database_url.startswith("sqlite"):
         Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
-        purgar_eventos_expirados(db)
         migrar_categoria_legada(db)
         colapsar_eventos_duplicados(db)
         promover_eventos_por_confiabilidade(db)
         preencher_enderecos_das_cameras(db)
     set_main_loop(asyncio.get_running_loop())
-    manutencao_task = asyncio.create_task(_manutencao_periodica())
     # Vem desligado por padrão, inclusive nos testes. Para ligar, use
-    # GX_MONITORAMENTO_ATIVO=true no .env.
+    # GX_MONITORAMENTO_ATIVO=true no .env. Na nuvem a CPU só existe com o painel
+    # aberto, então o monitoramento anda só enquanto alguém está usando.
     if settings.gx_monitoramento_ativo:
-        live_detection.iniciar()
-        flood_detection.iniciar()
+        ciclo_monitoramento.iniciar()
     yield
-    manutencao_task.cancel()
-    live_detection.parar()
-    flood_detection.parar()
+    ciclo_monitoramento.parar()
 
 
 app = FastAPI(
@@ -94,6 +74,7 @@ app.include_router(evidencias.router)
 app.include_router(dados_contextuais.router)
 app.include_router(tempo_real.router)
 app.include_router(deteccao.router)
+app.include_router(monitoramento.router)
 app.include_router(websocket.router)
 
 

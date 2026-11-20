@@ -1,4 +1,4 @@
-"""Testes da limpeza de eventos antigos.
+"""Testes da remoção de eventos.
 
 Todo evento apagado do banco também precisa sair do painel.
 """
@@ -55,16 +55,16 @@ def _criar_evento(db: Session, *, tipo: str, minutos_atras: float, lat: float, l
     return evento.id
 
 
-def test_purga_remove_so_o_antigo_e_avisa_o_painel(db_session: Session, remocoes_publicadas) -> None:
-    antigo = _criar_evento(db_session, tipo="transito", minutos_atras=90, lat=-23.55, lng=-46.63)
-    recente = _criar_evento(db_session, tipo="transito", minutos_atras=1, lat=-23.56, lng=-46.64)
+def test_remover_apaga_so_o_escolhido_e_avisa_o_painel(db_session: Session, remocoes_publicadas) -> None:
+    """Não existe prazo: um evento antigo só sai quando o ciclo manda apagar."""
+    antigo = _criar_evento(db_session, tipo="transito", minutos_atras=600, lat=-23.55, lng=-46.63)
+    outro = _criar_evento(db_session, tipo="transito", minutos_atras=1, lat=-23.56, lng=-46.64)
 
-    assert event_retention.purgar_eventos_expirados(db_session, janela_minutos=45) == 1
-    assert event_retention.purgar_eventos_expirados(db_session, janela_minutos=45) == 0
+    event_retention.remover_eventos(db_session, [outro])
 
-    assert db_session.get(Evento, antigo) is None
-    assert db_session.get(Evento, recente) is not None
-    assert remocoes_publicadas == [("evento_removido", {"id": antigo})]
+    assert db_session.get(Evento, antigo) is not None
+    assert db_session.get(Evento, outro) is None
+    assert remocoes_publicadas == [("evento_removido", {"id": outro})]
 
 
 def test_colapso_junta_repetidos_e_avisa_o_painel(db_session: Session, remocoes_publicadas) -> None:

@@ -21,18 +21,19 @@ python -m data_fusion.test_historico_alagamento
 
 | Arquivo | O que testa |
 |---|---|
-| `test_live_detection.py` | Gatilho de três faixas, recusa e confirmação da TomTom, tempos de espera e câmera travada |
-| `test_flood_detection.py` | Loop de alagamento, dados de clima, aviso do INMET e histórico da via |
+| `test_ciclo_monitoramento.py` | Cria, atualiza o mesmo evento (com promoção e rebaixamento), apaga no 2º ciclo sem confirmação, câmera sem imagem nova, falha do modelo, um ciclo por vez, os dois ritmos (com evento e sem evento, separados por tipo) e o relógio que faz a passada completa primeiro |
+| `test_live_detection.py` | Gatilho de três faixas, recusa e confirmação da TomTom e modelo indisponível |
+| `test_flood_detection.py` | Regra de alagamento, dados de clima, aviso do INMET e histórico da via |
 | `test_data_fusion_service.py` | Promoção, rebaixamento, arredondamento do limite, log só quando o status muda e troca de categoria |
 | `test_consultas.py` | Consulta e filtros de todas as rotas, 404 e escrita bloqueada (405) |
 | `test_evidencias.py` | Evidência gravada pela detecção (imagem original e hash) e download do arquivo |
 | `test_tempo_real.py` | WebSocket, SSE, conexões que caíram, ping/pong e envio entre threads |
 | `test_deteccao.py` | Status do YOLO, classes, câmeras e remoção das rotas de upload |
 | `test_detector_concorrencia.py` | Trava de carregamento, limite de detecções e trava por modelo; configuração do YOLO pelo `Settings` |
-| `test_event_retention.py` | Limpeza, junção de repetidos e aviso de remoção |
+| `test_event_retention.py` | Remoção sem prazo de validade, junção de repetidos e aviso de remoção |
 | `test_e2e.py` | Fluxos de ponta a ponta, status da API e cache do painel |
 | `test_cet_camera_catalog.py` | Câmera mais próxima e imagem travada |
-| `test_inmet_alert_source.py` · `test_tomtom_traffic_source.py` | Leitura das APIs externas e falha de rede |
+| `test_inmet_alert_source.py` · `test_tomtom_traffic_source.py` | Leitura das APIs externas, falha de rede e reaproveitamento da leitura da TomTom |
 | `test_replay_sintetico.py` | Roda o replay sintético e compara com `backend/replay_saida_esperada.txt` |
 
 ### Replay sintético

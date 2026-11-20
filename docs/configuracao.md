@@ -35,12 +35,11 @@ relativos dos modelos partem da raiz do projeto, e não de `backend/`.
 
 | Variável | Padrão | O que faz |
 |---|---|---|
-| `GX_MONITORAMENTO_ATIVO` | `false` | Chave geral. Sem ela, nenhuma thread de detecção sobe. |
-| `GX_TRANSITO_MONITORAR_CATALOGO` | `false` | Liga uma thread de trânsito para cada câmera do catálogo (10). |
-| `GX_ALAGAMENTO_MONITORAR_CATALOGO` | `false` | Liga uma thread de alagamento para cada câmera do catálogo (10). |
+| `GX_MONITORAMENTO_ATIVO` | `false` | Chave geral. Sem ela, nenhum ciclo de monitoramento roda. |
+| `GX_TRANSITO_MONITORAR_CATALOGO` | `false` | Procura trânsito nas câmeras do catálogo (10) a cada ciclo. |
+| `GX_ALAGAMENTO_MONITORAR_CATALOGO` | `false` | Procura alagamento nas câmeras do catálogo (10) a cada ciclo. Por enquanto fica desligado, inclusive na nuvem. |
 | `GX_CAMERA_SNAPSHOT_URL` | vazio | Câmera avulsa (útil para testar com um endereço conhecido). Precisa de latitude e longitude. |
 | `GX_CAMERA_LATITUDE` / `_LONGITUDE` | vazio | Coordenada da câmera avulsa. |
-| `GX_LIVE_DETECTION_INTERVAL_SECONDS` | `5` | Intervalo entre os downloads da imagem. |
 | `GX_CAMERA_FRESCOR_MAXIMO_SEGUNDOS` | `300` | Idade máxima do `Last-Modified` para a imagem contar como ao vivo. Ver [§9](deteccao.md#a-armadilha-do-frame-travado). |
 
 ### Gatilho de trânsito (as três faixas)
@@ -58,11 +57,12 @@ relativos dos modelos partem da raiz do projeto, e não de `backend/`.
 > Quando o serviço lia `os.getenv` direto, a chave do `.env` nunca chegava nele, já que o
 > `start.ps1` não define variáveis de ambiente.
 
-### Cooldowns e ciclo de vida
+### Ciclo de monitoramento e ciclo de vida
 
 | Variável | Padrão | O que faz |
 |---|---|---|
-| `GX_ALERTA_COOLDOWN_SECONDS` | `1800` (30 min) | Tempo que a câmera espera depois de criar um evento. |
-| `GX_TRANSITO_VETO_COOLDOWN_SECONDS` | `600` (10 min) | Tempo de espera depois de uma recusa da TomTom. É curto de propósito: uma recusa às 19h00 não pode deixar a câmera parada até 19h30 se a via travar no meio do caminho. Também limita o uso da API: 1 consulta por câmera a cada 10 min dá umas 1.400 chamadas por dia nas 10 câmeras, dentro do plano gratuito. |
-| `GX_EVENTO_JANELA_MINUTOS` | `45` | Janela de tempo real. Um evento detectado antes disso é apagado do banco. Fica acima do tempo de espera do alerta, para não abrir um buraco entre uma detecção e a próxima. |
+| `GX_CICLO_MINUTOS` | `10` | Ciclo geral: de quanto em quanto tempo as câmeras com evento no mapa são vistas de novo. Conta a partir do fim da passada completa feita ao ligar. |
+| `GX_CICLO_SEM_EVENTO_SEGUNDOS` | `60` | De quanto em quanto tempo as câmeras sem evento são vistas. |
+| `GX_CICLOS_SEM_CONFIRMACAO_PARA_REMOVER` | `2` | Quantos ciclos gerais seguidos sem detecção apagam um evento. Com 2, uma imagem ruim isolada não tira o evento do mapa. Não há outro prazo: é só assim que um evento sai. |
+| `GX_TOMTOM_CACHE_SEGUNDOS` | `300` | Por quanto tempo uma leitura boa da TomTom é reaproveitada no mesmo ponto. Sem isso, a verificação de 60 s acabaria com a cota gratuita diária da TomTom em poucas horas. |
 | `GX_FUSION_AUTO_ATIVO_MIN` | `0.80` | Confiabilidade a partir da qual um evento `em_analise` passa para `ativo`. |

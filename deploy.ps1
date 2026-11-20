@@ -15,6 +15,11 @@
     As variáveis já configuradas na nuvem são mantidas. O monitoramento só muda
     se for usado -Monitoramento ou -DesligarMonitoramento.
 
+    O Cloud Run só dá CPU enquanto alguém está com o painel aberto. Por isso o
+    monitoramento das câmeras só anda com o painel aberto: ele começa a frio
+    quando alguém entra e para quando todos fecham. Por enquanto só o trânsito
+    é monitorado. O alagamento fica desligado.
+
     Este é o deploy manual. O automático roda a cada push na main (cloudbuild.yaml).
 
 .EXAMPLE
@@ -94,8 +99,8 @@ if ($Monitoramento -and $DesligarMonitoramento) {
 # Variáveis que o script sempre define. O resto continua como está na nuvem.
 $pares = @(
     "DATABASE_URL=sqlite:///./gx.db",
-    # Na nuvem não tem GPU, então a detecção é mais lenta e o intervalo é maior.
-    "GX_LIVE_DETECTION_INTERVAL_SECONDS=60"
+    # Por enquanto só o trânsito é monitorado.
+    "GX_ALAGAMENTO_MONITORAR_CATALOGO=false"
 )
 # Só manda a chave se ela foi encontrada, para não apagar a que já está na nuvem.
 if ($tomtom) { $pares += "TOMTOM_API_KEY=$tomtom" }
@@ -105,8 +110,7 @@ if ($Monitoramento -or $DesligarMonitoramento) {
     $ativo = if ($Monitoramento) { "true" } else { "false" }
     $pares += @(
         "GX_MONITORAMENTO_ATIVO=$ativo",
-        "GX_TRANSITO_MONITORAR_CATALOGO=$ativo",
-        "GX_ALAGAMENTO_MONITORAR_CATALOGO=$ativo"
+        "GX_TRANSITO_MONITORAR_CATALOGO=$ativo"
     )
 }
 
@@ -133,8 +137,10 @@ gcloud run deploy $Service `
 if (-not $?) { Write-Error "Deploy falhou. Veja o log do Cloud Build no link acima."; exit 1 }
 
 $url = (gcloud run services describe $Service --region $Region --format "value(status.url)")
+
 Write-Host ""
 Write-Host "==> No ar: $url" -ForegroundColor Green
 Write-Host "    Monitoramento continuo: $ativo"
 Write-Host "    Status da API:          $url/api/status"
 Write-Host "    Estado do YOLO:         $url/deteccao/status"
+Write-Host "    Monitoramento:          $url/monitoramento/status"

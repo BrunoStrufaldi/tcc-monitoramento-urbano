@@ -280,6 +280,8 @@ function handleRealtimeMessage(tipo, dados) {
             updateMarker(atualizado);
             if (selectedEventId === atualizado.id) {
                 renderSelectedEvent(atualizado);
+                // A cada ciclo o evento confirmado ganha uma foto nova.
+                loadEventEvidence(atualizado.id);
             }
             break;
         }

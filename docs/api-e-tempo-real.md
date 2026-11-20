@@ -18,11 +18,11 @@ A documentação interativa fica em `http://localhost:8000/docs` (Swagger, gerad
 
 | Método | Rota | Parâmetros |
 |---|---|---|
-| GET | `/eventos` | `status`, `tipo`, `limite` (1 a 500, padrão 100), `janela_minutos` (0 = todos; padrão = `GX_EVENTO_JANELA_MINUTOS`) |
+| GET | `/eventos` | `status`, `tipo`, `limite` (1 a 500, padrão 100), `janela_minutos` (só os detectados nos últimos N minutos; vazio ou 0 = todos) |
 | GET | `/eventos/{id}` | nenhum |
 
-Por padrão a lista só traz eventos detectados nos últimos 45 minutos. É um painel ao vivo,
-e não um histórico.
+A lista traz os eventos que estão no mapa. É um painel ao vivo, e não um histórico: o
+evento é apagado quando a câmera deixa de ver ([deteccao.md](deteccao.md)).
 
 ### Data Fusion
 
@@ -42,6 +42,7 @@ para explicar a confiança do evento.
 | GET | `/deteccao/classes` | Classes do sistema e um aviso sobre os limites do modelo padrão do YOLO. |
 | GET | `/deteccao/cameras` | As câmeras da CET monitoradas (id, nome e coordenadas). O painel usa na busca por rua para dizer se o local tem cobertura. |
 | GET | `/deteccao/status` | Se os dois modelos estão disponíveis, o caminho deles, o erro de carregamento e o `min_veiculos_transito`. |
+| GET | `/monitoramento/status` | Se o monitoramento está ligado, os dois ritmos, o número de câmeras e o resumo da última passada de cada ritmo. |
 
 ### Consulta de apoio
 
@@ -109,7 +110,7 @@ Do servidor para o cliente:
 | `pronto` | nenhum | Quando a conexão é aceita. |
 | `evento_criado` | `EventoResponse` completo | `detection_events.registrar_deteccao` |
 | `evento_atualizado` | `EventoResponse` completo | `detection_events.publicar_evento`, quando o evento é renovado no mesmo ponto ou quando o recálculo muda o status |
-| `evento_removido` | `{"id": int}` | `event_retention.purgar_eventos_expirados` e `colapsar_eventos_duplicados` |
+| `evento_removido` | `{"id": int}` | `event_retention.remover_eventos` (chamado pelo ciclo) e `colapsar_eventos_duplicados` |
 | `pong` | `{}` | Resposta ao `ping` |
 
 Do cliente para o servidor: só `{"tipo":"ping"}`.

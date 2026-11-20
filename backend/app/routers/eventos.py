@@ -6,7 +6,6 @@ O painel só lê os eventos. Quem cria é a detecção automática nas câmeras.
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 
-from app.config import settings
 from app.database import get_db
 from app.models.evento import Evento
 from app.schemas.evento import EventoResponse
@@ -27,14 +26,12 @@ def listar_eventos(
     status_filtro: str | None = Query(None, alias="status"),
     tipo: str | None = None,
     limite: int = Query(100, ge=1, le=500),
-    janela_minutos: int | None = Query(None, ge=0, description="0 = sem janela (histórico completo)"),
+    janela_minutos: int | None = Query(None, ge=0, description="Só eventos detectados nos últimos N minutos. Vazio ou 0 = todos"),
 ) -> list[Evento]:
     query = db.query(Evento).options(*_EVENTO_LOAD_OPTIONS)
 
-    # Por padrão só devolve os eventos recentes. Com janela_minutos=0 devolve todos.
-    minutos = settings.gx_evento_janela_minutos if janela_minutos is None else janela_minutos
-    if minutos > 0:
-        query = query.filter(Evento.detectado_em >= limite_da_janela(minutos))
+    if janela_minutos:
+        query = query.filter(Evento.detectado_em >= limite_da_janela(janela_minutos))
 
     if status_filtro:
         query = query.filter(Evento.status == status_filtro)

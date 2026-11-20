@@ -37,21 +37,34 @@ def test_registrar_deteccao_grava_evento_e_evidencia_auditavel(client: TestClien
     assert metadados["validado_no_servidor"] is True
 
 
-def test_renovar_evento_antigo_preenche_o_nome_da_camera(db_session, tmp_path, monkeypatch):
-    """Um evento gravado sem o nome da câmera ganha o nome quando a câmera o renova."""
+def test_atualizar_evento_troca_a_foto_e_mantem_o_numero(db_session, tmp_path, monkeypatch):
+    """Ao ser confirmado de novo, o evento fica com uma foto só, a nova, e ganha o nome da câmera."""
     monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
     monkeypatch.setattr(detection_events, "annotate_evidence", lambda content, _detections: (content, 30, 40))
     deteccao = Deteccao(2, "transito", 0.91, "media", "transito", (1, 2, 30, 40))
-    antigo = detection_events.registrar_deteccao(db_session, deteccao, b"imagem", -23.5576, -46.6606)
+    antigo = detection_events.registrar_deteccao(db_session, deteccao, b"imagem-velha", -23.5576, -46.6606)
     assert antigo.localizacao.endereco is None
+    arquivo_velho = antigo.evidencias[0].caminho_arquivo
 
-    renovado = detection_events.refrescar_evento_no_ponto(
-        db_session, tipo="transito", latitude=-23.5576, longitude=-46.6606,
-        dentro_de_segundos=600, endereco="Paulista - Av Brigadeiro Luiz Antônio",
+    encontrado = detection_events.buscar_evento_no_ponto(db_session, tipo="transito", latitude=-23.5576, longitude=-46.6606)
+    assert encontrado is not None and encontrado.id == antigo.id
+
+    analise = detection_events.Analise(
+        deteccao=deteccao, fonte_nome="MotSP YOLO", fonte_descricao="teste",
+        modelo_ia="YOLO11", origem="camera_continua_contagem",
+        contexto=[("indice_congestionamento", 9.0, "indice_0_10")],
+    )
+    atualizado = detection_events.atualizar_evento(
+        db_session, encontrado, analise, b"imagem-nova", endereco="Paulista - Av Brigadeiro Luiz Antônio",
     )
 
-    assert renovado is not None and renovado.id == antigo.id
-    assert renovado.localizacao.endereco == "Paulista - Av Brigadeiro Luiz Antônio"
+    assert atualizado.id == antigo.id
+    assert atualizado.localizacao.endereco == "Paulista - Av Brigadeiro Luiz Antônio"
+    assert len(atualizado.evidencias) == 1
+    nova = atualizado.evidencias[0]
+    assert (tmp_path / nova.metadados["arquivo_original"]).read_bytes() == b"imagem-nova"
+    assert not (tmp_path / arquivo_velho).exists()
+    assert [d.chave for d in atualizado.dados_contextuais] == ["indice_congestionamento"]
 
 
 def test_eventos_antigos_ganham_o_nome_da_camera_pelo_ponto(db_session):
