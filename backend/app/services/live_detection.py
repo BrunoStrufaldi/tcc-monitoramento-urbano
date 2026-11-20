@@ -115,15 +115,8 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
     indice = round(min(10.0, len(veiculos) / 2), 1)
 
     with SessionLocal() as db:
-        # Se já tem um evento ativo nesse ponto, só atualiza ele em vez de criar outro.
-        if refrescar_evento_no_ponto(
-            db, tipo="transito", latitude=latitude, longitude=longitude,
-            dentro_de_segundos=settings.gx_alerta_cooldown_seconds, endereco=nome_camera,
-        ):
-            cooldown["transito"] = agora
-            logger.info("Trânsito em %s renovado (evento ainda vivo no ponto)", nome_camera)
-            return
-
+        # Renovar segue o mesmo critério de criar. Antes bastavam 4 veículos para
+        # renovar, e numa via movimentada o evento nunca expirava.
         cooldown["transito_veto"] = agora
         fluxo_tomtom = obter_fluxo_transito(latitude, longitude)
         criar, motivo = _avaliar_gatilho_transito(len(veiculos), fluxo_tomtom)
@@ -131,6 +124,14 @@ def _processar_frame(conteudo: bytes, latitude: float, longitude: float, thresho
             logger.info("Trânsito descartado em %s: %s (%s veículos no quadro)", nome_camera, motivo, len(veiculos))
             return
         cooldown["transito"] = agora
+
+        # Se já tem um evento ativo nesse ponto, só atualiza ele em vez de criar outro.
+        if refrescar_evento_no_ponto(
+            db, tipo="transito", latitude=latitude, longitude=longitude,
+            dentro_de_segundos=settings.gx_alerta_cooldown_seconds, endereco=nome_camera,
+        ):
+            logger.info("Trânsito em %s renovado (evento ainda vivo no ponto)", nome_camera)
+            return
 
         try:
             evento = registrar_deteccao(

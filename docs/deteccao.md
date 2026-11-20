@@ -148,8 +148,9 @@ a união das caixas dos veículos.
   depois de uma recusa da TomTom). Ele se perde quando o servidor reinicia.
 - No banco: `refrescar_evento_no_ponto` procura um evento ativo do mesmo tipo no mesmo
   ponto (tolerância de 1e-4°) dentro da janela. Se achar, só atualiza o `detectado_em` e
-  publica `evento_atualizado`, em vez de criar outro evento. Nesse caso a TomTom nem é
-  consultada.
+  publica `evento_atualizado`, em vez de criar outro evento. A renovação passa pelo mesmo
+  gatilho da criação (contagem e TomTom). Antes bastava o piso de 4 veículos, e numa via
+  movimentada o evento nunca expirava enquanto o servidor estivesse ligado.
 
 ### Dados contextuais gravados
 

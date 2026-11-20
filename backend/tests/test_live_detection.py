@@ -107,6 +107,25 @@ def test_processar_frame_com_poucos_veiculos_nem_consulta_a_tomtom(db_session: S
     assert consultas == []
 
 
+def test_renovar_evento_exige_o_mesmo_criterio_de_criar(db_session: Session, tmp_path, monkeypatch):
+    """Um quadro com poucos veículos e sem TomTom não mantém o evento vivo."""
+    _monta_camera_transito(db_session, tmp_path, monkeypatch, 18, {"disponivel": False})
+    live_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {})
+    evento = db_session.query(Evento).one()
+    detectado_antes = evento.detectado_em
+
+    monkeypatch.setattr(live_detection, "detectar_imagem_real", lambda _path, _threshold: _veiculos(6))
+    live_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {})
+    db_session.refresh(evento)
+    assert evento.detectado_em == detectado_antes
+
+    monkeypatch.setattr(live_detection, "detectar_imagem_real", lambda _path, _threshold: _veiculos(18))
+    live_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {})
+    db_session.refresh(evento)
+    assert evento.detectado_em > detectado_antes
+    assert db_session.query(Evento).count() == 1
+
+
 def test_processar_frame_nao_cria_em_espera_ou_sem_modelo(db_session: Session, tmp_path, monkeypatch):
     _monta_camera_transito(db_session, tmp_path, monkeypatch, 18, {"disponivel": False})
     live_detection._processar_frame(b"frame-fake", -23.55, -46.63, 0.45, {"transito": time.monotonic()})
