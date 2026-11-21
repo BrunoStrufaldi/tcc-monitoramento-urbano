@@ -6,6 +6,14 @@ if (-not (Test-Path $backendPython)) {
     exit 1
 }
 
+# No Windows o uvicorn consegue abrir a porta 8000 mesmo ocupada. Uma segunda
+# copia rodaria outro ciclo de monitoramento no mesmo banco.
+if (Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue) {
+    Write-Warning "O backend ja esta rodando na porta 8000. Feche a janela dele antes de abrir outra copia."
+    Start-Process "http://localhost:8000"
+    exit 1
+}
+
 # Um processo so: o FastAPI serve a API e o painel (frontend/) na mesma porta.
 Start-Process -FilePath "powershell" `
     -ArgumentList "-NoExit", "-Command", "& '$backendPython' -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000" `

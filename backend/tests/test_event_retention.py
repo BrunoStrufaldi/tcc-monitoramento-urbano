@@ -80,6 +80,17 @@ def test_colapso_junta_repetidos_e_avisa_o_painel(db_session: Session, remocoes_
     assert remocoes_publicadas == [("evento_removido", {"id": velho})]
 
 
+def test_limpeza_ao_iniciar_apaga_todos_os_eventos(db_session: Session, remocoes_publicadas) -> None:
+    """Os eventos da vez anterior não podem continuar no mapa."""
+    _criar_evento(db_session, tipo="transito", minutos_atras=1200, lat=-23.55, lng=-46.63)
+    _criar_evento(db_session, tipo="alagamento", minutos_atras=5, lat=-23.56, lng=-46.64)
+
+    assert event_retention.limpar_eventos_da_sessao_anterior(db_session) == 2
+    assert db_session.query(Evento).count() == 0
+    assert db_session.query(Localizacao).count() == 0
+    assert event_retention.limpar_eventos_da_sessao_anterior(db_session) == 0
+
+
 def test_remover_apaga_as_fotos_do_disco(db_session: Session, remocoes_publicadas, tmp_path, monkeypatch) -> None:
     """Quando o evento sai do banco, as fotos dele também saem da pasta."""
     monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)

@@ -27,7 +27,7 @@ from app.routers import (
 from app.services import ciclo_monitoramento
 from app.services.data_fusion_service import migrar_categoria_legada, promover_eventos_por_confiabilidade
 from app.services.detection_events import preencher_enderecos_das_cameras
-from app.services.event_retention import colapsar_eventos_duplicados
+from app.services.event_retention import colapsar_eventos_duplicados, limpar_eventos_da_sessao_anterior
 
 
 @asynccontextmanager
@@ -36,6 +36,10 @@ async def lifespan(_app: FastAPI):
     if settings.database_url.startswith("sqlite"):
         Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
+        if settings.gx_monitoramento_ativo:
+            # A contagem de ciclos sem confirmação some quando o backend fecha.
+            # Por isso o mapa começa vazio, igual na nuvem.
+            limpar_eventos_da_sessao_anterior(db)
         migrar_categoria_legada(db)
         colapsar_eventos_duplicados(db)
         promover_eventos_por_confiabilidade(db)

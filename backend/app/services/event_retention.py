@@ -3,7 +3,8 @@
 O painel mostra só o que está acontecendo agora. Quem decide apagar um evento é
 o ciclo de monitoramento, quando a câmera passa dois ciclos sem confirmar o
 evento. O evento sai junto com as evidências e os dados ligados a ele, e cada
-remoção é avisada ao painel, para ele tirar o evento da tela.
+remoção é avisada ao painel, para ele tirar o evento da tela. Quando o backend
+liga com o monitoramento ativo, os eventos da vez anterior são apagados.
 """
 
 from __future__ import annotations
@@ -62,6 +63,13 @@ def _apagar_eventos(db: Session, ids: list[int]) -> None:
 def remover_eventos(db: Session, ids: list[int]) -> None:
     """Apaga eventos escolhidos e tira eles do painel."""
     _apagar_eventos(db, ids)
+
+
+def limpar_eventos_da_sessao_anterior(db: Session) -> int:
+    """Apaga todos os eventos que ficaram de quando o backend rodou antes."""
+    ids = [i for (i,) in db.query(Evento.id)]
+    _apagar_eventos(db, ids)
+    return len(ids)
 
 
 def colapsar_eventos_duplicados(db: Session) -> int:
