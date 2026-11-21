@@ -151,11 +151,14 @@ def _nova_evidencia(
     )
 
 
-def _apagar_arquivos(evidencia: EvidenciaVisual) -> None:
+def arquivos_da_evidencia(evidencia: EvidenciaVisual) -> set[str]:
     nomes = {evidencia.caminho_arquivo, (evidencia.metadados or {}).get("arquivo_original")}
+    return {nome for nome in nomes if nome}
+
+
+def apagar_arquivos(nomes: set[str]) -> None:
     for nome in nomes:
-        if nome:
-            (_EVIDENCIAS_DIR / nome).unlink(missing_ok=True)
+        (_EVIDENCIAS_DIR / nome).unlink(missing_ok=True)
 
 
 def _gravar_contexto(db: Session, evento_id: int, contexto: list[tuple[str, float, str]]) -> None:
@@ -214,7 +217,7 @@ def atualizar_evento(
     voltar para análise.
     """
     for evidencia in list(evento.evidencias):
-        _apagar_arquivos(evidencia)
+        apagar_arquivos(arquivos_da_evidencia(evidencia))
         db.delete(evidencia)
     db.query(DadoContextual).filter(
         DadoContextual.evento_id == evento.id,

@@ -20,6 +20,7 @@ from app.models.evidencia_visual import EvidenciaVisual
 from app.models.localizacao import Localizacao
 from app.models.log_sistema import LogSistema
 from app.routers.tempo_real import _broadcast
+from app.services.detection_events import apagar_arquivos, arquivos_da_evidencia
 from app.ws_manager import manager as ws_manager
 
 
@@ -38,6 +39,9 @@ def _apagar_eventos(db: Session, ids: list[int]) -> None:
     if not ids:
         return
     localizacao_ids = list(db.scalars(select(Evento.localizacao_id).where(Evento.id.in_(ids))))
+    arquivos: set[str] = set()
+    for evidencia in db.scalars(select(EvidenciaVisual).where(EvidenciaVisual.evento_id.in_(ids))):
+        arquivos |= arquivos_da_evidencia(evidencia)
     db.query(EvidenciaVisual).filter(EvidenciaVisual.evento_id.in_(ids)).delete(synchronize_session=False)
     db.query(DadoContextual).filter(DadoContextual.evento_id.in_(ids)).delete(synchronize_session=False)
     db.query(LogSistema).filter(LogSistema.evento_id.in_(ids)).update(
@@ -50,6 +54,8 @@ def _apagar_eventos(db: Session, ids: list[int]) -> None:
         if orfas:
             db.query(Localizacao).filter(Localizacao.id.in_(orfas)).delete(synchronize_session=False)
     db.commit()
+    # As fotos só saem do disco depois que o banco confirmou a exclusão.
+    apagar_arquivos(arquivos)
     _publicar_remocoes(ids)
 
 

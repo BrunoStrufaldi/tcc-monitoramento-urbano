@@ -9,8 +9,9 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models.evento import Evento
+from app.models.evidencia_visual import EvidenciaVisual
 from app.models.localizacao import Localizacao
-from app.services import event_retention
+from app.services import detection_events, event_retention
 
 
 @pytest.fixture
@@ -77,3 +78,21 @@ def test_colapso_junta_repetidos_e_avisa_o_painel(db_session: Session, remocoes_
     assert db_session.get(Evento, velho) is None
     assert db_session.get(Evento, novo) is not None
     assert remocoes_publicadas == [("evento_removido", {"id": velho})]
+
+
+def test_remover_apaga_as_fotos_do_disco(db_session: Session, remocoes_publicadas, tmp_path, monkeypatch) -> None:
+    """Quando o evento sai do banco, as fotos dele também saem da pasta."""
+    monkeypatch.setattr(detection_events, "_EVIDENCIAS_DIR", tmp_path)
+    evento_id = _criar_evento(db_session, tipo="transito", minutos_atras=1, lat=-23.55, lng=-46.63)
+    for nome in ("abc-yolo.jpg", "abc-original.jpg", "outra-yolo.jpg"):
+        (tmp_path / nome).write_bytes(b"x")
+    db_session.add(EvidenciaVisual(
+        evento_id=evento_id,
+        caminho_arquivo="abc-yolo.jpg",
+        metadados={"arquivo_original": "abc-original.jpg"},
+    ))
+    db_session.commit()
+
+    event_retention.remover_eventos(db_session, [evento_id])
+
+    assert sorted(f.name for f in tmp_path.iterdir()) == ["outra-yolo.jpg"]
